@@ -1,2 +1,20 @@
 [env]
 GOTOOLCHAIN = "go1.23.5"
+
+[tasks.test]
+description = "Run tests"
+dir = "{{cwd}}"
+run = "go test -v ./..."
+alias = "t"
+
+[tasks.test_ci]
+description = "Run tests in CI"
+dir = "{{cwd}}"
+run = "go test -v -race ./..."
+alias = "tci"
+
+[tasks.lint]
+description = "Run linters"
+dir = "{{cwd}}"
+run = "golangci-lint run"
+alias = "l"
