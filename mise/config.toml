@@ -1,0 +1,2 @@
+[env]
+GOTOOLCHAIN = "go1.23.5"
