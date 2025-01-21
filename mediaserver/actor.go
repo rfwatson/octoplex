@@ -13,12 +13,16 @@ import (
 	"git.netflux.io/rob/termstream/container"
 )
 
-const imageNameMediaMTX = "bluenviron/mediamtx"
+const (
+	imageNameMediaMTX = "bluenviron/mediamtx"
+	rtmpPath          = "live"
+)
 
 // State contains the current state of the media server.
 type State struct {
 	ContainerRunning bool
 	IngressLive      bool
+	IngressURL       string
 }
 
 // action is an action to be performed by the actor.
@@ -79,7 +83,9 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("run container: %w", err)
 	}
+
 	actor.state.ContainerRunning = true
+	actor.state.IngressURL = "rtmp://localhost:1935/" + rtmpPath
 
 	go actor.actorLoop(containerDone)
 
@@ -192,7 +198,7 @@ func (s *Actor) fetchIngressStateFromServer() (bool, error) {
 	}
 
 	for _, conn := range resp.Items {
-		if conn.Path == "live" && conn.State == "publish" {
+		if conn.Path == rtmpPath && conn.State == "publish" {
 			return true, nil
 		}
 	}

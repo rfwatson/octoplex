@@ -4,4 +4,5 @@ package domain
 type AppState struct {
 	ContainerRunning bool
 	IngressLive      bool
+	IngressURL       string
 }

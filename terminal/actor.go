@@ -48,7 +48,7 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 
 	flex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(serverBox, 7, 0, false).
+		AddItem(serverBox, 9, 0, false).
 		AddItem(destBox, 0, 1, false)
 
 	container := tview.NewFlex().
@@ -127,20 +127,27 @@ func generateServerStatus(state domain.AppState) string {
 	var s strings.Builder
 
 	s.WriteString("\n")
-	s.WriteString("Container status: ")
+
+	s.WriteString("[grey]Container status: ")
 	if state.ContainerRunning {
-		s.WriteString("[green]running[white]")
+		s.WriteString("[green]running")
 	} else {
-		s.WriteString("[red]stopped[white]")
+		s.WriteString("[red]stopped")
 	}
 	s.WriteString("\n\n")
-	s.WriteString("Ingress stream: ")
-	if state.IngressLive {
-		s.WriteString("[green]on-air[white]")
-	} else {
-		s.WriteString("[yellow]off-air[white]")
+
+	s.WriteString("[grey]RTMP URL: ")
+	if state.IngressURL != "" {
+		s.WriteString("[white:grey]" + state.IngressURL)
 	}
-	s.WriteString("\n\n\n")
+	s.WriteString("\n\n")
+
+	s.WriteString("[grey:black]Ingress stream: ")
+	if state.IngressLive {
+		s.WriteString("[green]on-air")
+	} else {
+		s.WriteString("[yellow]off-air")
+	}
 
 	return s.String()
 }

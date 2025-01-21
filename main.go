@@ -43,7 +43,7 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("start media server: %w", err)
 	}
-	state.ContainerRunning = true
+	applyServerState(srv.State(), state)
 
 	ui, err := terminal.StartActor(ctx, terminal.StartActorParams{Logger: logger.With("component", "ui")})
 	if err != nil {
@@ -61,8 +61,7 @@ func run(ctx context.Context) error {
 			return nil
 		case serverState, ok := <-srv.C():
 			if ok {
-				state.ContainerRunning = serverState.ContainerRunning
-				state.IngressLive = serverState.IngressLive
+				applyServerState(serverState, state)
 				updateUI()
 			} else {
 				logger.Info("State channel closed, shutting down...")
@@ -70,4 +69,10 @@ func run(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func applyServerState(serverState mediaserver.State, appState *domain.AppState) {
+	appState.ContainerRunning = serverState.ContainerRunning
+	appState.IngressLive = serverState.IngressLive
+	appState.IngressURL = serverState.IngressURL
 }
