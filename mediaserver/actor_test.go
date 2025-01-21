@@ -47,10 +47,11 @@ func TestMediaServerStartStop(t *testing.T) {
 		"container not in RUNNING state",
 	)
 
+	require.False(t, actor.State().IngressLive)
 	launchFFMPEG(t, "rtmp://localhost:1935/live")
 	require.Eventually(
 		t,
-		func() bool { return actor.State().Live },
+		func() bool { return actor.State().IngressLive },
 		5*time.Second,
 		250*time.Millisecond,
 		"actor not in LIVE state",

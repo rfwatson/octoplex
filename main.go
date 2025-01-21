@@ -8,7 +8,9 @@ import (
 	"os/signal"
 
 	"git.netflux.io/rob/termstream/container"
+	"git.netflux.io/rob/termstream/domain"
 	"git.netflux.io/rob/termstream/mediaserver"
+	"git.netflux.io/rob/termstream/terminal"
 )
 
 func main() {
@@ -21,7 +23,13 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	state := new(domain.AppState)
+
+	logFile, err := os.OpenFile("termstream.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		return fmt.Errorf("error opening log file: %w", err)
+	}
+	logger := slog.New(slog.NewTextHandler(logFile, nil))
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
@@ -39,15 +47,27 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("start media server: %w", err)
 	}
+	state.ContainerRunning = true
+
+	ui, err := terminal.StartActor(ctx, terminal.StartActorParams{Logger: logger.With("component", "ui")})
+	if err != nil {
+		return fmt.Errorf("start tui: %w", err)
+	}
+	defer ui.Close()
+
+	updateUI := func() { ui.SetState(*state) }
+	updateUI()
 
 	for {
 		select {
-		case <-ch:
-			logger.Info("Received interrupt signal, shutting down...")
+		case <-ui.C():
+			logger.Info("UI closed")
 			return nil
-		case state, ok := <-srv.C():
+		case serverState, ok := <-srv.C():
 			if ok {
-				logger.Info("Received state change", "state", state)
+				state.ContainerRunning = serverState.ContainerRunning
+				state.IngressLive = serverState.IngressLive
+				updateUI()
 			} else {
 				logger.Info("State channel closed, shutting down...")
 				return nil
