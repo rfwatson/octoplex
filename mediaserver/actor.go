@@ -17,7 +17,8 @@ const imageNameMediaMTX = "bluenviron/mediamtx"
 
 // State contains the current state of the media server.
 type State struct {
-	Live bool
+	ContainerRunning bool
+	IngressLive      bool
 }
 
 // action is an action to be performed by the actor.
@@ -26,13 +27,11 @@ type action func()
 // Actor is responsible for managing the media server.
 type Actor struct {
 	ch         chan action
+	state      *State
 	stateChan  chan State
 	runner     *container.Runner
 	logger     *slog.Logger
 	httpClient *http.Client
-
-	// mutable state
-	live bool
 }
 
 // StartActorParams contains the parameters for starting a new media server
@@ -55,6 +54,7 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 
 	actor := &Actor{
 		ch:         make(chan action, chanSize),
+		state:      new(State),
 		stateChan:  make(chan State, chanSize),
 		runner:     params.Runner,
 		logger:     params.Logger,
@@ -79,6 +79,7 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("run container: %w", err)
 	}
+	actor.state.ContainerRunning = true
 
 	go actor.actorLoop(containerDone)
 
@@ -90,13 +91,12 @@ func (s *Actor) C() <-chan State {
 	return s.stateChan
 }
 
+// State returns the current state of the media server.
 func (s *Actor) State() State {
 	resultChan := make(chan State)
-
 	s.ch <- func() {
-		resultChan <- State{Live: s.live}
+		resultChan <- *s.state
 	}
-
 	return <-resultChan
 }
 
@@ -115,20 +115,33 @@ func (s *Actor) actorLoop(containerDone <-chan struct{}) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
+	var closing bool
+	sendState := func() {
+		if !closing {
+			s.stateChan <- *s.state
+		}
+	}
+
 	for {
 		select {
 		case <-containerDone:
-			s.stateChan <- State{Live: false}
+			ticker.Stop()
+
+			s.state.ContainerRunning = false
+			s.state.IngressLive = false
+			sendState()
+
+			closing = true
 			close(s.stateChan)
 		case <-ticker.C:
-			live, err := s.checkState()
+			ingressLive, err := s.fetchIngressStateFromServer()
 			if err != nil {
 				s.logger.Error("Error fetching server state", "error", err)
 				continue
 			}
-			if live != s.live {
-				s.live = live
-				s.stateChan <- State{Live: live}
+			if ingressLive != s.state.IngressLive {
+				s.state.IngressLive = ingressLive
+				sendState()
 			}
 		case action, ok := <-s.ch:
 			if !ok {
@@ -153,7 +166,7 @@ type rtmpConnsResponse struct {
 	RemoteAddr    string    `json:"remoteAddr"`
 }
 
-func (s *Actor) checkState() (bool, error) {
+func (s *Actor) fetchIngressStateFromServer() (bool, error) {
 	req, err := http.NewRequest(http.MethodGet, "http://localhost:9997/v3/rtmpconns/list", nil)
 	if err != nil {
 		return false, fmt.Errorf("new request: %w", err)
