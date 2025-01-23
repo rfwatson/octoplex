@@ -1,0 +1,4 @@
+---
+logfile: test.log
+destinations:
+- url: rtmp://rtmp.example.com:1935/live

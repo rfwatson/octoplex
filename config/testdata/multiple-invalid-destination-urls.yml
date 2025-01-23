@@ -1,0 +1,4 @@
+---
+destinations:
+- url: http://nope1.example.com:443/live
+- url: http://nope2.example.com:443/live

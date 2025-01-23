@@ -11,18 +11,19 @@ import (
 	"github.com/rivo/tview"
 )
 
-const defaultChanSize = 64
-
-type action func()
-
 // Actor is responsible for managing the terminal user interface.
 type Actor struct {
 	app       *tview.Application
 	ch        chan action
-	doneCh    chan struct{}
+	commandCh chan Command
 	logger    *slog.Logger
 	serverBox *tview.TextView
+	destBox   *tview.Table
 }
+
+const defaultChanSize = 64
+
+type action func()
 
 // StartActorParams contains the parameters for starting a new terminal user
 // interface.
@@ -34,6 +35,8 @@ type StartActorParams struct {
 // StartActor starts the terminal user interface actor.
 func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
+	ch := make(chan action, chanSize)
+	commandCh := make(chan Command, chanSize)
 
 	app := tview.NewApplication()
 	serverBox := tview.NewTextView()
@@ -42,9 +45,15 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	serverBox.SetTitle("media server")
 	serverBox.SetTextAlign(tview.AlignCenter)
 
-	destBox := tview.NewBox().
-		SetBorder(true).
-		SetTitle("destinations")
+	destBox := tview.NewTable()
+	destBox.SetTitle("destinations")
+	destBox.SetBorder(true)
+	destBox.SetSelectable(true, false)
+	destBox.SetWrapSelection(true, false)
+	destBox.SetDoneFunc(func(key tcell.Key) {
+		row, _ := destBox.GetSelection()
+		commandCh <- CommandToggleDestination{URL: destBox.GetCell(row, 0).Text}
+	})
 
 	flex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -58,38 +67,43 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 		AddItem(nil, 0, 1, false)
 
 	app.SetRoot(container, true)
-	app.EnableMouse(true)
+	app.SetFocus(destBox)
+	app.EnableMouse(false)
+
+	actor := &Actor{
+		ch:        ch,
+		commandCh: commandCh,
+		logger:    params.Logger,
+		app:       app,
+		serverBox: serverBox,
+		destBox:   destBox,
+	}
+
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyCtrlC {
+		switch event.Key() {
+		case tcell.KeyCtrlC:
 			app.Stop()
 			return nil
 		}
 
 		return event
 	})
-
-	actor := &Actor{
-		ch:        make(chan action, chanSize),
-		doneCh:    make(chan struct{}, 1),
-		logger:    params.Logger,
-		app:       app,
-		serverBox: serverBox,
-	}
-
 	go actor.actorLoop(ctx)
 
 	return actor, nil
 }
 
-// C returns a channel that is closed when the terminal user interface closes.
-func (a *Actor) C() <-chan struct{} {
-	return a.doneCh
+// C returns a channel that receives commands from the user interface.
+func (a *Actor) C() <-chan Command {
+	return a.commandCh
 }
 
 func (a *Actor) actorLoop(ctx context.Context) {
 	uiDone := make(chan struct{})
 	go func() {
-		defer close(uiDone)
+		defer func() {
+			uiDone <- struct{}{}
+		}()
 
 		if err := a.app.Run(); err != nil {
 			a.logger.Error("tui application error", "err", err)
@@ -101,7 +115,7 @@ func (a *Actor) actorLoop(ctx context.Context) {
 		case <-ctx.Done():
 			a.logger.Info("Context done")
 		case <-uiDone:
-			a.doneCh <- struct{}{}
+			close(a.commandCh)
 		case action, ok := <-a.ch:
 			if !ok {
 				return
@@ -120,6 +134,19 @@ func (a *Actor) SetState(state domain.AppState) {
 
 func (a *Actor) redrawFromState(state domain.AppState) {
 	a.serverBox.SetText(generateServerStatus(state))
+
+	a.destBox.Clear()
+
+	a.destBox.SetCell(0, 0, tview.NewTableCell("[grey]URL").SetAlign(tview.AlignLeft).SetExpansion(7).SetSelectable(false))
+	a.destBox.SetCell(0, 1, tview.NewTableCell("[grey]Status").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
+	a.destBox.SetCell(0, 2, tview.NewTableCell("[grey]Actions").SetAlign(tview.AlignLeft).SetExpansion(2).SetSelectable(false))
+
+	for i, dest := range state.Destinations {
+		a.destBox.SetCell(i+1, 0, tview.NewTableCell(dest.URL))
+		a.destBox.SetCell(i+1, 1, tview.NewTableCell("[yellow]off-air"))
+		a.destBox.SetCell(i+1, 2, tview.NewTableCell("[green]Tab to go live"))
+	}
+
 	a.app.Draw()
 }
 
