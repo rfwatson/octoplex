@@ -21,7 +21,7 @@ func TestMediaServerStartStop(t *testing.T) {
 	t.Cleanup(cancel)
 
 	logger := testhelpers.NewTestLogger()
-	containerClient, err := container.NewClient(logger)
+	containerClient, err := container.NewActor(ctx, container.NewActorParams{ChanSize: 1, Logger: logger})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, containerClient.Close()) })
 
@@ -29,7 +29,7 @@ func TestMediaServerStartStop(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, running)
 
-	actor, err := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
+	mediaServer, err := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
 		ChanSize:        1,
 		ContainerClient: containerClient,
 		Logger:          logger,
@@ -47,20 +47,20 @@ func TestMediaServerStartStop(t *testing.T) {
 		"container not in RUNNING state",
 	)
 
-	state := actor.State()
-	assert.False(t, state.IngressLive)
-	assert.Equal(t, "rtmp://localhost:1935/live", state.IngressURL)
+	state := mediaServer.State()
+	assert.False(t, state.Live)
+	assert.Equal(t, "rtmp://localhost:1935/live", state.URL)
 
 	launchFFMPEG(t, "rtmp://localhost:1935/live")
 	require.Eventually(
 		t,
-		func() bool { return actor.State().IngressLive },
+		func() bool { return mediaServer.State().Live },
 		5*time.Second,
 		250*time.Millisecond,
 		"actor not in LIVE state",
 	)
 
-	actor.Close()
+	mediaServer.Close()
 
 	running, err = containerClient.ContainerRunning(ctx, map[string]string{"component": component})
 	require.NoError(t, err)

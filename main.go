@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"time"
 
 	"git.netflux.io/rob/termstream/config"
 	"git.netflux.io/rob/termstream/container"
@@ -23,6 +24,8 @@ func main() {
 	}
 }
 
+const uiUpdateInterval = 2 * time.Second
+
 func run(ctx context.Context, cfgReader io.Reader) error {
 	cfg, err := config.Load(cfgReader)
 	if err != nil {
@@ -39,15 +42,17 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 	logger := slog.New(slog.NewTextHandler(logFile, nil))
 	logger.Info("Starting termstream", slog.Any("initial_state", state))
 
-	containerClient, err := container.NewClient(logger.With("component", "container_client"))
+	containerClient, err := container.NewActor(ctx, container.NewActorParams{
+		Logger: logger.With("component", "container_client"),
+	})
 	if err != nil {
 		return fmt.Errorf("new container client: %w", err)
 	}
 	defer containerClient.Close()
 
 	srv, err := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
-		Client: containerClient,
-		Logger: logger.With("component", "mediaserver"),
+		ContainerClient: containerClient,
+		Logger:          logger.With("component", "mediaserver"),
 	})
 	if err != nil {
 		return fmt.Errorf("start media server: %w", err)
@@ -63,20 +68,26 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 	updateUI := func() { ui.SetState(*state) }
 	updateUI()
 
+	uiTicker := time.NewTicker(uiUpdateInterval)
+	defer uiTicker.Stop()
+
 	for {
 		select {
 		case cmd, ok := <-ui.C():
-			logger.Info("Command received", "cmd", cmd)
 			if !ok {
 				logger.Info("UI closed")
 				return nil
 			}
+			logger.Info("Command received", "cmd", cmd)
+		case <-uiTicker.C:
+			applyContainerState(containerClient, state)
+			updateUI()
 		case serverState, ok := <-srv.C():
 			if ok {
 				applyServerState(serverState, state)
 				updateUI()
 			} else {
-				logger.Info("State channel closed, shutting down...")
+				logger.Info("Source state channel closed, shutting down...")
 				return nil
 			}
 		}
@@ -84,10 +95,8 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 }
 
 // applyServerState applies the current server state to the app state.
-func applyServerState(serverState mediaserver.State, appState *domain.AppState) {
-	appState.ContainerRunning = serverState.ContainerRunning
-	appState.IngressLive = serverState.IngressLive
-	appState.IngressURL = serverState.IngressURL
+func applyServerState(serverState domain.Source, appState *domain.AppState) {
+	appState.Source = serverState
 }
 
 // applyConfig applies the configuration to the app state.
@@ -96,4 +105,9 @@ func applyConfig(cfg config.Config, appState *domain.AppState) {
 	for _, dest := range cfg.Destinations {
 		appState.Destinations = append(appState.Destinations, domain.Destination{URL: dest.URL})
 	}
+}
+
+// applyContainerState applies the current container state to the app state.
+func applyContainerState(containerClient *container.Actor, appState *domain.AppState) {
+	appState.Containers = containerClient.GetContainerState()
 }

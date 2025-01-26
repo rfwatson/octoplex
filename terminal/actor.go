@@ -3,8 +3,8 @@ package terminal
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"log/slog"
-	"strings"
 
 	"git.netflux.io/rob/termstream/domain"
 	"github.com/gdamore/tcell/v2"
@@ -13,12 +13,12 @@ import (
 
 // Actor is responsible for managing the terminal user interface.
 type Actor struct {
-	app       *tview.Application
-	ch        chan action
-	commandCh chan Command
-	logger    *slog.Logger
-	serverBox *tview.TextView
-	destBox   *tview.Table
+	app        *tview.Application
+	ch         chan action
+	commandCh  chan Command
+	logger     *slog.Logger
+	sourceView *tview.Table
+	destView   *tview.Table
 }
 
 const defaultChanSize = 64
@@ -39,44 +39,43 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	commandCh := make(chan Command, chanSize)
 
 	app := tview.NewApplication()
-	serverBox := tview.NewTextView()
-	serverBox.SetDynamicColors(true)
-	serverBox.SetBorder(true)
-	serverBox.SetTitle("media server")
-	serverBox.SetTextAlign(tview.AlignCenter)
 
-	destBox := tview.NewTable()
-	destBox.SetTitle("destinations")
-	destBox.SetBorder(true)
-	destBox.SetSelectable(true, false)
-	destBox.SetWrapSelection(true, false)
-	destBox.SetDoneFunc(func(key tcell.Key) {
-		row, _ := destBox.GetSelection()
-		commandCh <- CommandToggleDestination{URL: destBox.GetCell(row, 0).Text}
+	sourceView := tview.NewTable()
+	sourceView.SetTitle("source")
+	sourceView.SetBorder(true)
+
+	destView := tview.NewTable()
+	destView.SetTitle("destinations")
+	destView.SetBorder(true)
+	destView.SetSelectable(true, false)
+	destView.SetWrapSelection(true, false)
+	destView.SetDoneFunc(func(key tcell.Key) {
+		row, _ := destView.GetSelection()
+		commandCh <- CommandToggleDestination{URL: destView.GetCell(row, 0).Text}
 	})
 
 	flex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(serverBox, 9, 0, false).
-		AddItem(destBox, 0, 1, false)
+		AddItem(sourceView, 4, 0, false).
+		AddItem(destView, 0, 1, false)
 
 	container := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
 		AddItem(nil, 0, 1, false).
-		AddItem(flex, 120, 0, false).
+		AddItem(flex, 180, 0, false).
 		AddItem(nil, 0, 1, false)
 
 	app.SetRoot(container, true)
-	app.SetFocus(destBox)
+	app.SetFocus(destView)
 	app.EnableMouse(false)
 
 	actor := &Actor{
-		ch:        ch,
-		commandCh: commandCh,
-		logger:    params.Logger,
-		app:       app,
-		serverBox: serverBox,
-		destBox:   destBox,
+		ch:         ch,
+		commandCh:  commandCh,
+		logger:     params.Logger,
+		app:        app,
+		sourceView: sourceView,
+		destView:   destView,
 	}
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -133,50 +132,39 @@ func (a *Actor) SetState(state domain.AppState) {
 }
 
 func (a *Actor) redrawFromState(state domain.AppState) {
-	a.serverBox.SetText(generateServerStatus(state))
+	setHeaderRow := func(tableView *tview.Table) {
+		tableView.SetCell(0, 0, tview.NewTableCell("[grey]URL").SetAlign(tview.AlignLeft).SetExpansion(7).SetSelectable(false))
+		tableView.SetCell(0, 1, tview.NewTableCell("[grey]Status").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
+		tableView.SetCell(0, 2, tview.NewTableCell("[grey]CPU %").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
+		tableView.SetCell(0, 3, tview.NewTableCell("[grey]Mem used (MB)").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
+		tableView.SetCell(0, 4, tview.NewTableCell("[grey]Actions").SetAlign(tview.AlignLeft).SetExpansion(2).SetSelectable(false))
+	}
 
-	a.destBox.Clear()
+	a.sourceView.Clear()
+	setHeaderRow(a.sourceView)
+	sourceContainer := state.Containers[state.Source.ContainerID]
+	a.sourceView.SetCell(1, 0, tview.NewTableCell(state.Source.URL))
+	if state.Source.Live {
+		a.sourceView.SetCell(1, 1, tview.NewTableCell("[green]on-air"))
+	} else {
+		a.sourceView.SetCell(1, 1, tview.NewTableCell("[yellow]off-air"))
+	}
+	a.sourceView.SetCell(1, 2, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", sourceContainer.CPUPercent)))
+	a.sourceView.SetCell(1, 3, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", float64(sourceContainer.MemoryUsageBytes)/1024/1024)))
+	a.sourceView.SetCell(1, 4, tview.NewTableCell(""))
 
-	a.destBox.SetCell(0, 0, tview.NewTableCell("[grey]URL").SetAlign(tview.AlignLeft).SetExpansion(7).SetSelectable(false))
-	a.destBox.SetCell(0, 1, tview.NewTableCell("[grey]Status").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
-	a.destBox.SetCell(0, 2, tview.NewTableCell("[grey]Actions").SetAlign(tview.AlignLeft).SetExpansion(2).SetSelectable(false))
+	a.destView.Clear()
+	setHeaderRow(a.destView)
 
 	for i, dest := range state.Destinations {
-		a.destBox.SetCell(i+1, 0, tview.NewTableCell(dest.URL))
-		a.destBox.SetCell(i+1, 1, tview.NewTableCell("[yellow]off-air"))
-		a.destBox.SetCell(i+1, 2, tview.NewTableCell("[green]Tab to go live"))
+		a.destView.SetCell(i+1, 0, tview.NewTableCell(dest.URL))
+		a.destView.SetCell(i+1, 1, tview.NewTableCell("[yellow]off-air"))
+		a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]-"))
+		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]-"))
+		a.destView.SetCell(i+1, 4, tview.NewTableCell("[green]Tab to go live"))
 	}
 
 	a.app.Draw()
-}
-
-func generateServerStatus(state domain.AppState) string {
-	var s strings.Builder
-
-	s.WriteString("\n")
-
-	s.WriteString("[grey]Container status: ")
-	if state.ContainerRunning {
-		s.WriteString("[green]running")
-	} else {
-		s.WriteString("[red]stopped")
-	}
-	s.WriteString("\n\n")
-
-	s.WriteString("[grey]RTMP URL: ")
-	if state.IngressURL != "" {
-		s.WriteString("[white:grey]" + state.IngressURL)
-	}
-	s.WriteString("\n\n")
-
-	s.WriteString("[grey:black]Ingress stream: ")
-	if state.IngressLive {
-		s.WriteString("[green]on-air")
-	} else {
-		s.WriteString("[yellow]off-air")
-	}
-
-	return s.String()
 }
 
 // Close closes the terminal user interface.

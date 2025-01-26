@@ -13,20 +13,13 @@ import (
 	typescontainer "github.com/docker/docker/api/types/container"
 
 	"git.netflux.io/rob/termstream/container"
+	"git.netflux.io/rob/termstream/domain"
 )
 
 const (
-	imageNameMediaMTX = "bluenviron/mediamtx"
+	imageNameMediaMTX = "netfluxio/mediamtx-alpine:latest"
 	rtmpPath          = "live"
 )
-
-// State contains the current state of the media server.
-type State struct {
-	ContainerRunning bool
-	ContainerID      string
-	IngressLive      bool
-	IngressURL       string
-}
 
 // action is an action to be performed by the actor.
 type action func()
@@ -34,9 +27,9 @@ type action func()
 // Actor is responsible for managing the media server.
 type Actor struct {
 	ch              chan action
-	state           *State
-	stateChan       chan State
-	containerClient *container.Client
+	state           *domain.Source
+	stateChan       chan domain.Source
+	containerClient *container.Actor
 	logger          *slog.Logger
 	httpClient      *http.Client
 }
@@ -44,7 +37,7 @@ type Actor struct {
 // StartActorParams contains the parameters for starting a new media server
 // actor.
 type StartActorParams struct {
-	ContainerClient *container.Client
+	ContainerClient *container.Actor
 	ChanSize        int
 	Logger          *slog.Logger
 }
@@ -61,8 +54,8 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 
 	actor := &Actor{
 		ch:              make(chan action, chanSize),
-		state:           new(State),
-		stateChan:       make(chan State, chanSize),
+		state:           new(domain.Source),
+		stateChan:       make(chan domain.Source, chanSize),
 		containerClient: params.ContainerClient,
 		logger:          params.Logger,
 		httpClient:      &http.Client{Timeout: httpClientTimeout},
@@ -81,6 +74,13 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 				Labels: map[string]string{
 					"component": componentName,
 				},
+				Healthcheck: &typescontainer.HealthConfig{
+					Test:          []string{"CMD", "curl", "-f", "http://localhost:9997/v3/paths/list"},
+					Interval:      time.Second * 10,
+					StartPeriod:   time.Second * 2,
+					StartInterval: time.Second * 2,
+					Retries:       2,
+				},
 			},
 			HostConfig: &typescontainer.HostConfig{
 				NetworkMode: "host",
@@ -92,8 +92,7 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	}
 
 	actor.state.ContainerID = containerID
-	actor.state.ContainerRunning = true
-	actor.state.IngressURL = "rtmp://localhost:1935/" + rtmpPath
+	actor.state.URL = "rtmp://localhost:1935/" + rtmpPath
 
 	go actor.actorLoop(containerDone)
 
@@ -101,13 +100,13 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 }
 
 // C returns a channel that will receive the current state of the media server.
-func (s *Actor) C() <-chan State {
+func (s *Actor) C() <-chan domain.Source {
 	return s.stateChan
 }
 
 // State returns the current state of the media server.
-func (s *Actor) State() State {
-	resultChan := make(chan State)
+func (s *Actor) State() domain.Source {
+	resultChan := make(chan domain.Source)
 	s.ch <- func() {
 		resultChan <- *s.state
 	}
@@ -141,8 +140,7 @@ func (s *Actor) actorLoop(containerDone <-chan struct{}) {
 		case <-containerDone:
 			ticker.Stop()
 
-			s.state.ContainerRunning = false
-			s.state.IngressLive = false
+			s.state.Live = false
 			sendState()
 
 			closing = true
@@ -153,8 +151,8 @@ func (s *Actor) actorLoop(containerDone <-chan struct{}) {
 				s.logger.Error("Error fetching server state", "error", err)
 				continue
 			}
-			if ingressLive != s.state.IngressLive {
-				s.state.IngressLive = ingressLive
+			if ingressLive != s.state.Live {
+				s.state.Live = ingressLive
 				sendState()
 			}
 		case action, ok := <-s.ch:
