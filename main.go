@@ -39,14 +39,14 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 	logger := slog.New(slog.NewTextHandler(logFile, nil))
 	logger.Info("Starting termstream", slog.Any("initial_state", state))
 
-	runner, err := container.NewRunner(logger.With("component", "runner"))
+	containerClient, err := container.NewClient(logger.With("component", "container_client"))
 	if err != nil {
-		return fmt.Errorf("new runner: %w", err)
+		return fmt.Errorf("new container client: %w", err)
 	}
-	defer runner.Close()
+	defer containerClient.Close()
 
 	srv, err := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
-		Runner: runner,
+		Client: containerClient,
 		Logger: logger.With("component", "mediaserver"),
 	})
 	if err != nil {

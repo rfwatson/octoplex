@@ -21,25 +21,25 @@ func TestMediaServerStartStop(t *testing.T) {
 	t.Cleanup(cancel)
 
 	logger := testhelpers.NewTestLogger()
-	runner, err := container.NewRunner(logger)
+	containerClient, err := container.NewClient(logger)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, runner.Close()) })
+	t.Cleanup(func() { require.NoError(t, containerClient.Close()) })
 
-	running, err := runner.ContainerRunning(ctx, map[string]string{"component": component})
+	running, err := containerClient.ContainerRunning(ctx, map[string]string{"component": component})
 	require.NoError(t, err)
 	assert.False(t, running)
 
 	actor, err := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
-		ChanSize: 1,
-		Runner:   runner,
-		Logger:   logger,
+		ChanSize:        1,
+		ContainerClient: containerClient,
+		Logger:          logger,
 	})
 	require.NoError(t, err)
 
 	require.Eventually(
 		t,
 		func() bool {
-			running, err = runner.ContainerRunning(ctx, map[string]string{"component": component})
+			running, err = containerClient.ContainerRunning(ctx, map[string]string{"component": component})
 			return err == nil && running
 		},
 		5*time.Second,
@@ -62,7 +62,7 @@ func TestMediaServerStartStop(t *testing.T) {
 
 	actor.Close()
 
-	running, err = runner.ContainerRunning(ctx, map[string]string{"component": component})
+	running, err = containerClient.ContainerRunning(ctx, map[string]string{"component": component})
 	require.NoError(t, err)
 	assert.False(t, running)
 }

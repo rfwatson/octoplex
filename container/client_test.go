@@ -7,13 +7,14 @@ import (
 
 	"git.netflux.io/rob/termstream/container"
 	"git.netflux.io/rob/termstream/testhelpers"
+	typescontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestRunnerStartStop(t *testing.T) {
+func TestClientStartStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
@@ -25,35 +26,40 @@ func TestRunnerStartStop(t *testing.T) {
 	containerName := "termstream-test-" + uuid.NewString()
 	component := "test-start-stop"
 
-	runner, err := container.NewRunner(logger)
+	client, err := container.NewClient(logger)
 	require.NoError(t, err)
 
-	running, err := runner.ContainerRunning(ctx, map[string]string{"component": component})
+	running, err := client.ContainerRunning(ctx, map[string]string{"component": component})
 	require.NoError(t, err)
 	assert.False(t, running)
 
-	_, err = runner.RunContainer(ctx, container.RunContainerParams{
-		Name:        containerName,
-		Image:       "bluenviron/mediamtx",
-		Labels:      map[string]string{"component": component},
-		NetworkMode: "default",
+	containerID, _, err := client.RunContainer(ctx, container.RunContainerParams{
+		Name: containerName,
+		ContainerConfig: &typescontainer.Config{
+			Image:  "bluenviron/mediamtx",
+			Labels: map[string]string{"component": component},
+		},
+		HostConfig: &typescontainer.HostConfig{
+			NetworkMode: "default",
+		},
 	})
 	require.NoError(t, err)
+	assert.NotEmpty(t, containerID)
 
 	require.Eventually(
 		t,
 		func() bool {
-			running, err = runner.ContainerRunning(ctx, map[string]string{"component": component})
+			running, err = client.ContainerRunning(ctx, map[string]string{"component": component})
 			return err == nil && running
 		},
-		5*time.Second,
-		250*time.Millisecond,
+		2*time.Second,
+		100*time.Millisecond,
 		"container not in RUNNING state",
 	)
 
-	runner.Close()
+	client.Close()
 
-	running, err = runner.ContainerRunning(ctx, map[string]string{"component": component})
+	running, err = client.ContainerRunning(ctx, map[string]string{"component": component})
 	require.NoError(t, err)
 	assert.False(t, running)
 }

@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"time"
 
+	typescontainer "github.com/docker/docker/api/types/container"
+
 	"git.netflux.io/rob/termstream/container"
 )
 
@@ -21,6 +23,7 @@ const (
 // State contains the current state of the media server.
 type State struct {
 	ContainerRunning bool
+	ContainerID      string
 	IngressLive      bool
 	IngressURL       string
 }
@@ -30,20 +33,20 @@ type action func()
 
 // Actor is responsible for managing the media server.
 type Actor struct {
-	ch         chan action
-	state      *State
-	stateChan  chan State
-	runner     *container.Runner
-	logger     *slog.Logger
-	httpClient *http.Client
+	ch              chan action
+	state           *State
+	stateChan       chan State
+	containerClient *container.Client
+	logger          *slog.Logger
+	httpClient      *http.Client
 }
 
 // StartActorParams contains the parameters for starting a new media server
 // actor.
 type StartActorParams struct {
-	Runner   *container.Runner
-	ChanSize int
-	Logger   *slog.Logger
+	ContainerClient *container.Client
+	ChanSize        int
+	Logger          *slog.Logger
 }
 
 const (
@@ -57,33 +60,38 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
 
 	actor := &Actor{
-		ch:         make(chan action, chanSize),
-		state:      new(State),
-		stateChan:  make(chan State, chanSize),
-		runner:     params.Runner,
-		logger:     params.Logger,
-		httpClient: &http.Client{Timeout: httpClientTimeout},
+		ch:              make(chan action, chanSize),
+		state:           new(State),
+		stateChan:       make(chan State, chanSize),
+		containerClient: params.ContainerClient,
+		logger:          params.Logger,
+		httpClient:      &http.Client{Timeout: httpClientTimeout},
 	}
 
-	containerDone, err := params.Runner.RunContainer(
+	containerID, containerDone, err := params.ContainerClient.RunContainer(
 		ctx,
 		container.RunContainerParams{
-			Name:  "server",
-			Image: imageNameMediaMTX,
-			Env: []string{
-				"MTX_LOGLEVEL=debug",
-				"MTX_API=yes",
+			Name: "server",
+			ContainerConfig: &typescontainer.Config{
+				Image: imageNameMediaMTX,
+				Env: []string{
+					"MTX_LOGLEVEL=debug",
+					"MTX_API=yes",
+				},
+				Labels: map[string]string{
+					"component": componentName,
+				},
 			},
-			Labels: map[string]string{
-				"component": componentName,
+			HostConfig: &typescontainer.HostConfig{
+				NetworkMode: "host",
 			},
-			NetworkMode: "host",
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("run container: %w", err)
 	}
 
+	actor.state.ContainerID = containerID
 	actor.state.ContainerRunning = true
 	actor.state.IngressURL = "rtmp://localhost:1935/" + rtmpPath
 
@@ -108,7 +116,7 @@ func (s *Actor) State() State {
 
 // Close closes the media server actor.
 func (s *Actor) Close() error {
-	if err := s.runner.RemoveContainers(context.Background(), map[string]string{"component": componentName}); err != nil {
+	if err := s.containerClient.RemoveContainers(context.Background(), map[string]string{"component": componentName}); err != nil {
 		return fmt.Errorf("remove containers: %w", err)
 	}
 
