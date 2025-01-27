@@ -135,23 +135,25 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 	setHeaderRow := func(tableView *tview.Table) {
 		tableView.SetCell(0, 0, tview.NewTableCell("[grey]URL").SetAlign(tview.AlignLeft).SetExpansion(7).SetSelectable(false))
 		tableView.SetCell(0, 1, tview.NewTableCell("[grey]Status").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
-		tableView.SetCell(0, 2, tview.NewTableCell("[grey]CPU %").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
-		tableView.SetCell(0, 3, tview.NewTableCell("[grey]Mem used (MB)").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
-		tableView.SetCell(0, 4, tview.NewTableCell("[grey]Actions").SetAlign(tview.AlignLeft).SetExpansion(2).SetSelectable(false))
+		tableView.SetCell(0, 2, tview.NewTableCell("[grey]Health").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
+		tableView.SetCell(0, 3, tview.NewTableCell("[grey]CPU %").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
+		tableView.SetCell(0, 4, tview.NewTableCell("[grey]Mem used (MB)").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
+		tableView.SetCell(0, 5, tview.NewTableCell("[grey]Actions").SetAlign(tview.AlignLeft).SetExpansion(2).SetSelectable(false))
 	}
 
 	a.sourceView.Clear()
 	setHeaderRow(a.sourceView)
-	sourceContainer := state.Containers[state.Source.ContainerID]
 	a.sourceView.SetCell(1, 0, tview.NewTableCell(state.Source.URL))
+
 	if state.Source.Live {
 		a.sourceView.SetCell(1, 1, tview.NewTableCell("[green]on-air"))
 	} else {
 		a.sourceView.SetCell(1, 1, tview.NewTableCell("[yellow]off-air"))
 	}
-	a.sourceView.SetCell(1, 2, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", sourceContainer.CPUPercent)))
-	a.sourceView.SetCell(1, 3, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", float64(sourceContainer.MemoryUsageBytes)/1024/1024)))
-	a.sourceView.SetCell(1, 4, tview.NewTableCell(""))
+	a.sourceView.SetCell(1, 2, tview.NewTableCell("[white]"+cmp.Or(state.Source.ContainerState.HealthState, "starting")))
+	a.sourceView.SetCell(1, 3, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", state.Source.ContainerState.CPUPercent)))
+	a.sourceView.SetCell(1, 4, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", float64(state.Source.ContainerState.MemoryUsageBytes)/1024/1024)))
+	a.sourceView.SetCell(1, 5, tview.NewTableCell(""))
 
 	a.destView.Clear()
 	setHeaderRow(a.destView)
@@ -161,7 +163,8 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 		a.destView.SetCell(i+1, 1, tview.NewTableCell("[yellow]off-air"))
 		a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]-"))
 		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]-"))
-		a.destView.SetCell(i+1, 4, tview.NewTableCell("[green]Tab to go live"))
+		a.destView.SetCell(i+1, 4, tview.NewTableCell("[white]-"))
+		a.destView.SetCell(i+1, 5, tview.NewTableCell("[green]Tab to go live"))
 	}
 
 	a.app.Draw()

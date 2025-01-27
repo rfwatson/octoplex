@@ -21,17 +21,14 @@ func TestClientStartStop(t *testing.T) {
 	containerName := "termstream-test-" + uuid.NewString()
 	component := "test-start-stop"
 
-	client, err := container.NewActor(ctx, container.NewActorParams{
-		ChanSize: 1,
-		Logger:   logger,
-	})
+	client, err := container.NewClient(ctx, logger)
 	require.NoError(t, err)
 
 	running, err := client.ContainerRunning(ctx, map[string]string{"component": component})
 	require.NoError(t, err)
 	assert.False(t, running)
 
-	containerID, _, err := client.RunContainer(ctx, container.RunContainerParams{
+	containerID, containerStateC, err := client.RunContainer(ctx, container.RunContainerParams{
 		Name: containerName,
 		ContainerConfig: &typescontainer.Config{
 			Image:  "netfluxio/mediamtx-alpine:latest",
@@ -42,6 +39,8 @@ func TestClientStartStop(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
+	testhelpers.DiscardChannel(containerStateC)
+
 	assert.NotEmpty(t, containerID)
 
 	require.Eventually(
@@ -53,17 +52,6 @@ func TestClientStartStop(t *testing.T) {
 		2*time.Second,
 		100*time.Millisecond,
 		"container not in RUNNING state",
-	)
-
-	require.Eventually(
-		t,
-		func() bool {
-			ctr, ok := client.GetContainerState()[containerID]
-			return ok && ctr.HealthState == "healthy" && ctr.CPUPercent > 0 && ctr.MemoryUsageBytes > 0
-		},
-		2*time.Second,
-		100*time.Millisecond,
-		"container state not updated",
 	)
 
 	client.Close()
@@ -80,14 +68,11 @@ func TestClientRemoveContainers(t *testing.T) {
 	logger := testhelpers.NewTestLogger()
 	component := "test-remove-containers"
 
-	client, err := container.NewActor(ctx, container.NewActorParams{
-		ChanSize: 1,
-		Logger:   logger,
-	})
+	client, err := container.NewClient(ctx, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { client.Close() })
 
-	_, _, err = client.RunContainer(ctx, container.RunContainerParams{
+	_, stateC, err := client.RunContainer(ctx, container.RunContainerParams{
 		ContainerConfig: &typescontainer.Config{
 			Image:  "netfluxio/mediamtx-alpine:latest",
 			Labels: map[string]string{"component": component, "group": "test1"},
@@ -95,8 +80,9 @@ func TestClientRemoveContainers(t *testing.T) {
 		HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
 	})
 	require.NoError(t, err)
+	testhelpers.DiscardChannel(stateC)
 
-	_, _, err = client.RunContainer(ctx, container.RunContainerParams{
+	_, stateC, err = client.RunContainer(ctx, container.RunContainerParams{
 		ContainerConfig: &typescontainer.Config{
 			Image:  "netfluxio/mediamtx-alpine:latest",
 			Labels: map[string]string{"component": component, "group": "test1"},
@@ -104,8 +90,9 @@ func TestClientRemoveContainers(t *testing.T) {
 		HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
 	})
 	require.NoError(t, err)
+	testhelpers.DiscardChannel(stateC)
 
-	_, _, err = client.RunContainer(ctx, container.RunContainerParams{
+	_, stateC, err = client.RunContainer(ctx, container.RunContainerParams{
 		ContainerConfig: &typescontainer.Config{
 			Image:  "netfluxio/mediamtx-alpine:latest",
 			Labels: map[string]string{"component": component, "group": "test2"},
@@ -113,7 +100,7 @@ func TestClientRemoveContainers(t *testing.T) {
 		HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
 	})
 	require.NoError(t, err)
-	require.Equal(t, 3, len(client.GetContainerState()))
+	testhelpers.DiscardChannel(stateC)
 
 	// check all containers in group 1 are running
 	require.Eventually(
@@ -154,7 +141,6 @@ func TestClientRemoveContainers(t *testing.T) {
 		100*time.Millisecond,
 		"container group 1 still in RUNNING state",
 	)
-	require.Equal(t, 1, len(client.GetContainerState()))
 
 	// check group 2 is still running
 	running, err := client.ContainerRunning(ctx, map[string]string{"group": "test2"})

@@ -42,9 +42,7 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 	logger := slog.New(slog.NewTextHandler(logFile, nil))
 	logger.Info("Starting termstream", slog.Any("initial_state", state))
 
-	containerClient, err := container.NewActor(ctx, container.NewActorParams{
-		Logger: logger.With("component", "container_client"),
-	})
+	containerClient, err := container.NewClient(ctx, logger.With("component", "container_client"))
 	if err != nil {
 		return fmt.Errorf("new container client: %w", err)
 	}
@@ -80,16 +78,11 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 			}
 			logger.Info("Command received", "cmd", cmd)
 		case <-uiTicker.C:
-			applyContainerState(containerClient, state)
+			// TODO: update UI with current state?
 			updateUI()
-		case serverState, ok := <-srv.C():
-			if ok {
-				applyServerState(serverState, state)
-				updateUI()
-			} else {
-				logger.Info("Source state channel closed, shutting down...")
-				return nil
-			}
+		case serverState := <-srv.C():
+			applyServerState(serverState, state)
+			updateUI()
 		}
 	}
 }
@@ -105,9 +98,4 @@ func applyConfig(cfg config.Config, appState *domain.AppState) {
 	for _, dest := range cfg.Destinations {
 		appState.Destinations = append(appState.Destinations, domain.Destination{URL: dest.URL})
 	}
-}
-
-// applyContainerState applies the current container state to the app state.
-func applyContainerState(containerClient *container.Actor, appState *domain.AppState) {
-	appState.Containers = containerClient.GetContainerState()
 }
