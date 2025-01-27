@@ -26,18 +26,20 @@ type action func()
 
 // Actor is responsible for managing the media server.
 type Actor struct {
-	ch              chan action
-	state           *domain.Source
-	stateChan       chan domain.Source
-	containerClient *container.Actor
+	actorC          chan action
+	stateC          chan domain.Source
+	containerClient *container.Client
 	logger          *slog.Logger
 	httpClient      *http.Client
+
+	// mutable state
+	state *domain.Source
 }
 
 // StartActorParams contains the parameters for starting a new media server
 // actor.
 type StartActorParams struct {
-	ContainerClient *container.Actor
+	ContainerClient *container.Client
 	ChanSize        int
 	Logger          *slog.Logger
 }
@@ -53,22 +55,22 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
 
 	actor := &Actor{
-		ch:              make(chan action, chanSize),
+		actorC:          make(chan action, chanSize),
 		state:           new(domain.Source),
-		stateChan:       make(chan domain.Source, chanSize),
+		stateC:          make(chan domain.Source, chanSize),
 		containerClient: params.ContainerClient,
 		logger:          params.Logger,
 		httpClient:      &http.Client{Timeout: httpClientTimeout},
 	}
 
-	containerID, containerDone, err := params.ContainerClient.RunContainer(
+	containerID, containerStateC, err := params.ContainerClient.RunContainer(
 		ctx,
 		container.RunContainerParams{
 			Name: "server",
 			ContainerConfig: &typescontainer.Config{
 				Image: imageNameMediaMTX,
 				Env: []string{
-					"MTX_LOGLEVEL=debug",
+					"MTX_LOGLEVEL=info",
 					"MTX_API=yes",
 				},
 				Labels: map[string]string{
@@ -91,23 +93,23 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 		return nil, fmt.Errorf("run container: %w", err)
 	}
 
-	actor.state.ContainerID = containerID
+	actor.state.ContainerState.ID = containerID
 	actor.state.URL = "rtmp://localhost:1935/" + rtmpPath
 
-	go actor.actorLoop(containerDone)
+	go actor.actorLoop(containerStateC)
 
 	return actor, nil
 }
 
 // C returns a channel that will receive the current state of the media server.
 func (s *Actor) C() <-chan domain.Source {
-	return s.stateChan
+	return s.stateC
 }
 
 // State returns the current state of the media server.
 func (s *Actor) State() domain.Source {
 	resultChan := make(chan domain.Source)
-	s.ch <- func() {
+	s.actorC <- func() {
 		resultChan <- *s.state
 	}
 	return <-resultChan
@@ -119,32 +121,37 @@ func (s *Actor) Close() error {
 		return fmt.Errorf("remove containers: %w", err)
 	}
 
+	close(s.actorC)
+
 	return nil
 }
 
-func (s *Actor) actorLoop(containerDone <-chan struct{}) {
-	defer close(s.ch)
-
+// actorLoop is the main loop of the media server actor. It only exits when the
+// actor is closed.
+func (s *Actor) actorLoop(containerStateC <-chan domain.ContainerState) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	var closing bool
-	sendState := func() {
-		if !closing {
-			s.stateChan <- *s.state
-		}
-	}
+	sendState := func() { s.stateC <- *s.state }
 
 	for {
 		select {
-		case <-containerDone:
-			ticker.Stop()
+		case containerState, ok := <-containerStateC:
+			if !ok {
+				ticker.Stop()
 
-			s.state.Live = false
+				if s.state.Live {
+					s.state.Live = false
+					sendState()
+				}
+
+				continue
+			}
+
+			s.state.ContainerState = containerState
 			sendState()
 
-			closing = true
-			close(s.stateChan)
+			continue
 		case <-ticker.C:
 			ingressLive, err := s.fetchIngressStateFromServer()
 			if err != nil {
@@ -155,7 +162,7 @@ func (s *Actor) actorLoop(containerDone <-chan struct{}) {
 				s.state.Live = ingressLive
 				sendState()
 			}
-		case action, ok := <-s.ch:
+		case action, ok := <-s.actorC:
 			if !ok {
 				return
 			}

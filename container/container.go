@@ -1,7 +1,6 @@
 package container
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,36 +21,22 @@ import (
 	"github.com/google/uuid"
 )
 
-var (
-	stopTimeout     = 10 * time.Second
-	defaultChanSize = 64
-)
+// stopTimeout is the timeout for stopping a container.
+var stopTimeout = 10 * time.Second
 
-type action func()
-
-// Actor is an actor that provides a thin wrapper around the Docker API client,
-// and provides additional functionality such as exposing container stats.
-type Actor struct {
+// Client provides a thin wrapper around the Docker API client, and provides
+// additional functionality such as exposing container stats.
+type Client struct {
 	id        uuid.UUID
 	ctx       context.Context
 	cancel    context.CancelFunc
-	ch        chan action
 	wg        sync.WaitGroup
 	apiClient *client.Client
 	logger    *slog.Logger
-
-	// mutable state
-	containers map[string]*domain.Container
 }
 
-// NewActorParams are the parameters for creating a new Actor.
-type NewActorParams struct {
-	ChanSize int
-	Logger   *slog.Logger
-}
-
-// NewActor creates a new Actor.
-func NewActor(ctx context.Context, params NewActorParams) (*Actor, error) {
+// NewClient creates a new Client.
+func NewClient(ctx context.Context, logger *slog.Logger) (*Client, error) {
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, err
@@ -59,144 +44,111 @@ func NewActor(ctx context.Context, params NewActorParams) (*Actor, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	client := &Actor{
-		id:         uuid.New(),
-		ctx:        ctx,
-		cancel:     cancel,
-		ch:         make(chan action, cmp.Or(params.ChanSize, defaultChanSize)),
-		apiClient:  apiClient,
-		logger:     params.Logger,
-		containers: make(map[string]*domain.Container),
+	client := &Client{
+		id:        uuid.New(),
+		ctx:       ctx,
+		cancel:    cancel,
+		apiClient: apiClient,
+		logger:    logger,
 	}
-
-	client.wg.Add(1)
-	go func() {
-		defer client.wg.Done()
-
-		client.dockerEventLoop()
-	}()
-
-	go client.actorLoop()
 
 	return client, nil
 }
 
-// actorLoop is the main loop for the client.
-//
-// It continues to run until the internal channel is closed, which only happens
-// when [Close] is called. This means that it is not reliant on any context
-// remaining open, and any method calls made after [Close] may deadlock or
-// fail.
-func (a *Actor) actorLoop() {
-	for action := range a.ch {
-		action()
-	}
+// stats is a struct to hold container stats.
+type stats struct {
+	cpuPercent       float64
+	memoryUsageBytes uint64
 }
 
-func (a *Actor) handleStats(id string) {
-	statsReader, err := a.apiClient.ContainerStats(a.ctx, id, true)
-	if err != nil {
-		// TODO: error handling?
-		a.logger.Error("Error getting container stats", "err", err, "id", shortID(id))
-		return
-	}
-	defer statsReader.Body.Close()
+// getStats returns a channel that will receive container stats. The channel is
+// never closed, but the spawned goroutine will exit when the context is
+// cancelled.
+func (a *Client) getStats(containerID string) <-chan stats {
+	ch := make(chan stats)
 
-	buf := make([]byte, 4_096)
-	for {
-		n, err := statsReader.Body.Read(buf)
+	go func() {
+		statsReader, err := a.apiClient.ContainerStats(a.ctx, containerID, true)
 		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
-				return
-			}
-			a.logger.Error("Error reading stats", "err", err, "id", shortID(id))
+			// TODO: error handling?
+			a.logger.Error("Error getting container stats", "err", err, "id", shortID(containerID))
 			return
 		}
+		defer statsReader.Body.Close()
 
-		var statsResp container.StatsResponse
-		if err = json.Unmarshal(buf[:n], &statsResp); err != nil {
-			a.logger.Error("Error unmarshalling stats", "err", err, "id", shortID(id))
-			continue
-		}
+		buf := make([]byte, 4_096)
+		for {
+			n, err := statsReader.Body.Read(buf)
+			if err != nil {
+				if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+					break
+				}
+				a.logger.Error("Error reading stats", "err", err, "id", shortID(containerID))
+				break
+			}
 
-		a.ch <- func() {
-			ctr, ok := a.containers[id]
-			if !ok {
-				return
+			var statsResp container.StatsResponse
+			if err = json.Unmarshal(buf[:n], &statsResp); err != nil {
+				a.logger.Error("Error unmarshalling stats", "err", err, "id", shortID(containerID))
+				break
 			}
 
 			// https://stackoverflow.com/a/30292327/62871
 			cpuDelta := float64(statsResp.CPUStats.CPUUsage.TotalUsage - statsResp.PreCPUStats.CPUUsage.TotalUsage)
 			systemDelta := float64(statsResp.CPUStats.SystemUsage - statsResp.PreCPUStats.SystemUsage)
-			ctr.CPUPercent = (cpuDelta / systemDelta) * float64(statsResp.CPUStats.OnlineCPUs) * 100
-			ctr.MemoryUsageBytes = statsResp.MemoryStats.Usage
+			ch <- stats{
+				cpuPercent:       (cpuDelta / systemDelta) * float64(statsResp.CPUStats.OnlineCPUs) * 100,
+				memoryUsageBytes: statsResp.MemoryStats.Usage,
+			}
 		}
-	}
+	}()
+
+	return ch
 }
 
-func (a *Actor) dockerEventLoop() {
-	for {
-		ch, errCh := a.apiClient.Events(a.ctx, events.ListOptions{
+// getEvents returns a channel that will receive container events. The channel is
+// never closed, but the spawned goroutine will exit when the context is
+// cancelled.
+func (a *Client) getEvents(containerID string) <-chan events.Message {
+	sendC := make(chan events.Message)
+
+	getEvents := func() (bool, error) {
+		recvC, errC := a.apiClient.Events(a.ctx, events.ListOptions{
 			Filters: filters.NewArgs(
-				filters.Arg("label", "app=termstream"),
-				filters.Arg("label", "app-id="+a.id.String()),
+				filters.Arg("container", containerID),
+				filters.Arg("type", "container"),
 			),
 		})
 
-		select {
-		case <-a.ctx.Done():
-			return
-		case evt := <-ch:
-			a.handleDockerEvent(evt)
-		case err := <-errCh:
-			if a.ctx.Err() != nil {
-				return
-			}
+		for {
+			select {
+			case <-a.ctx.Done():
+				return false, a.ctx.Err()
+			case evt := <-recvC:
+				sendC <- evt
+			case err := <-errC:
+				if a.ctx.Err() != nil || errors.Is(err, io.EOF) {
+					return false, err
+				}
 
-			a.logger.Warn("Error receiving Docker events", "err", err)
-			time.Sleep(1 * time.Second)
-		}
-	}
-}
-
-func (a *Actor) handleDockerEvent(evt events.Message) {
-	a.ch <- func() {
-		ctr, ok := a.containers[evt.ID]
-		if !ok {
-			return
-		}
-
-		if strings.HasPrefix(string(evt.Action), "health_status") {
-			a.logger.Info("Event: health status changed", "type", evt.Type, "action", evt.Action, "id", shortID(evt.ID))
-
-			switch evt.Action {
-			case events.ActionHealthStatusRunning:
-				ctr.HealthState = "running"
-			case events.ActionHealthStatusHealthy:
-				ctr.HealthState = "healthy"
-			case events.ActionHealthStatusUnhealthy:
-				ctr.HealthState = "unhealthy"
-			default:
-				a.logger.Warn("Unknown health status", "action", evt.Action)
-				ctr.HealthState = "unknown"
+				return true, err
 			}
 		}
 	}
-}
 
-// GetContainerState returns a copy of the current state of all containers.
-func (a *Actor) GetContainerState() map[string]domain.Container {
-	resultChan := make(chan map[string]domain.Container)
+	go func() {
+		for {
+			shouldRetry, err := getEvents()
+			if !shouldRetry {
+				break
+			}
 
-	a.ch <- func() {
-		result := make(map[string]domain.Container, len(a.containers))
-		for id, ctr := range a.containers {
-			result[id] = *ctr
+			a.logger.Warn("Error receiving Docker events", "err", err, "id", shortID(containerID))
+			time.Sleep(2 * time.Second)
 		}
-		resultChan <- result
-	}
+	}()
 
-	return <-resultChan
+	return sendC
 }
 
 // RunContainerParams are the parameters for running a container.
@@ -207,7 +159,10 @@ type RunContainerParams struct {
 }
 
 // RunContainer runs a container with the given parameters.
-func (a *Actor) RunContainer(ctx context.Context, params RunContainerParams) (string, <-chan struct{}, error) {
+//
+// The returned channel will receive the current state of the container, and
+// will be closed after the container has stopped.
+func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (string, <-chan domain.ContainerState, error) {
 	pullReader, err := a.apiClient.ImagePull(ctx, params.ContainerConfig.Image, image.PullOptions{})
 	if err != nil {
 		return "", nil, fmt.Errorf("image pull: %w", err)
@@ -240,44 +195,65 @@ func (a *Actor) RunContainer(ctx context.Context, params RunContainerParams) (st
 	}
 	a.logger.Info("Started container", "id", shortID(createResp.ID))
 
-	go a.handleStats(createResp.ID)
-
-	ch := make(chan struct{}, 1)
+	containerStateC := make(chan domain.ContainerState, 1)
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
+		defer close(containerStateC)
 
-		respChan, errChan := a.apiClient.ContainerWait(ctx, createResp.ID, container.WaitConditionNotRunning)
-		select {
-		case resp := <-respChan:
-			a.logger.Info("Container entered non-running state", "exit_code", resp.StatusCode, "id", shortID(createResp.ID))
-			a.ch <- func() {
-				delete(a.containers, createResp.ID)
-			}
-		case err = <-errChan:
-			// TODO: error handling?
-			if err != context.Canceled {
-				a.logger.Error("Error setting container wait", "err", err, "id", shortID(createResp.ID))
-			}
-		}
-
-		ch <- struct{}{}
+		a.runContainerLoop(ctx, createResp.ID, containerStateC)
 	}()
 
-	// Update the containers map which must be done on the actor loop, but before
-	// we return from the method.
-	done := make(chan struct{})
-	a.ch <- func() {
-		a.containers[createResp.ID] = &domain.Container{ID: createResp.ID, HealthState: "healthy"}
-		done <- struct{}{}
-	}
-	<-done
+	return createResp.ID, containerStateC, nil
+}
 
-	return createResp.ID, ch, nil
+// runContainerLoop is the control loop for a single container. It returns only
+// when the container exits.
+func (a *Client) runContainerLoop(ctx context.Context, containerID string, stateCh chan<- domain.ContainerState) {
+	statsC := a.getStats(containerID)
+	eventsC := a.getEvents(containerID)
+	respC, errC := a.apiClient.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
+
+	state := &domain.ContainerState{ID: containerID}
+	sendState := func() { stateCh <- *state }
+	sendState()
+
+	for {
+		select {
+		case resp := <-respC:
+			a.logger.Info("Container entered non-running state", "exit_code", resp.StatusCode, "id", shortID(containerID))
+			return
+		case err := <-errC:
+			// TODO: error handling?
+			if err != context.Canceled {
+				a.logger.Error("Error setting container wait", "err", err, "id", shortID(containerID))
+			}
+			return
+		case evt := <-eventsC:
+			if strings.Contains(string(evt.Action), "health_status") {
+				switch evt.Action {
+				case events.ActionHealthStatusRunning:
+					state.HealthState = "running"
+				case events.ActionHealthStatusHealthy:
+					state.HealthState = "healthy"
+				case events.ActionHealthStatusUnhealthy:
+					state.HealthState = "unhealthy"
+				default:
+					a.logger.Warn("Unknown health status", "status", evt.Action)
+					state.HealthState = "unknown"
+				}
+				sendState()
+			}
+		case stats := <-statsC:
+			state.CPUPercent = stats.cpuPercent
+			state.MemoryUsageBytes = stats.memoryUsageBytes
+			sendState()
+		}
+	}
 }
 
 // Close closes the client, stopping and removing all running containers.
-func (a *Actor) Close() error {
+func (a *Client) Close() error {
 	a.cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), stopTimeout)
@@ -296,12 +272,10 @@ func (a *Actor) Close() error {
 
 	a.wg.Wait()
 
-	close(a.ch)
-
 	return a.apiClient.Close()
 }
 
-func (a *Actor) removeContainer(ctx context.Context, id string) error {
+func (a *Client) removeContainer(ctx context.Context, id string) error {
 	a.logger.Info("Stopping container", "id", shortID(id))
 	stopTimeout := int(stopTimeout.Seconds())
 	if err := a.apiClient.ContainerStop(ctx, id, container.StopOptions{Timeout: &stopTimeout}); err != nil {
@@ -317,7 +291,7 @@ func (a *Actor) removeContainer(ctx context.Context, id string) error {
 }
 
 // ContainerRunning checks if a container with the given labels is running.
-func (a *Actor) ContainerRunning(ctx context.Context, labels map[string]string) (bool, error) {
+func (a *Client) ContainerRunning(ctx context.Context, labels map[string]string) (bool, error) {
 	containers, err := a.containersMatchingLabels(ctx, labels)
 	if err != nil {
 		return false, fmt.Errorf("container list: %w", err)
@@ -333,7 +307,7 @@ func (a *Actor) ContainerRunning(ctx context.Context, labels map[string]string) 
 }
 
 // RemoveContainers removes all containers with the given labels.
-func (a *Actor) RemoveContainers(ctx context.Context, labels map[string]string) error {
+func (a *Client) RemoveContainers(ctx context.Context, labels map[string]string) error {
 	containers, err := a.containersMatchingLabels(ctx, labels)
 	if err != nil {
 		return fmt.Errorf("container list: %w", err)
@@ -348,7 +322,7 @@ func (a *Actor) RemoveContainers(ctx context.Context, labels map[string]string) 
 	return nil
 }
 
-func (a *Actor) containersMatchingLabels(ctx context.Context, labels map[string]string) ([]types.Container, error) {
+func (a *Client) containersMatchingLabels(ctx context.Context, labels map[string]string) ([]types.Container, error) {
 	filterArgs := filters.NewArgs(
 		filters.Arg("label", "app=termstream"),
 		filters.Arg("label", "app-id="+a.id.String()),

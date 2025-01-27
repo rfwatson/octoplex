@@ -21,7 +21,7 @@ func TestMediaServerStartStop(t *testing.T) {
 	t.Cleanup(cancel)
 
 	logger := testhelpers.NewTestLogger()
-	containerClient, err := container.NewActor(ctx, container.NewActorParams{ChanSize: 1, Logger: logger})
+	containerClient, err := container.NewClient(ctx, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, containerClient.Close()) })
 
@@ -35,6 +35,7 @@ func TestMediaServerStartStop(t *testing.T) {
 		Logger:          logger,
 	})
 	require.NoError(t, err)
+	testhelpers.DiscardChannel(mediaServer.C())
 
 	require.Eventually(
 		t,
@@ -54,10 +55,13 @@ func TestMediaServerStartStop(t *testing.T) {
 	launchFFMPEG(t, "rtmp://localhost:1935/live")
 	require.Eventually(
 		t,
-		func() bool { return mediaServer.State().Live },
+		func() bool {
+			currState := mediaServer.State()
+			return currState.Live && currState.ContainerState.HealthState == "healthy"
+		},
 		5*time.Second,
 		250*time.Millisecond,
-		"actor not in LIVE state",
+		"actor not healthy and/or in LIVE state",
 	)
 
 	mediaServer.Close()
