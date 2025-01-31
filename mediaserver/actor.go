@@ -51,7 +51,9 @@ const (
 )
 
 // StartActor starts a new media server actor.
-func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
+//
+// Callers must consume the state channel exposed via [C].
+func StartActor(ctx context.Context, params StartActorParams) *Actor {
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
 
 	actor := &Actor{
@@ -63,10 +65,11 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 		httpClient:      &http.Client{Timeout: httpClientTimeout},
 	}
 
-	containerID, containerStateC, err := params.ContainerClient.RunContainer(
+	containerStateC, errC := params.ContainerClient.RunContainer(
 		ctx,
 		container.RunContainerParams{
-			Name: "server",
+			Name:     "server",
+			ChanSize: chanSize,
 			ContainerConfig: &typescontainer.Config{
 				Image: imageNameMediaMTX,
 				Env: []string{
@@ -89,16 +92,12 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 			},
 		},
 	)
-	if err != nil {
-		return nil, fmt.Errorf("run container: %w", err)
-	}
 
-	actor.state.ContainerState.ID = containerID
 	actor.state.URL = "rtmp://localhost:1935/" + rtmpPath
 
-	go actor.actorLoop(containerStateC)
+	go actor.actorLoop(containerStateC, errC)
 
-	return actor, nil
+	return actor
 }
 
 // C returns a channel that will receive the current state of the media server.
@@ -128,7 +127,7 @@ func (s *Actor) Close() error {
 
 // actorLoop is the main loop of the media server actor. It only exits when the
 // actor is closed.
-func (s *Actor) actorLoop(containerStateC <-chan domain.ContainerState) {
+func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan error) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -136,22 +135,22 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.ContainerState) {
 
 	for {
 		select {
-		case containerState, ok := <-containerStateC:
-			if !ok {
-				ticker.Stop()
-
-				if s.state.Live {
-					s.state.Live = false
-					sendState()
-				}
-
-				continue
-			}
-
-			s.state.ContainerState = containerState
+		case containerState := <-containerStateC:
+			s.state.Container = containerState
 			sendState()
 
 			continue
+		case err := <-errC:
+			if err != nil {
+				s.logger.Error("Error from container client", "error", err, "id", shortID(s.state.Container.ID))
+			}
+
+			ticker.Stop()
+
+			if s.state.Live {
+				s.state.Live = false
+				sendState()
+			}
 		case <-ticker.C:
 			ingressLive, err := s.fetchIngressStateFromServer()
 			if err != nil {
@@ -217,4 +216,11 @@ func (s *Actor) fetchIngressStateFromServer() (bool, error) {
 	}
 
 	return false, nil
+}
+
+func shortID(id string) string {
+	if len(id) < 12 {
+		return id
+	}
+	return id[:12]
 }

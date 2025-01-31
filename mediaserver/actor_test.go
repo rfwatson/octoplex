@@ -29,13 +29,13 @@ func TestMediaServerStartStop(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, running)
 
-	mediaServer, err := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
+	mediaServer := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
 		ChanSize:        1,
 		ContainerClient: containerClient,
 		Logger:          logger,
 	})
 	require.NoError(t, err)
-	testhelpers.DiscardChannel(mediaServer.C())
+	testhelpers.ChanDiscard(mediaServer.C())
 
 	require.Eventually(
 		t,
@@ -57,7 +57,7 @@ func TestMediaServerStartStop(t *testing.T) {
 		t,
 		func() bool {
 			currState := mediaServer.State()
-			return currState.Live && currState.ContainerState.HealthState == "healthy"
+			return currState.Live && currState.Container.HealthState == "healthy"
 		},
 		5*time.Second,
 		250*time.Millisecond,
