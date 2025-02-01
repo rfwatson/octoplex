@@ -113,7 +113,7 @@ func TestClientRemoveContainers(t *testing.T) {
 			return running
 		},
 		5*time.Second,
-		100*time.Millisecond,
+		500*time.Millisecond,
 		"container group 1 not in RUNNING state",
 	)
 	// check all containers in group 2 are running
@@ -124,7 +124,7 @@ func TestClientRemoveContainers(t *testing.T) {
 			return running
 		},
 		2*time.Second,
-		100*time.Millisecond,
+		500*time.Millisecond,
 		"container group 2 not in RUNNING state",
 	)
 
@@ -141,7 +141,7 @@ func TestClientRemoveContainers(t *testing.T) {
 			return err == nil && !running
 		},
 		2*time.Second,
-		100*time.Millisecond,
+		500*time.Millisecond,
 		"container group 1 still in RUNNING state",
 	)
 

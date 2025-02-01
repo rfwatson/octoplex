@@ -147,7 +147,7 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 	a.sourceView.SetCell(1, 0, tview.NewTableCell(state.Source.URL))
 
 	if state.Source.Live {
-		a.sourceView.SetCell(1, 1, tview.NewTableCell("[green]on-air"))
+		a.sourceView.SetCell(1, 1, tview.NewTableCell("[black:green]receiving"))
 	} else {
 		a.sourceView.SetCell(1, 1, tview.NewTableCell("[yellow]off-air"))
 	}
@@ -162,11 +162,31 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 
 	for i, dest := range state.Destinations {
 		a.destView.SetCell(i+1, 0, tview.NewTableCell(dest.URL))
-		a.destView.SetCell(i+1, 1, tview.NewTableCell("[yellow]off-air"))
-		a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]-"))
-		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]-"))
-		a.destView.SetCell(i+1, 4, tview.NewTableCell("[white]-"))
-		a.destView.SetCell(i+1, 5, tview.NewTableCell("[white]-"))
+		if dest.Live {
+			a.destView.SetCell(i+1, 1, tview.NewTableCell("[black:green]sending"))
+		} else {
+			a.destView.SetCell(i+1, 1, tview.NewTableCell("[white]off-air"))
+		}
+		a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+cmp.Or(dest.Container.State, "-")))
+
+		healthState := "-"
+		if dest.Container.State == "running" {
+			healthState = "healthy"
+		}
+		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+healthState))
+
+		cpuPercent := "-"
+		if dest.Container.State == "running" {
+			cpuPercent = fmt.Sprintf("%.1f", dest.Container.CPUPercent)
+		}
+
+		memoryUsage := "-"
+		if dest.Container.State == "running" {
+			memoryUsage = fmt.Sprintf("%.1f", float64(dest.Container.MemoryUsageBytes)/1024/1024)
+		}
+
+		a.destView.SetCell(i+1, 4, tview.NewTableCell("[white]"+cpuPercent))
+		a.destView.SetCell(i+1, 5, tview.NewTableCell("[white]"+memoryUsage))
 		a.destView.SetCell(i+1, 6, tview.NewTableCell("[green]Tab to go live"))
 	}
 

@@ -10,6 +10,7 @@ type AppState struct {
 type Source struct {
 	Container Container
 	Live      bool
+	Listeners int
 	URL       string
 }
 

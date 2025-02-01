@@ -175,9 +175,8 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 	now := time.Now()
 	containerStateC := make(chan domain.Container, cmp.Or(params.ChanSize, defaultChanSize))
 	errC := make(chan error, 1)
-	closeWithError := func(err error) {
+	sendError := func(err error) {
 		errC <- err
-		close(errC)
 	}
 
 	a.wg.Add(1)
@@ -189,7 +188,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 
 		pullReader, err := a.apiClient.ImagePull(ctx, params.ContainerConfig.Image, image.PullOptions{})
 		if err != nil {
-			closeWithError(fmt.Errorf("image pull: %w", err))
+			sendError(fmt.Errorf("image pull: %w", err))
 			return
 		}
 		_, _ = io.Copy(io.Discard, pullReader)
@@ -212,16 +211,17 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 			name,
 		)
 		if err != nil {
-			closeWithError(fmt.Errorf("container create: %w", err))
+			sendError(fmt.Errorf("container create: %w", err))
 			return
 		}
 		containerStateC <- domain.Container{ID: createResp.ID, State: "created"}
 
 		if err = a.apiClient.ContainerStart(ctx, createResp.ID, container.StartOptions{}); err != nil {
-			closeWithError(fmt.Errorf("container start: %w", err))
+			sendError(fmt.Errorf("container start: %w", err))
 			return
 		}
 		a.logger.Info("Started container", "id", shortID(createResp.ID), "duration", time.Since(now))
+
 		containerStateC <- domain.Container{ID: createResp.ID, State: "running"}
 
 		a.runContainerLoop(ctx, createResp.ID, containerStateC, errC)
@@ -245,6 +245,8 @@ func (a *Client) runContainerLoop(ctx context.Context, containerID string, state
 		select {
 		case resp := <-containerRespC:
 			a.logger.Info("Container entered non-running state", "exit_code", resp.StatusCode, "id", shortID(containerID))
+			state.State = "exited"
+			sendState()
 			return
 		case err := <-containerErrC:
 			// TODO: error handling?

@@ -12,6 +12,7 @@ import (
 	"git.netflux.io/rob/termstream/container"
 	"git.netflux.io/rob/termstream/domain"
 	"git.netflux.io/rob/termstream/mediaserver"
+	"git.netflux.io/rob/termstream/multiplexer"
 	"git.netflux.io/rob/termstream/terminal"
 )
 
@@ -42,6 +43,15 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 	logger := slog.New(slog.NewTextHandler(logFile, nil))
 	logger.Info("Starting termstream", slog.Any("initial_state", state))
 
+	ui, err := terminal.StartActor(ctx, terminal.StartActorParams{Logger: logger.With("component", "ui")})
+	if err != nil {
+		return fmt.Errorf("start tui: %w", err)
+	}
+	defer ui.Close()
+
+	updateUI := func() { ui.SetState(*state) }
+	updateUI()
+
 	containerClient, err := container.NewClient(ctx, logger.With("component", "container_client"))
 	if err != nil {
 		return fmt.Errorf("new container client: %w", err)
@@ -52,15 +62,14 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "mediaserver"),
 	})
+	defer srv.Close()
 
-	ui, err := terminal.StartActor(ctx, terminal.StartActorParams{Logger: logger.With("component", "ui")})
-	if err != nil {
-		return fmt.Errorf("start tui: %w", err)
-	}
-	defer ui.Close()
-
-	updateUI := func() { ui.SetState(*state) }
-	updateUI()
+	mp := multiplexer.NewActor(ctx, multiplexer.NewActorParams{
+		SourceURL:       srv.State().URL,
+		ContainerClient: containerClient,
+		Logger:          logger.With("component", "multiplexer"),
+	})
+	defer mp.Close()
 
 	uiTicker := time.NewTicker(uiUpdateInterval)
 	defer uiTicker.Stop()
@@ -73,12 +82,20 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 				logger.Info("UI closed")
 				return nil
 			}
+
 			logger.Info("Command received", "cmd", cmd)
+			switch c := cmd.(type) {
+			case terminal.CommandToggleDestination:
+				mp.ToggleDestination(c.URL)
+			}
 		case <-uiTicker.C:
 			// TODO: update UI with current state?
 			updateUI()
 		case serverState := <-srv.C():
 			applyServerState(serverState, state)
+			updateUI()
+		case mpState := <-mp.C():
+			applyMultiplexerState(mpState, state)
 			updateUI()
 		}
 	}
@@ -87,6 +104,18 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 // applyServerState applies the current server state to the app state.
 func applyServerState(serverState domain.Source, appState *domain.AppState) {
 	appState.Source = serverState
+}
+
+func applyMultiplexerState(destination domain.Destination, appState *domain.AppState) {
+	for i, dest := range appState.Destinations {
+		if dest.URL != destination.URL {
+			continue
+		}
+
+		appState.Destinations[i] = destination
+
+		break
+	}
 }
 
 // applyConfig applies the configuration to the app state.
