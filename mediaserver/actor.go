@@ -3,22 +3,28 @@ package mediaserver
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	typescontainer "github.com/docker/docker/api/types/container"
+	"github.com/docker/go-connections/nat"
 
 	"git.netflux.io/rob/termstream/container"
 	"git.netflux.io/rob/termstream/domain"
 )
 
 const (
-	imageNameMediaMTX = "netfluxio/mediamtx-alpine:latest"
-	rtmpPath          = "live"
+	defaultFetchIngressStateInterval = 5 * time.Second                    // default interval to fetch the state of the media server
+	defaultAPIPort                   = 9997                               // default API port for the media server
+	defaultRTMPPort                  = 1935                               // default RTMP port for the media server
+	defaultChanSize                  = 64                                 // default channel size for asynchronous non-error channels
+	imageNameMediaMTX                = "netfluxio/mediamtx-alpine:latest" // image name for mediamtx
+	rtmpPath                         = "live"                             // RTMP path for the media server
+	componentName                    = "mediaserver"                      // component name, mostly used for Docker labels
+	httpClientTimeout                = time.Second                        // timeout for outgoing HTTP client requests
 )
 
 // action is an action to be performed by the actor.
@@ -26,11 +32,14 @@ type action func()
 
 // Actor is responsible for managing the media server.
 type Actor struct {
-	actorC          chan action
-	stateC          chan domain.Source
-	containerClient *container.Client
-	logger          *slog.Logger
-	httpClient      *http.Client
+	actorC                    chan action
+	stateC                    chan domain.Source
+	containerClient           *container.Client
+	apiPort                   int
+	rtmpPort                  int
+	fetchIngressStateInterval time.Duration
+	logger                    *slog.Logger
+	httpClient                *http.Client
 
 	// mutable state
 	state *domain.Source
@@ -39,16 +48,13 @@ type Actor struct {
 // StartActorParams contains the parameters for starting a new media server
 // actor.
 type StartActorParams struct {
-	ContainerClient *container.Client
-	ChanSize        int
-	Logger          *slog.Logger
+	APIPort                   int           // defaults to 9997
+	RTMPPort                  int           // defaults to 1935
+	ChanSize                  int           // defaults to 64
+	FetchIngressStateInterval time.Duration // defaults to 5 seconds
+	ContainerClient           *container.Client
+	Logger                    *slog.Logger
 }
-
-const (
-	defaultChanSize   = 64
-	componentName     = "mediaserver"
-	httpClientTimeout = time.Second
-)
 
 // StartActor starts a new media server actor.
 //
@@ -57,18 +63,25 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
 
 	actor := &Actor{
-		actorC:          make(chan action, chanSize),
-		state:           new(domain.Source),
-		stateC:          make(chan domain.Source, chanSize),
-		containerClient: params.ContainerClient,
-		logger:          params.Logger,
-		httpClient:      &http.Client{Timeout: httpClientTimeout},
+		apiPort:                   cmp.Or(params.APIPort, defaultAPIPort),
+		rtmpPort:                  cmp.Or(params.RTMPPort, defaultRTMPPort),
+		fetchIngressStateInterval: cmp.Or(params.FetchIngressStateInterval, defaultFetchIngressStateInterval),
+		actorC:                    make(chan action, chanSize),
+		state:                     new(domain.Source),
+		stateC:                    make(chan domain.Source, chanSize),
+		containerClient:           params.ContainerClient,
+		logger:                    params.Logger,
+		httpClient:                &http.Client{Timeout: httpClientTimeout},
 	}
+
+	apiPortSpec := nat.Port(strconv.Itoa(actor.apiPort) + ":9997")
+	rtmpPortSpec := nat.Port(strconv.Itoa(actor.rtmpPort) + ":1935")
+	exposedPorts, portBindings, _ := nat.ParsePortSpecs([]string{string(apiPortSpec), string(rtmpPortSpec)})
 
 	containerStateC, errC := params.ContainerClient.RunContainer(
 		ctx,
 		container.RunContainerParams{
-			Name:     "server",
+			Name:     componentName,
 			ChanSize: chanSize,
 			ContainerConfig: &typescontainer.Config{
 				Image: imageNameMediaMTX,
@@ -86,14 +99,16 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 					StartInterval: time.Second * 2,
 					Retries:       2,
 				},
+				ExposedPorts: exposedPorts,
 			},
 			HostConfig: &typescontainer.HostConfig{
-				NetworkMode: "host",
+				NetworkMode:  "default",
+				PortBindings: portBindings,
 			},
 		},
 	)
 
-	actor.state.URL = "rtmp://localhost:1935/" + rtmpPath
+	actor.state.URL = actor.rtmpURL()
 
 	go actor.actorLoop(containerStateC, errC)
 
@@ -128,8 +143,8 @@ func (s *Actor) Close() error {
 // actorLoop is the main loop of the media server actor. It only exits when the
 // actor is closed.
 func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan error) {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
+	fetchStateT := time.NewTicker(s.fetchIngressStateInterval)
+	defer fetchStateT.Stop()
 
 	sendState := func() { s.stateC <- *s.state }
 
@@ -145,20 +160,21 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 				s.logger.Error("Error from container client", "error", err, "id", shortID(s.state.Container.ID))
 			}
 
-			ticker.Stop()
+			fetchStateT.Stop()
 
 			if s.state.Live {
 				s.state.Live = false
 				sendState()
 			}
-		case <-ticker.C:
-			ingressLive, err := s.fetchIngressStateFromServer()
+		case <-fetchStateT.C:
+			ingressState, err := s.fetchIngressState()
 			if err != nil {
 				s.logger.Error("Error fetching server state", "error", err)
 				continue
 			}
-			if ingressLive != s.state.Live {
-				s.state.Live = ingressLive
+			if ingressState.ready != s.state.Live || ingressState.listeners != s.state.Listeners {
+				s.state.Live = ingressState.ready
+				s.state.Listeners = ingressState.listeners
 				sendState()
 			}
 		case action, ok := <-s.actorC:
@@ -170,54 +186,17 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 	}
 }
 
-type apiResponse[T any] struct {
-	Items []T `json:"items"`
+// rtmpURL returns the RTMP URL for the media server, accessible from the host.
+func (s *Actor) rtmpURL() string {
+	return fmt.Sprintf("rtmp://localhost:%d/%s", s.rtmpPort, rtmpPath)
 }
 
-type rtmpConnsResponse struct {
-	ID            string    `json:"id"`
-	CreatedAt     time.Time `json:"created"`
-	State         string    `json:"state"`
-	Path          string    `json:"path"`
-	BytesReceived int64     `json:"bytesReceived"`
-	BytesSent     int64     `json:"bytesSent"`
-	RemoteAddr    string    `json:"remoteAddr"`
+// apiURL returns the API URL for the media server, accessible from the host.
+func (s *Actor) apiURL() string {
+	return fmt.Sprintf("http://localhost:%d/v3/rtmpconns/list", s.apiPort)
 }
 
-func (s *Actor) fetchIngressStateFromServer() (bool, error) {
-	req, err := http.NewRequest(http.MethodGet, "http://localhost:9997/v3/rtmpconns/list", nil)
-	if err != nil {
-		return false, fmt.Errorf("new request: %w", err)
-	}
-
-	httpResp, err := s.httpClient.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("do request: %w", err)
-	}
-
-	if httpResp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("unexpected status code: %d", httpResp.StatusCode)
-	}
-
-	respBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return false, fmt.Errorf("read body: %w", err)
-	}
-
-	var resp apiResponse[rtmpConnsResponse]
-	if err = json.Unmarshal(respBody, &resp); err != nil {
-		return false, fmt.Errorf("unmarshal: %w", err)
-	}
-
-	for _, conn := range resp.Items {
-		if conn.Path == rtmpPath && conn.State == "publish" {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
+// shortID returns the first 12 characters of the given container ID.
 func shortID(id string) string {
 	if len(id) < 12 {
 		return id

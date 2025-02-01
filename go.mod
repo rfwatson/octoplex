@@ -4,6 +4,7 @@ go 1.23.5
 
 require (
 	github.com/docker/docker v27.5.0+incompatible
+	github.com/docker/go-connections v0.5.0
 	github.com/gdamore/tcell/v2 v2.7.1
 	github.com/google/uuid v1.6.0
 	github.com/rivo/tview v0.0.0-20241227133733-17b7edb88c57
@@ -16,7 +17,6 @@ require (
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect

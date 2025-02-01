@@ -2,8 +2,6 @@ package mediaserver_test
 
 import (
 	"context"
-	"os/exec"
-	"syscall"
 	"testing"
 	"time"
 
@@ -30,9 +28,10 @@ func TestMediaServerStartStop(t *testing.T) {
 	assert.False(t, running)
 
 	mediaServer := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
-		ChanSize:        1,
-		ContainerClient: containerClient,
-		Logger:          logger,
+		FetchIngressStateInterval: 500 * time.Millisecond,
+		ChanSize:                  1,
+		ContainerClient:           containerClient,
+		Logger:                    logger,
 	})
 	require.NoError(t, err)
 	testhelpers.ChanDiscard(mediaServer.C())
@@ -43,8 +42,8 @@ func TestMediaServerStartStop(t *testing.T) {
 			running, err = containerClient.ContainerRunning(ctx, map[string]string{"component": component})
 			return err == nil && running
 		},
-		5*time.Second,
-		250*time.Millisecond,
+		time.Second*10,
+		time.Second,
 		"container not in RUNNING state",
 	)
 
@@ -52,15 +51,16 @@ func TestMediaServerStartStop(t *testing.T) {
 	assert.False(t, state.Live)
 	assert.Equal(t, "rtmp://localhost:1935/live", state.URL)
 
-	launchFFMPEG(t, "rtmp://localhost:1935/live")
+	testhelpers.StreamFLV(t, "rtmp://localhost:1935/live")
+
 	require.Eventually(
 		t,
 		func() bool {
 			currState := mediaServer.State()
 			return currState.Live && currState.Container.HealthState == "healthy"
 		},
-		5*time.Second,
-		250*time.Millisecond,
+		time.Second*5,
+		time.Second,
 		"actor not healthy and/or in LIVE state",
 	)
 
@@ -69,34 +69,4 @@ func TestMediaServerStartStop(t *testing.T) {
 	running, err = containerClient.ContainerRunning(ctx, map[string]string{"component": component})
 	require.NoError(t, err)
 	assert.False(t, running)
-}
-
-func launchFFMPEG(t *testing.T, destURL string) *exec.Cmd {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	cmd := exec.CommandContext(
-		ctx,
-		"ffmpeg",
-		"-r", "30",
-		"-f", "lavfi",
-		"-i", "testsrc",
-		"-vf", "scale=1280:960",
-		"-vcodec", "libx264",
-		"-profile:v", "baseline",
-		"-pix_fmt", "yuv420p",
-		"-f", "flv",
-		destURL,
-	)
-
-	require.NoError(t, cmd.Start())
-
-	t.Cleanup(func() {
-		if cmd.Process != nil {
-			_ = cmd.Process.Signal(syscall.SIGINT)
-		}
-
-		cancel()
-	})
-
-	return cmd
 }
