@@ -48,14 +48,10 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 	}
 	defer containerClient.Close()
 
-	srv, err := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
+	srv := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "mediaserver"),
 	})
-	if err != nil {
-		return fmt.Errorf("start media server: %w", err)
-	}
-	applyServerState(srv.State(), state)
 
 	ui, err := terminal.StartActor(ctx, terminal.StartActorParams{Logger: logger.With("component", "ui")})
 	if err != nil {
@@ -73,6 +69,7 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 		select {
 		case cmd, ok := <-ui.C():
 			if !ok {
+				// TODO: keep UI open until all containers have closed
 				logger.Info("UI closed")
 				return nil
 			}

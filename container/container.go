@@ -1,6 +1,7 @@
 package container
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,8 +22,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// stopTimeout is the timeout for stopping a container.
-var stopTimeout = 10 * time.Second
+const (
+	// stopTimeout is the timeout for stopping a container.
+	stopTimeout = 3 * time.Second
+
+	// defaultChanSize is the default size of asynchronous non-error channels.
+	defaultChanSize = 64
+)
 
 // Client provides a thin wrapper around the Docker API client, and provides
 // additional functionality such as exposing container stats.
@@ -154,80 +160,98 @@ func (a *Client) getEvents(containerID string) <-chan events.Message {
 // RunContainerParams are the parameters for running a container.
 type RunContainerParams struct {
 	Name            string
+	ChanSize        int
 	ContainerConfig *container.Config
 	HostConfig      *container.HostConfig
 }
 
 // RunContainer runs a container with the given parameters.
 //
-// The returned channel will receive the current state of the container, and
-// will be closed after the container has stopped.
-func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (string, <-chan domain.ContainerState, error) {
-	pullReader, err := a.apiClient.ImagePull(ctx, params.ContainerConfig.Image, image.PullOptions{})
-	if err != nil {
-		return "", nil, fmt.Errorf("image pull: %w", err)
-	}
-	_, _ = io.Copy(io.Discard, pullReader)
-	_ = pullReader.Close()
-
-	params.ContainerConfig.Labels["app"] = "termstream"
-	params.ContainerConfig.Labels["app-id"] = a.id.String()
-
-	var name string
-	if params.Name != "" {
-		name = "termstream-" + a.id.String() + "-" + params.Name
+// The returned state channel will receive the state of the container and will
+// never be closed. The error channel will receive an error if the container
+// fails to start, and will be closed when the container exits, possibly after
+// receiving an error.
+func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<-chan domain.Container, <-chan error) {
+	now := time.Now()
+	containerStateC := make(chan domain.Container, cmp.Or(params.ChanSize, defaultChanSize))
+	errC := make(chan error, 1)
+	closeWithError := func(err error) {
+		errC <- err
+		close(errC)
 	}
 
-	createResp, err := a.apiClient.ContainerCreate(
-		ctx,
-		params.ContainerConfig,
-		params.HostConfig,
-		nil,
-		nil,
-		name,
-	)
-	if err != nil {
-		return "", nil, fmt.Errorf("container create: %w", err)
-	}
-
-	if err = a.apiClient.ContainerStart(ctx, createResp.ID, container.StartOptions{}); err != nil {
-		return "", nil, fmt.Errorf("container start: %w", err)
-	}
-	a.logger.Info("Started container", "id", shortID(createResp.ID))
-
-	containerStateC := make(chan domain.ContainerState, 1)
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		defer close(containerStateC)
+		defer close(errC)
 
-		a.runContainerLoop(ctx, createResp.ID, containerStateC)
+		containerStateC <- domain.Container{State: "pulling"}
+
+		pullReader, err := a.apiClient.ImagePull(ctx, params.ContainerConfig.Image, image.PullOptions{})
+		if err != nil {
+			closeWithError(fmt.Errorf("image pull: %w", err))
+			return
+		}
+		_, _ = io.Copy(io.Discard, pullReader)
+		_ = pullReader.Close()
+
+		params.ContainerConfig.Labels["app"] = "termstream"
+		params.ContainerConfig.Labels["app-id"] = a.id.String()
+
+		var name string
+		if params.Name != "" {
+			name = "termstream-" + a.id.String() + "-" + params.Name
+		}
+
+		createResp, err := a.apiClient.ContainerCreate(
+			ctx,
+			params.ContainerConfig,
+			params.HostConfig,
+			nil,
+			nil,
+			name,
+		)
+		if err != nil {
+			closeWithError(fmt.Errorf("container create: %w", err))
+			return
+		}
+		containerStateC <- domain.Container{ID: createResp.ID, State: "created"}
+
+		if err = a.apiClient.ContainerStart(ctx, createResp.ID, container.StartOptions{}); err != nil {
+			closeWithError(fmt.Errorf("container start: %w", err))
+			return
+		}
+		a.logger.Info("Started container", "id", shortID(createResp.ID), "duration", time.Since(now))
+		containerStateC <- domain.Container{ID: createResp.ID, State: "running"}
+
+		a.runContainerLoop(ctx, createResp.ID, containerStateC, errC)
 	}()
 
-	return createResp.ID, containerStateC, nil
+	return containerStateC, errC
 }
 
 // runContainerLoop is the control loop for a single container. It returns only
 // when the container exits.
-func (a *Client) runContainerLoop(ctx context.Context, containerID string, stateCh chan<- domain.ContainerState) {
+func (a *Client) runContainerLoop(ctx context.Context, containerID string, stateC chan<- domain.Container, errC chan<- error) {
 	statsC := a.getStats(containerID)
 	eventsC := a.getEvents(containerID)
-	respC, errC := a.apiClient.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
+	containerRespC, containerErrC := a.apiClient.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
 
-	state := &domain.ContainerState{ID: containerID}
-	sendState := func() { stateCh <- *state }
+	state := &domain.Container{ID: containerID, State: "running"}
+	sendState := func() { stateC <- *state }
 	sendState()
 
 	for {
 		select {
-		case resp := <-respC:
+		case resp := <-containerRespC:
 			a.logger.Info("Container entered non-running state", "exit_code", resp.StatusCode, "id", shortID(containerID))
 			return
-		case err := <-errC:
+		case err := <-containerErrC:
 			// TODO: error handling?
 			if err != context.Canceled {
 				a.logger.Error("Error setting container wait", "err", err, "id", shortID(containerID))
 			}
+			errC <- err
 			return
 		case evt := <-eventsC:
 			if strings.Contains(string(evt.Action), "health_status") {
