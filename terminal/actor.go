@@ -49,6 +49,7 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	destView.SetBorder(true)
 	destView.SetSelectable(true, false)
 	destView.SetWrapSelection(true, false)
+	destView.SetSelectedStyle(tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorDarkSlateGrey))
 	destView.SetDoneFunc(func(key tcell.Key) {
 		row, _ := destView.GetSelection()
 		commandCh <- CommandToggleDestination{URL: destView.GetCell(row, 0).Text}
@@ -131,15 +132,25 @@ func (a *Actor) SetState(state domain.AppState) {
 	}
 }
 
+const dash = "—"
+
 func (a *Actor) redrawFromState(state domain.AppState) {
+	headerCell := func(content string, expansion int) *tview.TableCell {
+		return tview.
+			NewTableCell(content).
+			SetExpansion(expansion).
+			SetAlign(tview.AlignLeft).
+			SetSelectable(false)
+	}
+
 	setHeaderRow := func(tableView *tview.Table) {
-		tableView.SetCell(0, 0, tview.NewTableCell("[grey]URL").SetAlign(tview.AlignLeft).SetExpansion(7).SetSelectable(false))
-		tableView.SetCell(0, 1, tview.NewTableCell("[grey]Stream").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
-		tableView.SetCell(0, 2, tview.NewTableCell("[grey]Container").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
-		tableView.SetCell(0, 3, tview.NewTableCell("[grey]Health").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
-		tableView.SetCell(0, 4, tview.NewTableCell("[grey]CPU %").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
-		tableView.SetCell(0, 5, tview.NewTableCell("[grey]Mem used (MB)").SetAlign(tview.AlignLeft).SetExpansion(1).SetSelectable(false))
-		tableView.SetCell(0, 6, tview.NewTableCell("[grey]Actions").SetAlign(tview.AlignLeft).SetExpansion(2).SetSelectable(false))
+		tableView.SetCell(0, 0, headerCell("[grey]URL", 3))
+		tableView.SetCell(0, 1, headerCell("[grey]Status", 2))
+		tableView.SetCell(0, 2, headerCell("[grey]Container", 2))
+		tableView.SetCell(0, 3, headerCell("[grey]Health", 2))
+		tableView.SetCell(0, 4, headerCell("[grey]CPU %", 1))
+		tableView.SetCell(0, 5, headerCell("[grey]Memory MB", 1))
+		tableView.SetCell(0, 6, headerCell("[grey]Action", 2))
 	}
 
 	a.sourceView.Clear()
@@ -163,24 +174,36 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 	for i, dest := range state.Destinations {
 		a.destView.SetCell(i+1, 0, tview.NewTableCell(dest.URL))
 		if dest.Live {
-			a.destView.SetCell(i+1, 1, tview.NewTableCell("[black:green]sending"))
+			a.destView.SetCell(
+				i+1,
+				1,
+				tview.NewTableCell("sending").
+					SetTextColor(tcell.ColorBlack).
+					SetBackgroundColor(tcell.ColorGreen).
+					SetSelectedStyle(
+						tcell.
+							StyleDefault.
+							Foreground(tcell.ColorBlack).
+							Background(tcell.ColorGreen),
+					),
+			)
 		} else {
 			a.destView.SetCell(i+1, 1, tview.NewTableCell("[white]off-air"))
 		}
-		a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+cmp.Or(dest.Container.State, "-")))
+		a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+cmp.Or(dest.Container.State, dash)))
 
-		healthState := "-"
+		healthState := dash
 		if dest.Container.State == "running" {
 			healthState = "healthy"
 		}
 		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+healthState))
 
-		cpuPercent := "-"
+		cpuPercent := dash
 		if dest.Container.State == "running" {
 			cpuPercent = fmt.Sprintf("%.1f", dest.Container.CPUPercent)
 		}
 
-		memoryUsage := "-"
+		memoryUsage := dash
 		if dest.Container.State == "running" {
 			memoryUsage = fmt.Sprintf("%.1f", float64(dest.Container.MemoryUsageBytes)/1024/1024)
 		}
