@@ -8,6 +8,7 @@ import (
 	"git.netflux.io/rob/termstream/container"
 	"git.netflux.io/rob/termstream/mediaserver"
 	"git.netflux.io/rob/termstream/testhelpers"
+	"github.com/docker/docker/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +20,10 @@ func TestMediaServerStartStop(t *testing.T) {
 	t.Cleanup(cancel)
 
 	logger := testhelpers.NewTestLogger()
-	containerClient, err := container.NewClient(ctx, logger)
+	apiClient, err := client.NewClientWithOpts(client.FromEnv)
+	require.NoError(t, err)
+
+	containerClient, err := container.NewClient(ctx, apiClient, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, containerClient.Close()) })
 
@@ -49,7 +53,7 @@ func TestMediaServerStartStop(t *testing.T) {
 
 	state := mediaServer.State()
 	assert.False(t, state.Live)
-	assert.Equal(t, "rtmp://localhost:1935/live", state.URL)
+	assert.Equal(t, "rtmp://localhost:1935/live", state.RTMPURL)
 
 	testhelpers.StreamFLV(t, "rtmp://localhost:1935/live")
 
@@ -60,6 +64,17 @@ func TestMediaServerStartStop(t *testing.T) {
 			return currState.Live && currState.Container.HealthState == "healthy"
 		},
 		time.Second*5,
+		time.Second,
+		"actor not healthy and/or in LIVE state",
+	)
+
+	require.Eventually(
+		t,
+		func() bool {
+			currState := mediaServer.State()
+			return currState.Container.RxRate > 500
+		},
+		time.Second*10,
 		time.Second,
 		"actor not healthy and/or in LIVE state",
 	)

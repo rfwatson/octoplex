@@ -8,6 +8,7 @@ import (
 	"git.netflux.io/rob/termstream/container"
 	"git.netflux.io/rob/termstream/testhelpers"
 	typescontainer "github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,10 +19,12 @@ func TestClientStartStop(t *testing.T) {
 	t.Cleanup(cancel)
 
 	logger := testhelpers.NewTestLogger()
+	apiClient, err := client.NewClientWithOpts(client.FromEnv)
+	require.NoError(t, err)
 	containerName := "termstream-test-" + uuid.NewString()
 	component := "test-start-stop"
 
-	client, err := container.NewClient(ctx, logger)
+	client, err := container.NewClient(ctx, apiClient, logger)
 	require.NoError(t, err)
 
 	running, err := client.ContainerRunning(ctx, map[string]string{"component": component})
@@ -66,9 +69,11 @@ func TestClientRemoveContainers(t *testing.T) {
 	t.Cleanup(cancel)
 
 	logger := testhelpers.NewTestLogger()
+	apiClient, err := client.NewClientWithOpts(client.FromEnv)
+	require.NoError(t, err)
 	component := "test-remove-containers"
 
-	client, err := container.NewClient(ctx, logger)
+	client, err := container.NewClient(ctx, apiClient, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { client.Close() })
 

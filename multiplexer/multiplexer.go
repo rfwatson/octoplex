@@ -100,8 +100,9 @@ func (a *Actor) ToggleDestination(url string) {
 				Labels: labels,
 			},
 			HostConfig: &typescontainer.HostConfig{
-				NetworkMode: "host",
+				NetworkMode: "default",
 			},
+			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth1", Tx: "eth1"},
 		})
 
 		a.nextIndex++

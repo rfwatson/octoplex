@@ -8,10 +8,11 @@ type AppState struct {
 
 // Source represents the source, currently always the mediaserver.
 type Source struct {
-	Container Container
-	Live      bool
-	Listeners int
-	URL       string
+	Container       Container
+	Live            bool
+	Listeners       int
+	RTMPURL         string
+	RTMPInternalURL string
 }
 
 // Destination is a single destination.
@@ -31,4 +32,6 @@ type Container struct {
 	HealthState      string
 	CPUPercent       float64
 	MemoryUsageBytes uint64
+	RxRate           int
+	TxRate           int
 }
