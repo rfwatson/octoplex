@@ -3,7 +3,6 @@ package container
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,8 +17,9 @@ import (
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/client"
+	"github.com/docker/docker/api/types/network"
 	"github.com/google/uuid"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 const (
@@ -30,6 +30,24 @@ const (
 	defaultChanSize = 64
 )
 
+// DockerClient isolates a docker *client.Client.
+type DockerClient interface {
+	io.Closer
+
+	ContainerCreate(context.Context, *container.Config, *container.HostConfig, *network.NetworkingConfig, *ocispec.Platform, string) (container.CreateResponse, error)
+	ContainerList(context.Context, container.ListOptions) ([]types.Container, error)
+	ContainerRemove(context.Context, string, container.RemoveOptions) error
+	ContainerStart(context.Context, string, container.StartOptions) error
+	ContainerStats(context.Context, string, bool) (container.StatsResponseReader, error)
+	ContainerStop(context.Context, string, container.StopOptions) error
+	ContainerWait(context.Context, string, container.WaitCondition) (<-chan container.WaitResponse, <-chan error)
+	Events(context.Context, events.ListOptions) (<-chan events.Message, <-chan error)
+	ImagePull(context.Context, string, image.PullOptions) (io.ReadCloser, error)
+	NetworkConnect(context.Context, string, string, *network.EndpointSettings) error
+	NetworkCreate(context.Context, string, network.CreateOptions) (network.CreateResponse, error)
+	NetworkRemove(context.Context, string) error
+}
+
 // Client provides a thin wrapper around the Docker API client, and provides
 // additional functionality such as exposing container stats.
 type Client struct {
@@ -37,24 +55,27 @@ type Client struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
-	apiClient *client.Client
+	apiClient DockerClient
+	networkID string
 	logger    *slog.Logger
 }
 
 // NewClient creates a new Client.
-func NewClient(ctx context.Context, logger *slog.Logger) (*Client, error) {
-	apiClient, err := client.NewClientWithOpts(client.FromEnv)
+func NewClient(ctx context.Context, apiClient DockerClient, logger *slog.Logger) (*Client, error) {
+	id := uuid.New()
+	network, err := apiClient.NetworkCreate(ctx, "termstream-"+id.String(), network.CreateOptions{Driver: "bridge"})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("network create: %w", err)
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
 
 	client := &Client{
-		id:        uuid.New(),
+		id:        id,
 		ctx:       ctx,
 		cancel:    cancel,
 		apiClient: apiClient,
+		networkID: network.ID,
 		logger:    logger,
 	}
 
@@ -65,49 +86,16 @@ func NewClient(ctx context.Context, logger *slog.Logger) (*Client, error) {
 type stats struct {
 	cpuPercent       float64
 	memoryUsageBytes uint64
+	rxRate, txRate   int
 }
 
 // getStats returns a channel that will receive container stats. The channel is
 // never closed, but the spawned goroutine will exit when the context is
 // cancelled.
-func (a *Client) getStats(containerID string) <-chan stats {
+func (a *Client) getStats(containerID string, networkCountConfig NetworkCountConfig) <-chan stats {
 	ch := make(chan stats)
 
-	go func() {
-		statsReader, err := a.apiClient.ContainerStats(a.ctx, containerID, true)
-		if err != nil {
-			// TODO: error handling?
-			a.logger.Error("Error getting container stats", "err", err, "id", shortID(containerID))
-			return
-		}
-		defer statsReader.Body.Close()
-
-		buf := make([]byte, 4_096)
-		for {
-			n, err := statsReader.Body.Read(buf)
-			if err != nil {
-				if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
-					break
-				}
-				a.logger.Error("Error reading stats", "err", err, "id", shortID(containerID))
-				break
-			}
-
-			var statsResp container.StatsResponse
-			if err = json.Unmarshal(buf[:n], &statsResp); err != nil {
-				a.logger.Error("Error unmarshalling stats", "err", err, "id", shortID(containerID))
-				break
-			}
-
-			// https://stackoverflow.com/a/30292327/62871
-			cpuDelta := float64(statsResp.CPUStats.CPUUsage.TotalUsage - statsResp.PreCPUStats.CPUUsage.TotalUsage)
-			systemDelta := float64(statsResp.CPUStats.SystemUsage - statsResp.PreCPUStats.SystemUsage)
-			ch <- stats{
-				cpuPercent:       (cpuDelta / systemDelta) * float64(statsResp.CPUStats.OnlineCPUs) * 100,
-				memoryUsageBytes: statsResp.MemoryStats.Usage,
-			}
-		}
-	}()
+	go handleStats(a.ctx, containerID, a.apiClient, networkCountConfig, a.logger, ch)
 
 	return ch
 }
@@ -157,12 +145,19 @@ func (a *Client) getEvents(containerID string) <-chan events.Message {
 	return sendC
 }
 
+type NetworkCountConfig struct {
+	Rx string // the network name to count the Rx bytes
+	Tx string // the network name to count the Tx bytes
+}
+
 // RunContainerParams are the parameters for running a container.
 type RunContainerParams struct {
-	Name            string
-	ChanSize        int
-	ContainerConfig *container.Config
-	HostConfig      *container.HostConfig
+	Name               string
+	ChanSize           int
+	ContainerConfig    *container.Config
+	HostConfig         *container.HostConfig
+	NetworkingConfig   *network.NetworkingConfig
+	NetworkCountConfig NetworkCountConfig
 }
 
 // RunContainer runs a container with the given parameters.
@@ -206,7 +201,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 			ctx,
 			params.ContainerConfig,
 			params.HostConfig,
-			nil,
+			params.NetworkingConfig,
 			nil,
 			name,
 		)
@@ -216,6 +211,11 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 		}
 		containerStateC <- domain.Container{ID: createResp.ID, State: "created"}
 
+		if err = a.apiClient.NetworkConnect(ctx, a.networkID, createResp.ID, nil); err != nil {
+			sendError(fmt.Errorf("network connect: %w", err))
+			return
+		}
+
 		if err = a.apiClient.ContainerStart(ctx, createResp.ID, container.StartOptions{}); err != nil {
 			sendError(fmt.Errorf("container start: %w", err))
 			return
@@ -224,7 +224,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 
 		containerStateC <- domain.Container{ID: createResp.ID, State: "running"}
 
-		a.runContainerLoop(ctx, createResp.ID, containerStateC, errC)
+		a.runContainerLoop(ctx, createResp.ID, params.NetworkCountConfig, containerStateC, errC)
 	}()
 
 	return containerStateC, errC
@@ -232,8 +232,14 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 
 // runContainerLoop is the control loop for a single container. It returns only
 // when the container exits.
-func (a *Client) runContainerLoop(ctx context.Context, containerID string, stateC chan<- domain.Container, errC chan<- error) {
-	statsC := a.getStats(containerID)
+func (a *Client) runContainerLoop(
+	ctx context.Context,
+	containerID string,
+	networkCountConfig NetworkCountConfig,
+	stateC chan<- domain.Container,
+	errC chan<- error,
+) {
+	statsC := a.getStats(containerID, networkCountConfig)
 	eventsC := a.getEvents(containerID)
 	containerRespC, containerErrC := a.apiClient.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
 
@@ -273,6 +279,8 @@ func (a *Client) runContainerLoop(ctx context.Context, containerID string, state
 		case stats := <-statsC:
 			state.CPUPercent = stats.cpuPercent
 			state.MemoryUsageBytes = stats.memoryUsageBytes
+			state.RxRate = stats.rxRate
+			state.TxRate = stats.txRate
 			sendState()
 		}
 	}
@@ -297,6 +305,12 @@ func (a *Client) Close() error {
 	}
 
 	a.wg.Wait()
+
+	if a.networkID != "" {
+		if err := a.apiClient.NetworkRemove(ctx, a.networkID); err != nil {
+			a.logger.Error("Error removing network", "err", err)
+		}
+	}
 
 	return a.apiClient.Close()
 }

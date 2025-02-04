@@ -18,8 +18,8 @@ import (
 
 const (
 	defaultFetchIngressStateInterval = 5 * time.Second                    // default interval to fetch the state of the media server
-	defaultAPIPort                   = 9997                               // default API port for the media server
-	defaultRTMPPort                  = 1935                               // default RTMP port for the media server
+	defaultAPIPort                   = 9997                               // default API host port for the media server
+	defaultRTMPPort                  = 1935                               // default RTMP host port for the media server
 	defaultChanSize                  = 64                                 // default channel size for asynchronous non-error channels
 	imageNameMediaMTX                = "netfluxio/mediamtx-alpine:latest" // image name for mediamtx
 	rtmpPath                         = "live"                             // RTMP path for the media server
@@ -84,7 +84,8 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 			Name:     componentName,
 			ChanSize: chanSize,
 			ContainerConfig: &typescontainer.Config{
-				Image: imageNameMediaMTX,
+				Image:    imageNameMediaMTX,
+				Hostname: "mediaserver",
 				Env: []string{
 					"MTX_LOGLEVEL=info",
 					"MTX_API=yes",
@@ -105,10 +106,12 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 				NetworkMode:  "default",
 				PortBindings: portBindings,
 			},
+			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth0", Tx: "eth1"},
 		},
 	)
 
-	actor.state.URL = actor.rtmpURL()
+	actor.state.RTMPURL = actor.rtmpURL()
+	actor.state.RTMPInternalURL = actor.rtmpInternalURL()
 
 	go actor.actorLoop(containerStateC, errC)
 
@@ -152,6 +155,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 		select {
 		case containerState := <-containerStateC:
 			s.state.Container = containerState
+
 			sendState()
 
 			continue
@@ -189,6 +193,13 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 // rtmpURL returns the RTMP URL for the media server, accessible from the host.
 func (s *Actor) rtmpURL() string {
 	return fmt.Sprintf("rtmp://localhost:%d/%s", s.rtmpPort, rtmpPath)
+}
+
+// rtmpInternalURL returns the RTMP URL for the media server, accessible from
+// the app network.
+func (s *Actor) rtmpInternalURL() string {
+	// Container port, not host port:
+	return fmt.Sprintf("rtmp://mediaserver:1935/%s", rtmpPath)
 }
 
 // apiURL returns the API URL for the media server, accessible from the host.

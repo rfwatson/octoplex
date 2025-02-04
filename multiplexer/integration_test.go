@@ -9,6 +9,7 @@ import (
 	"git.netflux.io/rob/termstream/mediaserver"
 	"git.netflux.io/rob/termstream/multiplexer"
 	"git.netflux.io/rob/termstream/testhelpers"
+	"github.com/docker/docker/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +21,10 @@ func TestMultiplexer(t *testing.T) {
 	t.Cleanup(cancel)
 
 	logger := testhelpers.NewTestLogger()
-	containerClient, err := container.NewClient(ctx, logger)
+	apiClient, err := client.NewClientWithOpts(client.FromEnv)
+	require.NoError(t, err)
+
+	containerClient, err := container.NewClient(ctx, apiClient, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, containerClient.Close()) })
 
@@ -40,7 +44,7 @@ func TestMultiplexer(t *testing.T) {
 	testhelpers.ChanDiscard(srv.C())
 
 	time.Sleep(2 * time.Second)
-	testhelpers.StreamFLV(t, srv.State().URL)
+	testhelpers.StreamFLV(t, srv.State().RTMPURL)
 
 	require.Eventually(
 		t,
@@ -51,7 +55,7 @@ func TestMultiplexer(t *testing.T) {
 	)
 
 	mp := multiplexer.NewActor(ctx, multiplexer.NewActorParams{
-		SourceURL:       srv.State().URL,
+		SourceURL:       srv.State().RTMPInternalURL,
 		ChanSize:        1,
 		ContainerClient: containerClient,
 		Logger:          logger,
@@ -61,16 +65,16 @@ func TestMultiplexer(t *testing.T) {
 
 	requireListeners(t, srv, 0)
 
-	mp.ToggleDestination("rtmp://localhost:1936/destination/test1")
-	mp.ToggleDestination("rtmp://localhost:1936/destination/test2")
-	mp.ToggleDestination("rtmp://localhost:1936/destination/test3")
+	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test1")
+	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test2")
+	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test3")
 	requireListeners(t, srv, 3)
 
-	mp.ToggleDestination("rtmp://localhost:1936/destination/test3")
+	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test3")
 	requireListeners(t, srv, 2)
 
-	mp.ToggleDestination("rtmp://localhost:1936/destination/test2")
-	mp.ToggleDestination("rtmp://localhost:1936/destination/test1")
+	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test2")
+	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test1")
 	requireListeners(t, srv, 0)
 }
 

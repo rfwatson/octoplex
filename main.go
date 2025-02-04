@@ -14,6 +14,7 @@ import (
 	"git.netflux.io/rob/termstream/mediaserver"
 	"git.netflux.io/rob/termstream/multiplexer"
 	"git.netflux.io/rob/termstream/terminal"
+	"github.com/docker/docker/client"
 )
 
 func main() {
@@ -52,7 +53,12 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 	updateUI := func() { ui.SetState(*state) }
 	updateUI()
 
-	containerClient, err := container.NewClient(ctx, logger.With("component", "container_client"))
+	apiClient, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		return fmt.Errorf("new docker client: %w", err)
+	}
+
+	containerClient, err := container.NewClient(ctx, apiClient, logger.With("component", "container_client"))
 	if err != nil {
 		return fmt.Errorf("new container client: %w", err)
 	}
@@ -65,7 +71,7 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 	defer srv.Close()
 
 	mp := multiplexer.NewActor(ctx, multiplexer.NewActorParams{
-		SourceURL:       srv.State().URL,
+		SourceURL:       srv.State().RTMPInternalURL,
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "multiplexer"),
 	})
