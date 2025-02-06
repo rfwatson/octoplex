@@ -3,7 +3,6 @@ package container
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -90,7 +89,7 @@ type stats struct {
 }
 
 // getStats returns a channel that will receive container stats. The channel is
-// never closed, but the spawned goroutine will exit when the context is
+// never closed, but any spawned goroutines will exit when the context is
 // cancelled.
 func (a *Client) getStats(containerID string, networkCountConfig NetworkCountConfig) <-chan stats {
 	ch := make(chan stats)
@@ -101,48 +100,14 @@ func (a *Client) getStats(containerID string, networkCountConfig NetworkCountCon
 }
 
 // getEvents returns a channel that will receive container events. The channel is
-// never closed, but the spawned goroutine will exit when the context is
+// never closed, but any spawned goroutines will exit when the context is
 // cancelled.
 func (a *Client) getEvents(containerID string) <-chan events.Message {
-	sendC := make(chan events.Message)
+	ch := make(chan events.Message)
 
-	getEvents := func() (bool, error) {
-		recvC, errC := a.apiClient.Events(a.ctx, events.ListOptions{
-			Filters: filters.NewArgs(
-				filters.Arg("container", containerID),
-				filters.Arg("type", "container"),
-			),
-		})
+	go handleEvents(a.ctx, containerID, a.apiClient, a.logger, ch)
 
-		for {
-			select {
-			case <-a.ctx.Done():
-				return false, a.ctx.Err()
-			case evt := <-recvC:
-				sendC <- evt
-			case err := <-errC:
-				if a.ctx.Err() != nil || errors.Is(err, io.EOF) {
-					return false, err
-				}
-
-				return true, err
-			}
-		}
-	}
-
-	go func() {
-		for {
-			shouldRetry, err := getEvents()
-			if !shouldRetry {
-				break
-			}
-
-			a.logger.Warn("Error receiving Docker events", "err", err, "id", shortID(containerID))
-			time.Sleep(2 * time.Second)
-		}
-	}()
-
-	return sendC
+	return ch
 }
 
 type NetworkCountConfig struct {
