@@ -33,7 +33,7 @@ func TestMultiplexer(t *testing.T) {
 	assert.False(t, running)
 
 	srv := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
-		RTMPPort:                  1936,
+		RTMPPort:                  19350,
 		APIPort:                   9998,
 		FetchIngressStateInterval: 250 * time.Millisecond,
 		ContainerClient:           containerClient,
@@ -65,16 +65,16 @@ func TestMultiplexer(t *testing.T) {
 
 	requireListeners(t, srv, 0)
 
-	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test1")
-	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test2")
-	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test3")
+	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test1")
+	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test2")
+	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test3")
 	requireListeners(t, srv, 3)
 
-	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test3")
+	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test3")
 	requireListeners(t, srv, 2)
 
-	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test2")
-	mp.ToggleDestination("rtmp://mediaserver:1935/destination/test1")
+	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test2")
+	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test1")
 	requireListeners(t, srv, 0)
 }
 

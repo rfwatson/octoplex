@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strconv"
 	"sync"
+	"time"
 
 	typescontainer "github.com/docker/docker/api/types/container"
 
@@ -100,7 +101,8 @@ func (a *Actor) ToggleDestination(url string) {
 				Labels: labels,
 			},
 			HostConfig: &typescontainer.HostConfig{
-				NetworkMode: "default",
+				NetworkMode:   "default",
+				RestartPolicy: typescontainer.RestartPolicy{Name: "always"},
 			},
 			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth1", Tx: "eth1"},
 		})
@@ -132,7 +134,16 @@ func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, er
 		select {
 		case containerState := <-containerStateC:
 			state.Container = containerState
-			state.Live = containerState.State == "running"
+
+			if containerState.State == "running" {
+				if hasElapsedSince(5*time.Second, containerState.RxSince) {
+					state.State = domain.DestinationStateLive
+				} else {
+					state.State = domain.DestinationStateStarting
+				}
+			} else {
+				state.State = domain.DestinationStateOffAir
+			}
 			sendState()
 		case err := <-errC:
 			// TODO: error handling
@@ -168,4 +179,14 @@ func (a *Actor) actorLoop() {
 	for act := range a.actorC {
 		act()
 	}
+}
+
+// hasElapsedSince returns true if the duration has elapsed since the given
+// time. If the provided time is zero, the function returns false.
+func hasElapsedSince(d time.Duration, t time.Time) bool {
+	if t.IsZero() {
+		return false
+	}
+
+	return d < time.Since(t)
 }

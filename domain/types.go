@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 // AppState holds application state.
 type AppState struct {
 	Source       Source
@@ -15,10 +17,18 @@ type Source struct {
 	RTMPInternalURL string
 }
 
+type DestinationState int
+
+const (
+	DestinationStateOffAir DestinationState = iota
+	DestinationStateStarting
+	DestinationStateLive
+)
+
 // Destination is a single destination.
 type Destination struct {
 	Container Container
-	Live      bool
+	State     DestinationState
 	URL       string
 }
 
@@ -34,4 +44,6 @@ type Container struct {
 	MemoryUsageBytes uint64
 	RxRate           int
 	TxRate           int
+	RxSince          time.Time
+	RestartCount     int
 }

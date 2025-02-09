@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 )
@@ -31,13 +32,21 @@ func handleStats(
 	defer statsReader.Body.Close()
 
 	var (
-		processedAny  bool
-		lastNetworkRx uint64
-		lastNetworkTx uint64
+		lastRxBytes  uint64
+		lastTxBytes  uint64
+		getAvgRxRate func(float64) float64
+		getAvgTxRate func(float64) float64
+		rxSince      time.Time
 	)
 
-	getAvgRxRate := rolling(10)
-	getAvgTxRate := rolling(10)
+	reset := func() {
+		lastRxBytes = 0
+		lastTxBytes = 0
+		getAvgRxRate = rolling(10)
+		getAvgTxRate = rolling(10)
+		rxSince = time.Time{}
+	}
+	reset()
 
 	buf := make([]byte, 4_096)
 	for {
@@ -56,30 +65,44 @@ func handleStats(
 			break
 		}
 
-		// https://stackoverflow.com/a/30292327/62871
-		cpuDelta := float64(statsResp.CPUStats.CPUUsage.TotalUsage - statsResp.PreCPUStats.CPUUsage.TotalUsage)
-		systemDelta := float64(statsResp.CPUStats.SystemUsage - statsResp.PreCPUStats.SystemUsage)
+		rxBytes := statsResp.Networks[networkNameRx].RxBytes
+		txBytes := statsResp.Networks[networkNameTx].TxBytes
 
-		var avgRxRate, avgTxRate float64
-		if processedAny {
-			secondsSinceLastReceived := statsResp.Read.Sub(statsResp.PreRead).Seconds()
-			diffRxBytes := (statsResp.Networks[networkNameRx].RxBytes - lastNetworkRx)
-			diffTxBytes := (statsResp.Networks[networkNameTx].TxBytes - lastNetworkTx)
-			rxRate := float64(diffRxBytes) / secondsSinceLastReceived / 1000.0 * 8
-			txRate := float64(diffTxBytes) / secondsSinceLastReceived / 1000.0 * 8
-			avgRxRate = getAvgRxRate(rxRate)
-			avgTxRate = getAvgTxRate(txRate)
+		if statsResp.PreRead.IsZero() || rxBytes < lastRxBytes || txBytes < lastTxBytes {
+			// Container restarted
+			reset()
+			lastRxBytes = rxBytes
+			lastTxBytes = txBytes
+			ch <- stats{}
+			continue
 		}
 
-		lastNetworkRx = statsResp.Networks[networkNameRx].RxBytes
-		lastNetworkTx = statsResp.Networks[networkNameTx].TxBytes
-		processedAny = true
+		// https://stackoverflow.com/a/30292327/62871
+		var cpuDelta, systemDelta float64
+		cpuDelta = float64(statsResp.CPUStats.CPUUsage.TotalUsage - statsResp.PreCPUStats.CPUUsage.TotalUsage)
+		systemDelta = float64(statsResp.CPUStats.SystemUsage - statsResp.PreCPUStats.SystemUsage)
+
+		secondsSinceLastReceived := statsResp.Read.Sub(statsResp.PreRead).Seconds()
+		diffRxBytes := rxBytes - lastRxBytes
+		diffTxBytes := txBytes - lastTxBytes
+		rxRate := float64(diffRxBytes) / secondsSinceLastReceived / 1000.0 * 8
+		txRate := float64(diffTxBytes) / secondsSinceLastReceived / 1000.0 * 8
+		avgRxRate := getAvgRxRate(rxRate)
+		avgTxRate := getAvgTxRate(txRate)
+
+		if diffRxBytes > 0 && rxSince.IsZero() {
+			rxSince = statsResp.PreRead
+		}
+
+		lastRxBytes = rxBytes
+		lastTxBytes = txBytes
 
 		ch <- stats{
 			cpuPercent:       (cpuDelta / systemDelta) * float64(statsResp.CPUStats.OnlineCPUs) * 100,
 			memoryUsageBytes: statsResp.MemoryStats.Usage,
 			rxRate:           int(avgRxRate),
 			txRate:           int(avgTxRate),
+			rxSince:          rxSince,
 		}
 	}
 }

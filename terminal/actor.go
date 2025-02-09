@@ -179,7 +179,8 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 
 	for i, dest := range state.Destinations {
 		a.destView.SetCell(i+1, 0, tview.NewTableCell(dest.URL))
-		if dest.Live {
+		switch dest.State {
+		case domain.DestinationStateLive:
 			a.destView.SetCell(
 				i+1,
 				1,
@@ -193,13 +194,21 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 							Background(tcell.ColorGreen),
 					),
 			)
-		} else {
+		case domain.DestinationStateStarting:
+			label := "starting"
+			if dest.Container.RestartCount > 0 {
+				label = fmt.Sprintf("restarting (%d)", dest.Container.RestartCount)
+			}
+			a.destView.SetCell(i+1, 1, tview.NewTableCell("[white]"+label))
+		case domain.DestinationStateOffAir:
 			a.destView.SetCell(i+1, 1, tview.NewTableCell("[white]off-air"))
+		default:
+			panic("unknown destination state")
 		}
 		a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+cmp.Or(dest.Container.State, dash)))
 
 		healthState := dash
-		if dest.Container.State == "running" {
+		if dest.State == domain.DestinationStateLive {
 			healthState = "healthy"
 		}
 		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+healthState))
