@@ -16,6 +16,9 @@ import (
 //go:embed testdata/stats1.json
 var statsJSON []byte
 
+//go:embed testdata/stats2.json
+var statsWithRestartJSON []byte
+
 func TestHandleStats(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -55,4 +58,56 @@ func TestHandleStats(t *testing.T) {
 	assert.Equal(t, uint64(8802304), lastStats.memoryUsageBytes)
 	assert.Equal(t, 1091, lastStats.rxRate)
 	assert.Equal(t, 1108, lastStats.txRate)
+}
+
+func TestHandleStatsWithContainerRestart(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	pr, pw := io.Pipe()
+	containerID := "d0adc747fb12b9ce2376408aed8538a0769de55aa9c239313f231d9d80402e39"
+	dockerClient := testhelpers.MockDockerClient{ContainerStatsResponse: pr}
+	networkCountConfig := NetworkCountConfig{Rx: "eth1", Tx: "eth0"}
+	logger := testhelpers.NewTestLogger()
+	ch := make(chan stats)
+
+	go func() {
+		defer close(ch)
+
+		handleStats(ctx, containerID, &dockerClient, networkCountConfig, logger, ch)
+	}()
+
+	go func() {
+		defer pw.Close()
+
+		scanner := bufio.NewScanner(bytes.NewReader(statsWithRestartJSON))
+		for scanner.Scan() {
+			_, err := pw.Write(scanner.Bytes())
+			require.NoError(t, err)
+		}
+	}()
+
+	// before container restart:
+	var lastStats stats
+	for range 31 {
+		lastStats = <-ch
+	}
+
+	assert.Equal(t, 5.008083989501312, lastStats.cpuPercent)
+	assert.Equal(t, uint64(24068096), lastStats.memoryUsageBytes)
+	assert.Equal(t, 1199, lastStats.rxRate)
+	assert.Equal(t, 1200, lastStats.txRate)
+
+	// restart triggers zero value stats:
+	assert.Equal(t, stats{}, <-ch)
+
+	// after container restart:
+	for stats := range ch {
+		lastStats = stats
+	}
+
+	assert.Equal(t, 1.887690322580645, lastStats.cpuPercent)
+	assert.Equal(t, uint64(12496896), lastStats.memoryUsageBytes)
+	assert.Equal(t, 1215, lastStats.rxRate)
+	assert.Equal(t, 1254, lastStats.txRate)
 }

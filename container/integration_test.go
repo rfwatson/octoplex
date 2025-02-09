@@ -2,6 +2,7 @@ package container_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -43,7 +44,7 @@ func TestClientStartStop(t *testing.T) {
 		},
 	})
 	testhelpers.ChanDiscard(containerStateC)
-	testhelpers.ChanRequireNoError(t, errC)
+	testhelpers.ChanRequireNoError(ctx, t, errC)
 
 	require.Eventually(
 		t,
@@ -161,4 +162,65 @@ func TestClientRemoveContainers(t *testing.T) {
 	client.Close()
 
 	assert.NoError(t, <-err3C)
+}
+
+func TestContainerRestart(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	logger := testhelpers.NewTestLogger()
+	apiClient, err := client.NewClientWithOpts(client.FromEnv)
+	require.NoError(t, err)
+	containerName := "termstream-test-" + uuid.NewString()
+	component := "test-restart"
+
+	client, err := container.NewClient(ctx, apiClient, logger)
+	require.NoError(t, err)
+	defer client.Close()
+
+	containerStateC, errC := client.RunContainer(ctx, container.RunContainerParams{
+		Name:     containerName,
+		ChanSize: 1,
+		ContainerConfig: &typescontainer.Config{
+			Image:  "alpine:latest",
+			Cmd:    []string{"sleep", "1"},
+			Labels: map[string]string{"component": component},
+		},
+		HostConfig: &typescontainer.HostConfig{
+			NetworkMode:   "default",
+			RestartPolicy: typescontainer.RestartPolicy{Name: "always"},
+		},
+	})
+	testhelpers.ChanRequireNoError(ctx, t, errC)
+
+	containerState := <-containerStateC
+	assert.Equal(t, "pulling", containerState.State)
+	containerState = <-containerStateC
+	assert.Equal(t, "created", containerState.State)
+	containerState = <-containerStateC
+	assert.Equal(t, "running", containerState.State)
+
+	err = nil // reset error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		var count int
+		for {
+			containerState = <-containerStateC
+			if containerState.State == "restarting" {
+				break
+			} else if containerState.State == "exited" {
+				err = errors.New("container exited unexpectedly")
+			} else if count >= 5 {
+				err = errors.New("container did not enter restarting state")
+			} else {
+				// wait for a few state changes
+				count++
+			}
+		}
+	}()
+
+	<-done
+	require.NoError(t, err)
 }

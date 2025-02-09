@@ -34,6 +34,7 @@ type DockerClient interface {
 	io.Closer
 
 	ContainerCreate(context.Context, *container.Config, *container.HostConfig, *network.NetworkingConfig, *ocispec.Platform, string) (container.CreateResponse, error)
+	ContainerInspect(context.Context, string) (types.ContainerJSON, error)
 	ContainerList(context.Context, container.ListOptions) ([]types.Container, error)
 	ContainerRemove(context.Context, string, container.RemoveOptions) error
 	ContainerStart(context.Context, string, container.StartOptions) error
@@ -86,6 +87,7 @@ type stats struct {
 	cpuPercent       float64
 	memoryUsageBytes uint64
 	rxRate, txRate   int
+	rxSince          time.Time
 }
 
 // getStats returns a channel that will receive container stats. The channel is
@@ -204,9 +206,55 @@ func (a *Client) runContainerLoop(
 	stateC chan<- domain.Container,
 	errC chan<- error,
 ) {
+	type containerWaitResponse struct {
+		container.WaitResponse
+		restarting bool
+	}
+
+	containerRespC := make(chan containerWaitResponse)
+	containerErrC := make(chan error)
 	statsC := a.getStats(containerID, networkCountConfig)
 	eventsC := a.getEvents(containerID)
-	containerRespC, containerErrC := a.apiClient.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
+
+	// ContainerWait only sends a result for the first non-running state, so we
+	// need to poll it repeatedly.
+	//
+	// The goroutine exits when a value is received on the error channel, or when
+	// the container exits and is not restarting, or when the context is cancelled.
+	go func() {
+		for {
+			respC, errC := a.apiClient.ContainerWait(ctx, containerID, container.WaitConditionNextExit)
+			select {
+			case resp := <-respC:
+				// Check if the container is restarting. If it is not then we don't
+				// want to wait for it again and can return early.
+				//
+				// Low priority: is the API call necessary?
+				ctr, err := a.apiClient.ContainerInspect(ctx, containerID)
+				if err != nil {
+					// TODO: error handling?
+					a.logger.Error("Error inspecting container", "err", err, "id", shortID(containerID))
+					containerErrC <- err
+					return
+				}
+
+				// Race condition: the container may have already restarted.
+				restarting := ctr.State.Status == "restarting" || ctr.State.Status == "running"
+
+				containerRespC <- containerWaitResponse{WaitResponse: resp, restarting: restarting}
+				if !restarting {
+					return
+				}
+			case err := <-errC:
+				// Otherwise, this is probably unexpected and we need to handle it.
+				// TODO: improve handling
+				containerErrC <- err
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	state := &domain.Container{ID: containerID, State: "running"}
 	sendState := func() { stateC <- *state }
@@ -215,10 +263,28 @@ func (a *Client) runContainerLoop(
 	for {
 		select {
 		case resp := <-containerRespC:
-			a.logger.Info("Container entered non-running state", "exit_code", resp.StatusCode, "id", shortID(containerID))
-			state.State = "exited"
+			a.logger.Info("Container entered non-running state", "exit_code", resp.StatusCode, "id", shortID(containerID), "restarting", resp.restarting)
+
+			var containerState string
+			if resp.restarting {
+				containerState = "restarting"
+			} else {
+				containerState = "exited"
+			}
+
+			state.State = containerState
+			state.CPUPercent = 0
+			state.MemoryUsageBytes = 0
+			state.HealthState = "unhealthy"
+			state.RxRate = 0
+			state.TxRate = 0
+			state.RxSince = time.Time{}
+			state.RestartCount++
 			sendState()
-			return
+
+			if !resp.restarting {
+				return
+			}
 		case err := <-containerErrC:
 			// TODO: error handling?
 			if err != context.Canceled {
@@ -227,6 +293,16 @@ func (a *Client) runContainerLoop(
 			errC <- err
 			return
 		case evt := <-eventsC:
+			if evt.Type != events.ContainerEventType {
+				continue
+			}
+
+			if evt.Action == "start" {
+				state.State = "running"
+				sendState()
+				continue
+			}
+
 			if strings.Contains(string(evt.Action), "health_status") {
 				switch evt.Action {
 				case events.ActionHealthStatusRunning:
@@ -240,12 +316,14 @@ func (a *Client) runContainerLoop(
 					state.HealthState = "unknown"
 				}
 				sendState()
+				continue
 			}
-		case stats := <-statsC:
-			state.CPUPercent = stats.cpuPercent
-			state.MemoryUsageBytes = stats.memoryUsageBytes
-			state.RxRate = stats.rxRate
-			state.TxRate = stats.txRate
+		case s := <-statsC:
+			state.CPUPercent = s.cpuPercent
+			state.MemoryUsageBytes = s.memoryUsageBytes
+			state.RxRate = s.rxRate
+			state.TxRate = s.txRate
+			state.RxSince = s.rxSince
 			sendState()
 		}
 	}
@@ -253,6 +331,10 @@ func (a *Client) runContainerLoop(
 
 // Close closes the client, stopping and removing all running containers.
 func (a *Client) Close() error {
+	if a.ctx.Err() != nil {
+		return nil
+	}
+
 	a.cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), stopTimeout)
