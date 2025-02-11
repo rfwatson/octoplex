@@ -37,7 +37,7 @@ func run(ctx context.Context, cfgReader io.Reader) error {
 	state := new(domain.AppState)
 	applyConfig(cfg, state)
 
-	logFile, err := os.OpenFile("termstream.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	logFile, err := os.OpenFile(cfg.LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return fmt.Errorf("error opening log file: %w", err)
 	}
