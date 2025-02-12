@@ -44,7 +44,7 @@ func TestClientStartStop(t *testing.T) {
 		},
 	})
 	testhelpers.ChanDiscard(containerStateC)
-	testhelpers.ChanRequireNoError(ctx, t, errC)
+	testhelpers.ChanRequireNoError(t, errC)
 
 	require.Eventually(
 		t,
@@ -191,7 +191,7 @@ func TestContainerRestart(t *testing.T) {
 			RestartPolicy: typescontainer.RestartPolicy{Name: "always"},
 		},
 	})
-	testhelpers.ChanRequireNoError(ctx, t, errC)
+	testhelpers.ChanRequireNoError(t, errC)
 
 	containerState := <-containerStateC
 	assert.Equal(t, "pulling", containerState.State)

@@ -7,7 +7,9 @@ import (
 	"io"
 	"testing"
 
+	containermocks "git.netflux.io/rob/termstream/generated/mocks/container"
 	"git.netflux.io/rob/termstream/testhelpers"
+	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,7 +23,15 @@ var statsWithRestartJSON []byte
 func TestHandleStats(t *testing.T) {
 	pr, pw := io.Pipe()
 	containerID := "b905f51b47242090ae504c184c7bc84d6274511ef763c1847039dcaa00a3ad27"
-	dockerClient := testhelpers.MockDockerClient{ContainerStatsResponse: pr}
+
+	var dockerClient containermocks.DockerClient
+	defer dockerClient.AssertExpectations(t)
+
+	dockerClient.
+		EXPECT().
+		ContainerStats(t.Context(), containerID, true).
+		Return(dockercontainer.StatsResponseReader{Body: pr}, nil)
+
 	networkCountConfig := NetworkCountConfig{Rx: "eth0", Tx: "eth1"}
 	logger := testhelpers.NewTestLogger()
 	ch := make(chan stats)
@@ -59,7 +69,15 @@ func TestHandleStats(t *testing.T) {
 func TestHandleStatsWithContainerRestart(t *testing.T) {
 	pr, pw := io.Pipe()
 	containerID := "d0adc747fb12b9ce2376408aed8538a0769de55aa9c239313f231d9d80402e39"
-	dockerClient := testhelpers.MockDockerClient{ContainerStatsResponse: pr}
+
+	var dockerClient containermocks.DockerClient
+	defer dockerClient.AssertExpectations(t)
+
+	dockerClient.
+		EXPECT().
+		ContainerStats(t.Context(), containerID, true).
+		Return(dockercontainer.StatsResponseReader{Body: pr}, nil)
+
 	networkCountConfig := NetworkCountConfig{Rx: "eth1", Tx: "eth0"}
 	logger := testhelpers.NewTestLogger()
 	ch := make(chan stats)
