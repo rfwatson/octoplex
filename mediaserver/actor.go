@@ -159,17 +159,32 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 			sendState()
 
 			continue
-		case err := <-errC:
+		case err, ok := <-errC:
+			if !ok {
+				// The loop continues until the actor is closed.
+				// Avoid receiving duplicate close signals.
+				errC = nil
+				continue
+			}
+
 			if err != nil {
 				s.logger.Error("Error from container client", "error", err, "id", shortID(s.state.Container.ID))
 			}
 
 			fetchStateT.Stop()
 
+			// TODO: surface better error from container
+			if s.state.Container.ExitCode != nil {
+				s.state.ExitReason = fmt.Sprintf("Server process exited with code %d", *s.state.Container.ExitCode)
+			} else {
+				s.state.ExitReason = "Server process exited unexpectedly"
+			}
+
 			if s.state.Live {
 				s.state.Live = false
-				sendState()
 			}
+
+			sendState()
 		case <-fetchStateT.C:
 			ingressState, err := s.fetchIngressState()
 			if err != nil {

@@ -1,7 +1,6 @@
 package testhelpers
 
 import (
-	"context"
 	"log/slog"
 	"testing"
 
@@ -18,7 +17,7 @@ func ChanDiscard[T any](ch <-chan T) {
 }
 
 // ChanRequireNoError consumes a channel and asserts that no error is received.
-func ChanRequireNoError(ctx context.Context, t testing.TB, ch <-chan error) {
+func ChanRequireNoError(t testing.TB, ch <-chan error) {
 	t.Helper()
 
 	go func() {
@@ -27,7 +26,7 @@ func ChanRequireNoError(ctx context.Context, t testing.TB, ch <-chan error) {
 			case err := <-ch:
 				require.NoError(t, err)
 				return
-			case <-ctx.Done():
+			case <-t.Context().Done():
 				return
 			}
 		}

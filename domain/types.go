@@ -15,6 +15,7 @@ type Source struct {
 	Listeners       int
 	RTMPURL         string
 	RTMPInternalURL string
+	ExitReason      string
 }
 
 type DestinationState int
@@ -46,4 +47,5 @@ type Container struct {
 	TxRate           int
 	RxSince          time.Time
 	RestartCount     int
+	ExitCode         *int
 }

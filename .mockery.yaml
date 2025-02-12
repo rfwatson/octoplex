@@ -1,0 +1,11 @@
+with-expecter: true
+dir: "generated/mocks/{{ .InterfaceDirRelative }}"
+filename: "{{ .InterfaceName | lower }}_mock.go"
+mockname: "{{ .InterfaceName }}"
+outpkg: "{{ .PackageName }}"
+issue-845-fix: true
+resolve-type-alias: false
+packages:
+  git.netflux.io/rob/termstream/container:
+    interfaces:
+      DockerClient:

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -156,8 +157,11 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 		_, _ = io.Copy(io.Discard, pullReader)
 		_ = pullReader.Close()
 
-		params.ContainerConfig.Labels["app"] = "termstream"
-		params.ContainerConfig.Labels["app-id"] = a.id.String()
+		containerConfig := *params.ContainerConfig
+		containerConfig.Labels = make(map[string]string)
+		maps.Copy(containerConfig.Labels, params.ContainerConfig.Labels)
+		containerConfig.Labels["app"] = "termstream"
+		containerConfig.Labels["app-id"] = a.id.String()
 
 		var name string
 		if params.Name != "" {
@@ -166,7 +170,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 
 		createResp, err := a.apiClient.ContainerCreate(
 			ctx,
-			params.ContainerConfig,
+			&containerConfig,
 			params.HostConfig,
 			params.NetworkingConfig,
 			nil,
@@ -280,11 +284,15 @@ func (a *Client) runContainerLoop(
 			state.TxRate = 0
 			state.RxSince = time.Time{}
 			state.RestartCount++
-			sendState()
 
 			if !resp.restarting {
+				exitCode := int(resp.StatusCode)
+				state.ExitCode = &exitCode
+				sendState()
 				return
 			}
+
+			sendState()
 		case err := <-containerErrC:
 			// TODO: error handling?
 			if err != context.Canceled {
@@ -331,10 +339,6 @@ func (a *Client) runContainerLoop(
 
 // Close closes the client, stopping and removing all running containers.
 func (a *Client) Close() error {
-	if a.ctx.Err() != nil {
-		return nil
-	}
-
 	a.cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), stopTimeout)

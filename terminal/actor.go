@@ -128,6 +128,21 @@ func (a *Actor) actorLoop(ctx context.Context) {
 // SetState sets the state of the terminal user interface.
 func (a *Actor) SetState(state domain.AppState) {
 	a.ch <- func() {
+		if state.Source.ExitReason != "" {
+			modal := tview.NewModal()
+			modal.SetText("Mediaserver error: " + state.Source.ExitReason).
+				AddButtons([]string{"Quit"}).
+				SetBackgroundColor(tcell.ColorBlack).
+				SetTextColor(tcell.ColorWhite).
+				SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+					// TODO: improve app cleanup
+					a.app.Stop()
+				})
+			modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+
+			a.app.SetRoot(modal, false)
+		}
+
 		a.redrawFromState(state)
 	}
 }
