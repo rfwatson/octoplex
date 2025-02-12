@@ -1,7 +1,6 @@
 package mediaserver_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -16,22 +15,19 @@ import (
 const component = "mediaserver"
 
 func TestMediaServerStartStop(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
 	logger := testhelpers.NewTestLogger()
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	require.NoError(t, err)
 
-	containerClient, err := container.NewClient(ctx, apiClient, logger)
+	containerClient, err := container.NewClient(t.Context(), apiClient, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, containerClient.Close()) })
 
-	running, err := containerClient.ContainerRunning(ctx, map[string]string{"component": component})
+	running, err := containerClient.ContainerRunning(t.Context(), map[string]string{"component": component})
 	require.NoError(t, err)
 	assert.False(t, running)
 
-	mediaServer := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
+	mediaServer := mediaserver.StartActor(t.Context(), mediaserver.StartActorParams{
 		FetchIngressStateInterval: 500 * time.Millisecond,
 		ChanSize:                  1,
 		ContainerClient:           containerClient,
@@ -43,7 +39,7 @@ func TestMediaServerStartStop(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			running, err = containerClient.ContainerRunning(ctx, map[string]string{"component": component})
+			running, err = containerClient.ContainerRunning(t.Context(), map[string]string{"component": component})
 			return err == nil && running
 		},
 		time.Second*10,
@@ -81,7 +77,7 @@ func TestMediaServerStartStop(t *testing.T) {
 
 	mediaServer.Close()
 
-	running, err = containerClient.ContainerRunning(ctx, map[string]string{"component": component})
+	running, err = containerClient.ContainerRunning(t.Context(), map[string]string{"component": component})
 	require.NoError(t, err)
 	assert.False(t, running)
 }

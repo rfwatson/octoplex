@@ -3,7 +3,6 @@ package container
 import (
 	"bufio"
 	"bytes"
-	"context"
 	_ "embed"
 	"io"
 	"testing"
@@ -20,9 +19,6 @@ var statsJSON []byte
 var statsWithRestartJSON []byte
 
 func TestHandleStats(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
 	pr, pw := io.Pipe()
 	containerID := "b905f51b47242090ae504c184c7bc84d6274511ef763c1847039dcaa00a3ad27"
 	dockerClient := testhelpers.MockDockerClient{ContainerStatsResponse: pr}
@@ -33,7 +29,7 @@ func TestHandleStats(t *testing.T) {
 	go func() {
 		defer close(ch)
 
-		handleStats(ctx, containerID, &dockerClient, networkCountConfig, logger, ch)
+		handleStats(t.Context(), containerID, &dockerClient, networkCountConfig, logger, ch)
 	}()
 
 	go func() {
@@ -61,9 +57,6 @@ func TestHandleStats(t *testing.T) {
 }
 
 func TestHandleStatsWithContainerRestart(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
 	pr, pw := io.Pipe()
 	containerID := "d0adc747fb12b9ce2376408aed8538a0769de55aa9c239313f231d9d80402e39"
 	dockerClient := testhelpers.MockDockerClient{ContainerStatsResponse: pr}
@@ -74,7 +67,7 @@ func TestHandleStatsWithContainerRestart(t *testing.T) {
 	go func() {
 		defer close(ch)
 
-		handleStats(ctx, containerID, &dockerClient, networkCountConfig, logger, ch)
+		handleStats(t.Context(), containerID, &dockerClient, networkCountConfig, logger, ch)
 	}()
 
 	go func() {

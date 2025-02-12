@@ -27,15 +27,15 @@ jobs:
         ffmpeg-version: release
     - name: checkout
       uses: actions/checkout@v4
-    - name: Setup Go 1.23.5
+    - name: Setup Go 1.24.0
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23.5'
+        go-version: '1.24.0'
         cache: false
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v6
       with:
-        version: v1.60.1
+        version: v1.64.2
     - name: check_gomod
       run: mise run check_gomod
     - name: test_ci

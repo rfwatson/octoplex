@@ -1,6 +1,6 @@
 module git.netflux.io/rob/termstream
 
-go 1.23.5
+go 1.24.0
 
 require (
 	github.com/docker/docker v27.5.0+incompatible

@@ -1,7 +1,6 @@
 package container
 
 import (
-	"context"
 	"errors"
 	"io"
 	"testing"
@@ -12,9 +11,6 @@ import (
 )
 
 func TestHandleEvents(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
 	var count int
 	eventsC1 := make(chan events.Message)
 	eventsC2 := make(chan events.Message)
@@ -37,7 +33,7 @@ func TestHandleEvents(t *testing.T) {
 	go func() {
 		defer close(done)
 
-		handleEvents(ctx, containerID, &dockerClient, logger, ch)
+		handleEvents(t.Context(), containerID, &dockerClient, logger, ch)
 	}()
 
 	go func() {

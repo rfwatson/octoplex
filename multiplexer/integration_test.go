@@ -1,7 +1,6 @@
 package multiplexer_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -17,22 +16,19 @@ import (
 const component = "multiplexer"
 
 func TestMultiplexer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
 	logger := testhelpers.NewTestLogger()
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	require.NoError(t, err)
 
-	containerClient, err := container.NewClient(ctx, apiClient, logger)
+	containerClient, err := container.NewClient(t.Context(), apiClient, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, containerClient.Close()) })
 
-	running, err := containerClient.ContainerRunning(ctx, map[string]string{"component": component})
+	running, err := containerClient.ContainerRunning(t.Context(), map[string]string{"component": component})
 	require.NoError(t, err)
 	assert.False(t, running)
 
-	srv := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
+	srv := mediaserver.StartActor(t.Context(), mediaserver.StartActorParams{
 		RTMPPort:                  19350,
 		APIPort:                   9998,
 		FetchIngressStateInterval: 250 * time.Millisecond,
@@ -54,7 +50,7 @@ func TestMultiplexer(t *testing.T) {
 		"source not live",
 	)
 
-	mp := multiplexer.NewActor(ctx, multiplexer.NewActorParams{
+	mp := multiplexer.NewActor(t.Context(), multiplexer.NewActorParams{
 		SourceURL:       srv.State().RTMPInternalURL,
 		ChanSize:        1,
 		ContainerClient: containerClient,
