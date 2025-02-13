@@ -1,3 +1,5 @@
+//go:build integration
+
 package container_test
 
 import (
@@ -15,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestClientStartStop(t *testing.T) {
+func TestIntegrationClientStartStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
@@ -65,7 +67,7 @@ func TestClientStartStop(t *testing.T) {
 	assert.False(t, running)
 }
 
-func TestClientRemoveContainers(t *testing.T) {
+func TestIntegrationClientRemoveContainers(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 

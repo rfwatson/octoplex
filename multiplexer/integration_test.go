@@ -1,3 +1,5 @@
+//go:build integration
+
 package multiplexer_test
 
 import (
@@ -15,7 +17,7 @@ import (
 
 const component = "multiplexer"
 
-func TestMultiplexer(t *testing.T) {
+func TestIntegrationMultiplexer(t *testing.T) {
 	logger := testhelpers.NewTestLogger()
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	require.NoError(t, err)

@@ -1,3 +1,5 @@
+//go:build integration
+
 package mediaserver_test
 
 import (
@@ -14,7 +16,7 @@ import (
 
 const component = "mediaserver"
 
-func TestMediaServerStartStop(t *testing.T) {
+func TestIntegrationMediaServerStartStop(t *testing.T) {
 	logger := testhelpers.NewTestLogger()
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	require.NoError(t, err)

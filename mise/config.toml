@@ -7,11 +7,21 @@ dir = "{{cwd}}"
 run = "go test -v ./..."
 alias = "t"
 
+[tasks.test_integration]
+description = "Run integration tests"
+dir = "{{cwd}}"
+run = "go test -v -tags=integration -run TestIntegration ./..."
+alias = "ti"
+
 [tasks.test_ci]
 description = "Run tests in CI"
 dir = "{{cwd}}"
 run = "go test -v -race ./..."
-alias = "tci"
+
+[tasks.test_integration_ci]
+description = "Run integration tests in CI"
+dir = "{{cwd}}"
+run = "go test -v -race -tags=integration -run TestIntegration ./..."
 
 [tasks.lint]
 description = "Run linters"
