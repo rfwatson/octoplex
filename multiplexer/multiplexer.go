@@ -104,7 +104,7 @@ func (a *Actor) ToggleDestination(url string) {
 				NetworkMode:   "default",
 				RestartPolicy: typescontainer.RestartPolicy{Name: "always"},
 			},
-			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth1", Tx: "eth1"},
+			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth1", Tx: "eth0"},
 		})
 
 		a.nextIndex++
