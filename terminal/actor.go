@@ -14,6 +14,7 @@ import (
 // Actor is responsible for managing the terminal user interface.
 type Actor struct {
 	app        *tview.Application
+	pages      *tview.Pages
 	ch         chan action
 	commandCh  chan Command
 	logger     *slog.Logger
@@ -66,7 +67,10 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 		AddItem(flex, 180, 0, false).
 		AddItem(nil, 0, 1, false)
 
-	app.SetRoot(container, true)
+	pages := tview.NewPages()
+	pages.AddPage("main", container, true, true)
+
+	app.SetRoot(pages, true)
 	app.SetFocus(destView)
 	app.EnableMouse(false)
 
@@ -75,6 +79,7 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 		commandCh:  commandCh,
 		logger:     params.Logger,
 		app:        app,
+		pages:      pages,
 		sourceView: sourceView,
 		destView:   destView,
 	}
@@ -82,7 +87,23 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyCtrlC:
-			app.Stop()
+			modal := tview.NewModal()
+			modal.SetText("Are you sure you want to quit?").
+				AddButtons([]string{"Quit", "Cancel"}).
+				SetBackgroundColor(tcell.ColorBlack).
+				SetTextColor(tcell.ColorWhite).
+				SetDoneFunc(func(buttonIndex int, _ string) {
+					if buttonIndex == 1 || buttonIndex == -1 {
+						pages.RemovePage("modal")
+						app.SetFocus(destView)
+						return
+					}
+
+					commandCh <- CommandQuit{}
+				})
+			modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+
+			pages.AddPage("modal", modal, true, true)
 			return nil
 		}
 
@@ -140,7 +161,7 @@ func (a *Actor) SetState(state domain.AppState) {
 				})
 			modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
-			a.app.SetRoot(modal, false)
+			a.pages.AddPage("modal", modal, true, true)
 		}
 
 		a.redrawFromState(state)

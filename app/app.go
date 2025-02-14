@@ -31,7 +31,6 @@ func Run(
 		return fmt.Errorf("error opening log file: %w", err)
 	}
 	logger := slog.New(slog.NewTextHandler(logFile, nil))
-	logger.Info("Starting termstream", slog.Any("initial_state", state))
 
 	ui, err := terminal.StartActor(ctx, terminal.StartActorParams{Logger: logger.With("component", "ui")})
 	if err != nil {
@@ -73,10 +72,12 @@ func Run(
 				return nil
 			}
 
-			logger.Info("Command received", "cmd", cmd)
+			logger.Info("Command received", "cmd", cmd.Name())
 			switch c := cmd.(type) {
 			case terminal.CommandToggleDestination:
 				mp.ToggleDestination(c.URL)
+			case terminal.CommandQuit:
+				return nil
 			}
 		case <-uiTicker.C:
 			// TODO: update UI with current state?

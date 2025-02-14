@@ -11,6 +11,14 @@ func (c CommandToggleDestination) Name() string {
 	return "toggle_destination"
 }
 
+// CommandQuit quits the app.
+type CommandQuit struct{}
+
+// Name implements the Command interface.
+func (c CommandQuit) Name() string {
+	return "quit"
+}
+
 // Command is an interface for commands that can be triggered by the terminal
 // user interface.
 type Command interface {
