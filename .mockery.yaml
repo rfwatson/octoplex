@@ -9,3 +9,8 @@ packages:
   git.netflux.io/rob/termstream/container:
     interfaces:
       DockerClient:
+  git.netflux.io/rob/termstream/mediaserver:
+    interfaces:
+      httpClient:
+        config:
+          mockname: HTTPClient

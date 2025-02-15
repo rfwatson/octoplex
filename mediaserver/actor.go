@@ -186,7 +186,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 
 			sendState()
 		case <-fetchStateT.C:
-			ingressState, err := s.fetchIngressState()
+			ingressState, err := fetchIngressState(s.apiURL(), s.httpClient)
 			if err != nil {
 				s.logger.Error("Error fetching server state", "error", err)
 				continue

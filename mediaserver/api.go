@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+type httpClient interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
 type apiResponse[T any] struct {
 	Items []T `json:"items"`
 }
@@ -27,13 +31,13 @@ type ingressStreamState struct {
 	listeners int
 }
 
-func (s *Actor) fetchIngressState() (state ingressStreamState, _ error) {
-	req, err := http.NewRequest(http.MethodGet, s.apiURL(), nil)
+func fetchIngressState(apiURL string, httpClient httpClient) (state ingressStreamState, _ error) {
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		return state, fmt.Errorf("new request: %w", err)
 	}
 
-	httpResp, err := s.httpClient.Do(req)
+	httpResp, err := httpClient.Do(req)
 	if err != nil {
 		return state, fmt.Errorf("do request: %w", err)
 	}
