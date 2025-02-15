@@ -80,7 +80,6 @@ func Run(
 				return nil
 			}
 		case <-uiTicker.C:
-			// TODO: update UI with current state?
 			updateUI()
 		case serverState := <-srv.C():
 			applyServerState(serverState, state)
@@ -97,13 +96,15 @@ func applyServerState(serverState domain.Source, appState *domain.AppState) {
 	appState.Source = serverState
 }
 
-func applyMultiplexerState(destination domain.Destination, appState *domain.AppState) {
+// applyMultiplexerState applies the current multiplexer state to the app state.
+func applyMultiplexerState(mpState multiplexer.State, appState *domain.AppState) {
 	for i, dest := range appState.Destinations {
-		if dest.URL != destination.URL {
+		if dest.URL != mpState.URL {
 			continue
 		}
 
-		appState.Destinations[i] = destination
+		appState.Destinations[i].Container = mpState.Container
+		appState.Destinations[i].Status = mpState.Status
 
 		break
 	}
@@ -113,6 +114,9 @@ func applyMultiplexerState(destination domain.Destination, appState *domain.AppS
 func applyConfig(cfg config.Config, appState *domain.AppState) {
 	appState.Destinations = make([]domain.Destination, 0, len(cfg.Destinations))
 	for _, dest := range cfg.Destinations {
-		appState.Destinations = append(appState.Destinations, domain.Destination{URL: dest.URL})
+		appState.Destinations = append(appState.Destinations, domain.Destination{
+			Name: dest.Name,
+			URL:  dest.URL,
+		})
 	}
 }

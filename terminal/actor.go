@@ -52,8 +52,14 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	destView.SetWrapSelection(true, false)
 	destView.SetSelectedStyle(tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorDarkSlateGrey))
 	destView.SetDoneFunc(func(key tcell.Key) {
+		const urlCol = 1
 		row, _ := destView.GetSelection()
-		commandCh <- CommandToggleDestination{URL: destView.GetCell(row, 0).Text}
+		url, ok := destView.GetCell(row, urlCol).GetReference().(string)
+		if !ok {
+			return
+		}
+
+		commandCh <- CommandToggleDestination{URL: url}
 	})
 
 	flex := tview.NewFlex().
@@ -180,44 +186,47 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 	}
 
 	setHeaderRow := func(tableView *tview.Table, txRxLabel string) {
-		tableView.SetCell(0, 0, headerCell("[grey]URL", 3))
-		tableView.SetCell(0, 1, headerCell("[grey]Status", 2))
-		tableView.SetCell(0, 2, headerCell("[grey]Container", 2))
-		tableView.SetCell(0, 3, headerCell("[grey]Health", 2))
-		tableView.SetCell(0, 4, headerCell("[grey]CPU %", 1))
-		tableView.SetCell(0, 5, headerCell("[grey]Memory MB", 1))
-		tableView.SetCell(0, 6, headerCell("[grey]"+txRxLabel+" Kbps", 1))
-		tableView.SetCell(0, 7, headerCell("[grey]Action", 2))
+		tableView.SetCell(0, 0, headerCell("[grey]Name", 3))
+		tableView.SetCell(0, 1, headerCell("[grey]URL", 3))
+		tableView.SetCell(0, 2, headerCell("[grey]Status", 2))
+		tableView.SetCell(0, 3, headerCell("[grey]Container", 2))
+		tableView.SetCell(0, 4, headerCell("[grey]Health", 2))
+		tableView.SetCell(0, 5, headerCell("[grey]CPU %", 1))
+		tableView.SetCell(0, 6, headerCell("[grey]Memory MB", 1))
+		tableView.SetCell(0, 7, headerCell("[grey]"+txRxLabel+" Kbps", 1))
+		tableView.SetCell(0, 8, headerCell("[grey]Action", 2))
 	}
 
 	a.sourceView.Clear()
 	setHeaderRow(a.sourceView, "Rx")
-	a.sourceView.SetCell(1, 0, tview.NewTableCell(state.Source.RTMPURL))
+	a.sourceView.SetCell(1, 0, tview.NewTableCell("Local server"))
+	a.sourceView.SetCell(1, 1, tview.NewTableCell(state.Source.RTMPURL))
 
 	if state.Source.Live {
-		a.sourceView.SetCell(1, 1, tview.NewTableCell("[black:green]receiving"))
+		a.sourceView.SetCell(1, 2, tview.NewTableCell("[black:green]receiving"))
 	} else if state.Source.Container.State == "running" && state.Source.Container.HealthState == "healthy" {
-		a.sourceView.SetCell(1, 1, tview.NewTableCell("[black:yellow]ready"))
+		a.sourceView.SetCell(1, 2, tview.NewTableCell("[black:yellow]ready"))
 	} else {
-		a.sourceView.SetCell(1, 1, tview.NewTableCell("[white:red]not ready"))
+		a.sourceView.SetCell(1, 2, tview.NewTableCell("[white:red]not ready"))
 	}
-	a.sourceView.SetCell(1, 2, tview.NewTableCell("[white]"+state.Source.Container.State))
-	a.sourceView.SetCell(1, 3, tview.NewTableCell("[white]"+cmp.Or(state.Source.Container.HealthState, "starting")))
-	a.sourceView.SetCell(1, 4, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", state.Source.Container.CPUPercent)))
-	a.sourceView.SetCell(1, 5, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", float64(state.Source.Container.MemoryUsageBytes)/1024/1024)))
-	a.sourceView.SetCell(1, 6, tview.NewTableCell("[white]"+fmt.Sprintf("%d", state.Source.Container.RxRate)))
-	a.sourceView.SetCell(1, 7, tview.NewTableCell(""))
+	a.sourceView.SetCell(1, 3, tview.NewTableCell("[white]"+state.Source.Container.State))
+	a.sourceView.SetCell(1, 4, tview.NewTableCell("[white]"+cmp.Or(state.Source.Container.HealthState, "starting")))
+	a.sourceView.SetCell(1, 5, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", state.Source.Container.CPUPercent)))
+	a.sourceView.SetCell(1, 6, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", float64(state.Source.Container.MemoryUsageBytes)/1024/1024)))
+	a.sourceView.SetCell(1, 7, tview.NewTableCell("[white]"+fmt.Sprintf("%d", state.Source.Container.RxRate)))
+	a.sourceView.SetCell(1, 8, tview.NewTableCell(""))
 
 	a.destView.Clear()
 	setHeaderRow(a.destView, "Tx")
 
 	for i, dest := range state.Destinations {
-		a.destView.SetCell(i+1, 0, tview.NewTableCell(dest.URL))
-		switch dest.State {
-		case domain.DestinationStateLive:
+		a.destView.SetCell(i+1, 0, tview.NewTableCell(dest.Name))
+		a.destView.SetCell(i+1, 1, tview.NewTableCell(truncate(dest.URL, 50)).SetReference(dest.URL))
+		switch dest.Status {
+		case domain.DestinationStatusLive:
 			a.destView.SetCell(
 				i+1,
-				1,
+				2,
 				tview.NewTableCell("sending").
 					SetTextColor(tcell.ColorBlack).
 					SetBackgroundColor(tcell.ColorGreen).
@@ -228,44 +237,44 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 							Background(tcell.ColorGreen),
 					),
 			)
-		case domain.DestinationStateStarting:
+		case domain.DestinationStatusStarting:
 			label := "starting"
 			if dest.Container.RestartCount > 0 {
 				label = fmt.Sprintf("restarting (%d)", dest.Container.RestartCount)
 			}
-			a.destView.SetCell(i+1, 1, tview.NewTableCell("[white]"+label))
-		case domain.DestinationStateOffAir:
-			a.destView.SetCell(i+1, 1, tview.NewTableCell("[white]off-air"))
+			a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+label))
+		case domain.DestinationStatusOffAir:
+			a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]off-air"))
 		default:
 			panic("unknown destination state")
 		}
-		a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+cmp.Or(dest.Container.State, dash)))
+		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+cmp.Or(dest.Container.State, dash)))
 
 		healthState := dash
-		if dest.State == domain.DestinationStateLive {
+		if dest.Status == domain.DestinationStatusLive {
 			healthState = "healthy"
 		}
-		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+healthState))
+		a.destView.SetCell(i+1, 4, tview.NewTableCell("[white]"+healthState))
 
 		cpuPercent := dash
 		if dest.Container.State == "running" {
 			cpuPercent = fmt.Sprintf("%.1f", dest.Container.CPUPercent)
 		}
-		a.destView.SetCell(i+1, 4, tview.NewTableCell("[white]"+cpuPercent))
+		a.destView.SetCell(i+1, 5, tview.NewTableCell("[white]"+cpuPercent))
 
 		memoryUsage := dash
 		if dest.Container.State == "running" {
-			memoryUsage = fmt.Sprintf("%.1f", float64(dest.Container.MemoryUsageBytes)/1024/1024)
+			memoryUsage = fmt.Sprintf("%.1f", float64(dest.Container.MemoryUsageBytes)/1000/1000)
 		}
-		a.destView.SetCell(i+1, 5, tview.NewTableCell("[white]"+memoryUsage))
+		a.destView.SetCell(i+1, 6, tview.NewTableCell("[white]"+memoryUsage))
 
 		txRate := dash
 		if dest.Container.State == "running" {
 			txRate = "[white]" + fmt.Sprintf("%d", dest.Container.TxRate)
 		}
-		a.destView.SetCell(i+1, 6, tview.NewTableCell(txRate))
+		a.destView.SetCell(i+1, 7, tview.NewTableCell(txRate))
 
-		a.destView.SetCell(i+1, 7, tview.NewTableCell("[green]Tab to go live"))
+		a.destView.SetCell(i+1, 8, tview.NewTableCell("[green]Tab to go live"))
 	}
 
 	a.app.Draw()
@@ -274,4 +283,11 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 // Close closes the terminal user interface.
 func (a *Actor) Close() {
 	a.app.Stop()
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "…"
 }

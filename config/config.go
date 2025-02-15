@@ -15,7 +15,8 @@ const defaultLogFile = "termstream.log"
 
 // Destination holds the configuration for a destination.
 type Destination struct {
-	URL string `yaml:"url"`
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
 }
 
 // Config holds the configuration for the application.
@@ -64,6 +65,12 @@ func Load(r io.Reader) (cfg Config, _ error) {
 func setDefaults(cfg *Config) {
 	if cfg.LogFile == "" {
 		cfg.LogFile = defaultLogFile
+	}
+
+	for i := range cfg.Destinations {
+		if strings.TrimSpace(cfg.Destinations[i].Name) == "" {
+			cfg.Destinations[i].Name = fmt.Sprintf("Stream %d", i+1)
+		}
 	}
 }
 

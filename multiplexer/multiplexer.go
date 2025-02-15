@@ -23,6 +23,14 @@ const (
 	imageNameFFMPEG = "ghcr.io/jrottenberg/ffmpeg:7.1-scratch" // image name for ffmpeg
 )
 
+// State is the state of a single destination from the point of view of the
+// multiplexer.
+type State struct {
+	URL       string
+	Container domain.Container
+	Status    domain.DestinationStatus
+}
+
 // Actor is responsible for managing the multiplexer.
 type Actor struct {
 	wg              sync.WaitGroup
@@ -32,7 +40,7 @@ type Actor struct {
 	containerClient *container.Client
 	logger          *slog.Logger
 	actorC          chan action
-	stateC          chan domain.Destination
+	stateC          chan State
 
 	// mutable state
 	currURLs  map[string]struct{}
@@ -60,7 +68,7 @@ func NewActor(ctx context.Context, params NewActorParams) *Actor {
 		containerClient: params.ContainerClient,
 		logger:          params.Logger,
 		actorC:          make(chan action, cmp.Or(params.ChanSize, defaultChanSize)),
-		stateC:          make(chan domain.Destination, cmp.Or(params.ChanSize, defaultChanSize)),
+		stateC:          make(chan State, cmp.Or(params.ChanSize, defaultChanSize)),
 		currURLs:        make(map[string]struct{}),
 	}
 
@@ -127,7 +135,7 @@ func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, er
 		}
 	}()
 
-	state := &domain.Destination{URL: url}
+	state := &State{URL: url}
 	sendState := func() { a.stateC <- *state }
 
 	for {
@@ -137,12 +145,12 @@ func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, er
 
 			if containerState.State == "running" {
 				if hasElapsedSince(5*time.Second, containerState.RxSince) {
-					state.State = domain.DestinationStateLive
+					state.Status = domain.DestinationStatusLive
 				} else {
-					state.State = domain.DestinationStateStarting
+					state.Status = domain.DestinationStatusStarting
 				}
 			} else {
-				state.State = domain.DestinationStateOffAir
+				state.Status = domain.DestinationStatusOffAir
 			}
 			sendState()
 		case err := <-errC:
@@ -157,7 +165,7 @@ func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, er
 
 // C returns a channel that will receive the current state of the multiplexer.
 // The channel is never closed.
-func (a *Actor) C() <-chan domain.Destination {
+func (a *Actor) C() <-chan State {
 	return a.stateC
 }
 

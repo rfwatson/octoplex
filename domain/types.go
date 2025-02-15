@@ -18,18 +18,19 @@ type Source struct {
 	ExitReason      string
 }
 
-type DestinationState int
+type DestinationStatus int
 
 const (
-	DestinationStateOffAir DestinationState = iota
-	DestinationStateStarting
-	DestinationStateLive
+	DestinationStatusOffAir DestinationStatus = iota
+	DestinationStatusStarting
+	DestinationStatusLive
 )
 
 // Destination is a single destination.
 type Destination struct {
 	Container Container
-	State     DestinationState
+	Status    DestinationStatus
+	Name      string
 	URL       string
 }
 

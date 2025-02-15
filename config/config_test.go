@@ -17,6 +17,9 @@ var configComplete []byte
 //go:embed testdata/no-logfile.yml
 var configNoLogfile []byte
 
+//go:embed testdata/no-name.yml
+var configNoName []byte
+
 //go:embed testdata/invalid-destination-url.yml
 var configInvalidDestinationURL []byte
 
@@ -39,7 +42,10 @@ func TestConfig(t *testing.T) {
 					config.Config{
 						LogFile: "test.log",
 						Destinations: []config.Destination{
-							{URL: "rtmp://rtmp.example.com:1935/live"},
+							{
+								Name: "my stream",
+								URL:  "rtmp://rtmp.example.com:1935/live",
+							},
 						},
 					}, cfg)
 			},
@@ -49,6 +55,13 @@ func TestConfig(t *testing.T) {
 			r:    bytes.NewReader(configNoLogfile),
 			want: func(t *testing.T, cfg config.Config) {
 				assert.Equal(t, "termstream.log", cfg.LogFile)
+			},
+		},
+		{
+			name: "no name",
+			r:    bytes.NewReader(configNoName),
+			want: func(t *testing.T, cfg config.Config) {
+				assert.Equal(t, "Stream 1", cfg.Destinations[0].Name)
 			},
 		},
 		{
