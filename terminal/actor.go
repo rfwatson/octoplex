@@ -63,18 +63,12 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	})
 
 	flex := tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(sourceView, 4, 0, false).
+		SetDirection(tview.FlexColumn).
+		AddItem(sourceView, 0, 1, false).
 		AddItem(destView, 0, 1, false)
 
-	container := tview.NewFlex().
-		SetDirection(tview.FlexColumn).
-		AddItem(nil, 0, 1, false).
-		AddItem(flex, 180, 0, false).
-		AddItem(nil, 0, 1, false)
-
 	pages := tview.NewPages()
-	pages.AddPage("main", container, true, true)
+	pages.AddPage("main", flex, true, true)
 
 	app.SetRoot(pages, true)
 	app.SetFocus(destView)
@@ -176,6 +170,19 @@ func (a *Actor) SetState(state domain.AppState) {
 
 const dash = "—"
 
+const (
+	headerName      = "Name"
+	headerURL       = "URL"
+	headerStatus    = "Status"
+	headerContainer = "Container"
+	headerHealth    = "Health"
+	headerCPU       = "CPU %"
+	headerMem       = "Mem M"
+	headerRx        = "Rx Kbps"
+	headerTx        = "Tx Kbps"
+	headerAction    = "Action"
+)
+
 func (a *Actor) redrawFromState(state domain.AppState) {
 	headerCell := func(content string, expansion int) *tview.TableCell {
 		return tview.
@@ -185,20 +192,16 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 			SetSelectable(false)
 	}
 
-	setHeaderRow := func(tableView *tview.Table, txRxLabel string) {
-		tableView.SetCell(0, 0, headerCell("[grey]Name", 3))
-		tableView.SetCell(0, 1, headerCell("[grey]URL", 3))
-		tableView.SetCell(0, 2, headerCell("[grey]Status", 2))
-		tableView.SetCell(0, 3, headerCell("[grey]Container", 2))
-		tableView.SetCell(0, 4, headerCell("[grey]Health", 2))
-		tableView.SetCell(0, 5, headerCell("[grey]CPU %", 1))
-		tableView.SetCell(0, 6, headerCell("[grey]Memory MB", 1))
-		tableView.SetCell(0, 7, headerCell("[grey]"+txRxLabel+" Kbps", 1))
-		tableView.SetCell(0, 8, headerCell("[grey]Action", 2))
-	}
-
 	a.sourceView.Clear()
-	setHeaderRow(a.sourceView, "Rx")
+	a.sourceView.SetCell(0, 0, headerCell("[grey]"+headerName, 3))
+	a.sourceView.SetCell(0, 1, headerCell("[grey]"+headerURL, 3))
+	a.sourceView.SetCell(0, 2, headerCell("[grey]"+headerStatus, 2))
+	a.sourceView.SetCell(0, 3, headerCell("[grey]"+headerContainer, 2))
+	a.sourceView.SetCell(0, 4, headerCell("[grey]"+headerHealth, 2))
+	a.sourceView.SetCell(0, 5, headerCell("[grey]"+headerCPU, 1))
+	a.sourceView.SetCell(0, 6, headerCell("[grey]"+headerMem, 1))
+	a.sourceView.SetCell(0, 7, headerCell("[grey]"+headerRx, 1))
+
 	a.sourceView.SetCell(1, 0, tview.NewTableCell("Local server"))
 	a.sourceView.SetCell(1, 1, tview.NewTableCell(state.Source.RTMPURL))
 
@@ -214,10 +217,16 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 	a.sourceView.SetCell(1, 5, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", state.Source.Container.CPUPercent)))
 	a.sourceView.SetCell(1, 6, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", float64(state.Source.Container.MemoryUsageBytes)/1024/1024)))
 	a.sourceView.SetCell(1, 7, tview.NewTableCell("[white]"+fmt.Sprintf("%d", state.Source.Container.RxRate)))
-	a.sourceView.SetCell(1, 8, tview.NewTableCell(""))
 
 	a.destView.Clear()
-	setHeaderRow(a.destView, "Tx")
+	a.destView.SetCell(0, 0, headerCell("[grey]"+headerName, 3))
+	a.destView.SetCell(0, 1, headerCell("[grey]"+headerURL, 3))
+	a.destView.SetCell(0, 2, headerCell("[grey]"+headerStatus, 2))
+	a.destView.SetCell(0, 3, headerCell("[grey]"+headerContainer, 2))
+	a.destView.SetCell(0, 4, headerCell("[grey]"+headerHealth, 2))
+	a.destView.SetCell(0, 5, headerCell("[grey]"+headerCPU, 1))
+	a.destView.SetCell(0, 6, headerCell("[grey]"+headerMem, 1))
+	a.destView.SetCell(0, 7, headerCell("[grey]"+headerTx, 1))
 
 	for i, dest := range state.Destinations {
 		a.destView.SetCell(i+1, 0, tview.NewTableCell(dest.Name))
