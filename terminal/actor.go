@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"git.netflux.io/rob/termstream/domain"
 	"github.com/gdamore/tcell/v2"
@@ -14,6 +15,7 @@ import (
 type sourceViews struct {
 	url    *tview.TextView
 	status *tview.TextView
+	tracks *tview.TextView
 	health *tview.TextView
 	cpu    *tview.TextView
 	mem    *tview.TextView
@@ -57,13 +59,13 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	sourceView.SetDirection(tview.FlexColumn)
 	sourceView.SetBorder(true)
 	sourceView.SetTitle("Ingress RTMP server")
-	sidebar.AddItem(sourceView, 8, 0, false)
+	sidebar.AddItem(sourceView, 9, 0, false)
 
 	leftCol := tview.NewFlex()
 	leftCol.SetDirection(tview.FlexRow)
 	rightCol := tview.NewFlex()
 	rightCol.SetDirection(tview.FlexRow)
-	sourceView.AddItem(leftCol, 8, 0, false)
+	sourceView.AddItem(leftCol, 9, 0, false)
 	sourceView.AddItem(rightCol, 0, 1, false)
 
 	urlHeaderTextView := tview.NewTextView().SetDynamicColors(true).SetText("[grey]" + headerURL)
@@ -75,6 +77,11 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	leftCol.AddItem(statusHeaderTextView, 1, 0, false)
 	statusTextView := tview.NewTextView().SetDynamicColors(true).SetText("[white]" + dash)
 	rightCol.AddItem(statusTextView, 1, 0, false)
+
+	tracksHeaderTextView := tview.NewTextView().SetDynamicColors(true).SetText("[grey]" + headerTracks)
+	leftCol.AddItem(tracksHeaderTextView, 1, 0, false)
+	tracksTextView := tview.NewTextView().SetDynamicColors(true).SetText("[white]" + dash)
+	rightCol.AddItem(tracksTextView, 1, 0, false)
 
 	healthHeaderTextView := tview.NewTextView().SetDynamicColors(true).SetText("[grey]" + headerHealth)
 	leftCol.AddItem(healthHeaderTextView, 1, 0, false)
@@ -139,6 +146,7 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 		sourceViews: sourceViews{
 			url:    urlTextView,
 			status: statusTextView,
+			tracks: tracksTextView,
 			health: healthTextView,
 			cpu:    cpuTextView,
 			mem:    memTextView,
@@ -244,6 +252,7 @@ const (
 	headerRx        = "Rx Kbps"
 	headerTx        = "Tx Kbps"
 	headerAction    = "Action"
+	headerTracks    = "Tracks"
 )
 
 func (a *Actor) redrawFromState(state domain.AppState) {
@@ -256,6 +265,13 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 	}
 
 	a.sourceViews.url.SetText(state.Source.RTMPURL)
+
+	tracks := dash
+	if state.Source.Live && len(state.Source.Tracks) > 0 {
+		tracks = strings.Join(state.Source.Tracks, ", ")
+	}
+	a.sourceViews.tracks.SetText(tracks)
+
 	if state.Source.Live {
 		a.sourceViews.status.SetText("[black:green]receiving")
 	} else if state.Source.Container.State == "running" && state.Source.Container.HealthState == "healthy" {

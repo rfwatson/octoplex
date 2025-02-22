@@ -154,6 +154,14 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 	fetchStateT := time.NewTicker(s.fetchIngressStateInterval)
 	defer fetchStateT.Stop()
 
+	// fetchTracksT is used to signal that tracks should be fetched from the
+	// media server, after the stream goes on-air. A short delay is needed due to
+	// workaround a race condition in the media server.
+	var fetchTracksT *time.Timer
+	resetFetchTracksT := func(d time.Duration) { fetchTracksT = time.NewTimer(d) }
+	resetFetchTracksT(time.Second)
+	fetchTracksT.Stop()
+
 	sendState := func() { s.stateC <- *s.state }
 
 	for {
@@ -173,7 +181,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 			}
 
 			if err != nil {
-				s.logger.Error("Error from container client", "error", err, "id", shortID(s.state.Container.ID))
+				s.logger.Error("Error from container client", "err", err, "id", shortID(s.state.Container.ID))
 			}
 
 			fetchStateT.Stop()
@@ -191,14 +199,29 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 
 			sendState()
 		case <-fetchStateT.C:
-			ingressState, err := fetchIngressState(s.apiURL(), s.httpClient)
+			ingressState, err := fetchIngressState(s.rtmpConnsURL(), s.httpClient)
 			if err != nil {
-				s.logger.Error("Error fetching server state", "error", err)
+				s.logger.Error("Error fetching server state", "err", err)
 				continue
 			}
 			if ingressState.ready != s.state.Live || ingressState.listeners != s.state.Listeners {
 				s.state.Live = ingressState.ready
 				s.state.Listeners = ingressState.listeners
+				resetFetchTracksT(time.Second)
+				sendState()
+			}
+		case <-fetchTracksT.C:
+			if !s.state.Live {
+				continue
+			}
+
+			if tracks, err := fetchTracks(s.pathsURL(), s.httpClient); err != nil {
+				s.logger.Error("Error fetching tracks", "err", err)
+				resetFetchTracksT(3 * time.Second)
+			} else if len(tracks) == 0 {
+				resetFetchTracksT(time.Second)
+			} else {
+				s.state.Tracks = tracks
 				sendState()
 			}
 		case action, ok := <-s.actorC:
@@ -224,9 +247,15 @@ func (s *Actor) rtmpInternalURL() string {
 	return fmt.Sprintf("rtmp://mediaserver:1935/%s", rtmpPath)
 }
 
-// apiURL returns the API URL for the media server, accessible from the host.
-func (s *Actor) apiURL() string {
+// rtmpConnsURL returns the URL for fetching RTMP connections, accessible from
+// the host.
+func (s *Actor) rtmpConnsURL() string {
 	return fmt.Sprintf("http://localhost:%d/v3/rtmpconns/list", s.apiPort)
+}
+
+// pathsURL returns the URL for fetching paths, accessible from the host.
+func (s *Actor) pathsURL() string {
+	return fmt.Sprintf("http://localhost:%d/v3/paths/list", s.apiPort)
 }
 
 // shortID returns the first 12 characters of the given container ID.

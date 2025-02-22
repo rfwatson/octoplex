@@ -13,6 +13,7 @@ type Source struct {
 	Container       Container
 	Live            bool
 	Listeners       int
+	Tracks          []string
 	RTMPURL         string
 	RTMPInternalURL string
 	ExitReason      string

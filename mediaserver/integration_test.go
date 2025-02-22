@@ -36,6 +36,7 @@ func TestIntegrationMediaServerStartStop(t *testing.T) {
 		Logger:                    logger,
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() { mediaServer.Close() })
 	testhelpers.ChanDiscard(mediaServer.C())
 
 	require.Eventually(
@@ -70,11 +71,22 @@ func TestIntegrationMediaServerStartStop(t *testing.T) {
 		t,
 		func() bool {
 			currState := mediaServer.State()
+			return len(currState.Tracks) == 1 && currState.Tracks[0] == "H264"
+		},
+		time.Second*5,
+		time.Second,
+		"tracks not updated",
+	)
+
+	require.Eventually(
+		t,
+		func() bool {
+			currState := mediaServer.State()
 			return currState.Container.RxRate > 500
 		},
 		time.Second*10,
 		time.Second,
-		"actor not healthy and/or in LIVE state",
+		"rxRate not updated",
 	)
 
 	mediaServer.Close()

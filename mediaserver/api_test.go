@@ -13,7 +13,7 @@ import (
 )
 
 func TestFetchIngressState(t *testing.T) {
-	const URL = "http://localhost:8989/v3/rtmpconns/list"
+	const url = "http://localhost:8989/v3/rtmpconns/list"
 
 	testCases := []struct {
 		name         string
@@ -75,16 +75,78 @@ func TestFetchIngressState(t *testing.T) {
 			httpClient.
 				EXPECT().
 				Do(mock.MatchedBy(func(req *http.Request) bool {
-					return req.URL.String() == URL && req.Method == http.MethodGet
+					return req.URL.String() == url && req.Method == http.MethodGet
 				})).
 				Return(tc.httpResponse, tc.httpError)
 
-			state, err := fetchIngressState(URL, &httpClient)
+			state, err := fetchIngressState(url, &httpClient)
 			if tc.wantErr != nil {
 				require.EqualError(t, err, tc.wantErr.Error())
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, tc.wantState, state)
+			}
+		})
+	}
+}
+
+func TestFetchTracks(t *testing.T) {
+	const url = "http://localhost:8989/v3/paths/list"
+
+	testCases := []struct {
+		name         string
+		httpResponse *http.Response
+		httpError    error
+		wantTracks   []string
+		wantErr      error
+	}{
+		{
+			name:         "non-200 status",
+			httpResponse: &http.Response{StatusCode: http.StatusNotFound},
+			wantErr:      errors.New("unexpected status code: 404"),
+		},
+		{
+			name: "unparseable response",
+			httpResponse: &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader([]byte("invalid json"))),
+			},
+			wantErr: errors.New("unmarshal: invalid character 'i' looking for beginning of value"),
+		},
+		{
+			name: "successful response, no tracks",
+			httpResponse: &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader([]byte(`{"itemCount":1,"pageCount":1,"items":[{"name":"live","confName":"all_others","source":{"type":"rtmpConn","id":"287340b2-04c2-4fcc-ab9c-089f4ff15aeb"},"ready":true,"readyTime":"2025-02-22T17:26:05.527206818Z","tracks":[],"bytesReceived":94430983,"bytesSent":0,"readers":[]}]}`))),
+			},
+			wantTracks: []string{},
+		},
+		{
+			name: "successful response, tracks",
+			httpResponse: &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader([]byte(`{"itemCount":1,"pageCount":1,"items":[{"name":"live","confName":"all_others","source":{"type":"rtmpConn","id":"287340b2-04c2-4fcc-ab9c-089f4ff15aeb"},"ready":true,"readyTime":"2025-02-22T17:26:05.527206818Z","tracks":["H264","MPEG-4 Audio"],"bytesReceived":94430983,"bytesSent":0,"readers":[]}]}`))),
+			},
+			wantTracks: []string{"H264", "MPEG-4 Audio"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var httpClient mocks.HTTPClient
+			httpClient.
+				EXPECT().
+				Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == url && req.Method == http.MethodGet
+				})).
+				Return(tc.httpResponse, tc.httpError)
+
+			tracks, err := fetchTracks(url, &httpClient)
+			if tc.wantErr != nil {
+				require.EqualError(t, err, tc.wantErr.Error())
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.wantTracks, tracks)
 			}
 		})
 	}

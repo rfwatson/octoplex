@@ -87,7 +87,7 @@ func (a *Actor) ToggleDestination(url string) {
 
 			if err := a.containerClient.RemoveContainers(a.ctx, labels); err != nil {
 				// TODO: error handling
-				a.logger.Error("Failed to stop live stream", "url", url, "error", err)
+				a.logger.Error("Failed to stop live stream", "url", url, "err", err)
 			}
 
 			delete(a.currURLs, url)
@@ -156,7 +156,7 @@ func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, er
 		case err := <-errC:
 			// TODO: error handling
 			if err != nil {
-				a.logger.Error("Error from container client", "error", err)
+				a.logger.Error("Error from container client", "err", err)
 			}
 			return
 		}

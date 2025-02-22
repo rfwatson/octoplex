@@ -31,6 +31,7 @@ type ingressStreamState struct {
 	listeners int
 }
 
+// TODO: handle pagination
 func fetchIngressState(apiURL string, httpClient httpClient) (state ingressStreamState, _ error) {
 	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -73,4 +74,45 @@ func fetchIngressState(apiURL string, httpClient httpClient) (state ingressStrea
 	}
 
 	return state, nil
+}
+
+type path struct {
+	Name   string   `json:"name"`
+	Tracks []string `json:"tracks"`
+}
+
+// TODO: handle pagination
+func fetchTracks(apiURL string, httpClient httpClient) ([]string, error) {
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+
+	httpResp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do request: %w", err)
+	}
+
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", httpResp.StatusCode)
+	}
+
+	respBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	var resp apiResponse[path]
+	if err = json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal: %w", err)
+	}
+
+	var tracks []string
+	for _, path := range resp.Items {
+		if path.Name == rtmpPath {
+			tracks = path.Tracks
+		}
+	}
+
+	return tracks, nil
 }
