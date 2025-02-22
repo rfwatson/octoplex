@@ -11,15 +11,24 @@ import (
 	"github.com/rivo/tview"
 )
 
+type sourceViews struct {
+	url    *tview.TextView
+	status *tview.TextView
+	health *tview.TextView
+	cpu    *tview.TextView
+	mem    *tview.TextView
+	rx     *tview.TextView
+}
+
 // Actor is responsible for managing the terminal user interface.
 type Actor struct {
-	app        *tview.Application
-	pages      *tview.Pages
-	ch         chan action
-	commandCh  chan Command
-	logger     *slog.Logger
-	sourceView *tview.Table
-	destView   *tview.Table
+	app         *tview.Application
+	pages       *tview.Pages
+	ch          chan action
+	commandCh   chan Command
+	logger      *slog.Logger
+	sourceViews sourceViews
+	destView    *tview.Table
 }
 
 const defaultChanSize = 64
@@ -41,12 +50,59 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 
 	app := tview.NewApplication()
 
-	sourceView := tview.NewTable()
-	sourceView.SetTitle("source")
+	sidebar := tview.NewFlex()
+	sidebar.SetDirection(tview.FlexRow)
+
+	sourceView := tview.NewFlex()
+	sourceView.SetDirection(tview.FlexColumn)
 	sourceView.SetBorder(true)
+	sourceView.SetTitle("Ingress RTMP server")
+	sidebar.AddItem(sourceView, 8, 0, false)
+
+	leftCol := tview.NewFlex()
+	leftCol.SetDirection(tview.FlexRow)
+	rightCol := tview.NewFlex()
+	rightCol.SetDirection(tview.FlexRow)
+	sourceView.AddItem(leftCol, 8, 0, false)
+	sourceView.AddItem(rightCol, 0, 1, false)
+
+	urlHeaderTextView := tview.NewTextView().SetDynamicColors(true).SetText("[grey]" + headerURL)
+	leftCol.AddItem(urlHeaderTextView, 1, 0, false)
+	urlTextView := tview.NewTextView().SetDynamicColors(true).SetText("[white]" + dash)
+	rightCol.AddItem(urlTextView, 1, 0, false)
+
+	statusHeaderTextView := tview.NewTextView().SetDynamicColors(true).SetText("[grey]" + headerStatus)
+	leftCol.AddItem(statusHeaderTextView, 1, 0, false)
+	statusTextView := tview.NewTextView().SetDynamicColors(true).SetText("[white]" + dash)
+	rightCol.AddItem(statusTextView, 1, 0, false)
+
+	healthHeaderTextView := tview.NewTextView().SetDynamicColors(true).SetText("[grey]" + headerHealth)
+	leftCol.AddItem(healthHeaderTextView, 1, 0, false)
+	healthTextView := tview.NewTextView().SetDynamicColors(true).SetText("[white]" + dash)
+	rightCol.AddItem(healthTextView, 1, 0, false)
+
+	cpuHeaderTextView := tview.NewTextView().SetDynamicColors(true).SetText("[grey]" + headerCPU)
+	leftCol.AddItem(cpuHeaderTextView, 1, 0, false)
+	cpuTextView := tview.NewTextView().SetDynamicColors(true).SetText("[white]" + dash)
+	rightCol.AddItem(cpuTextView, 1, 0, false)
+
+	memHeaderTextView := tview.NewTextView().SetDynamicColors(true).SetText("[grey]" + headerMem)
+	leftCol.AddItem(memHeaderTextView, 1, 0, false)
+	memTextView := tview.NewTextView().SetDynamicColors(true).SetText("[white]" + dash)
+	rightCol.AddItem(memTextView, 1, 0, false)
+
+	rxHeaderTextView := tview.NewTextView().SetDynamicColors(true).SetText("[grey]" + headerRx)
+	leftCol.AddItem(rxHeaderTextView, 1, 0, false)
+	rxTextView := tview.NewTextView().SetDynamicColors(true).SetText("[white]" + dash)
+	rightCol.AddItem(rxTextView, 1, 0, false)
+
+	aboutView := tview.NewBox()
+	aboutView.SetBorder(true)
+	aboutView.SetTitle("Actions")
+	sidebar.AddItem(aboutView, 0, 1, false)
 
 	destView := tview.NewTable()
-	destView.SetTitle("destinations")
+	destView.SetTitle("Egress streams")
 	destView.SetBorder(true)
 	destView.SetSelectable(true, false)
 	destView.SetWrapSelection(true, false)
@@ -64,8 +120,8 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 
 	flex := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
-		AddItem(sourceView, 0, 1, false).
-		AddItem(destView, 0, 1, false)
+		AddItem(sidebar, 40, 0, false).
+		AddItem(destView, 0, 6, false)
 
 	pages := tview.NewPages()
 	pages.AddPage("main", flex, true, true)
@@ -75,13 +131,20 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	app.EnableMouse(false)
 
 	actor := &Actor{
-		ch:         ch,
-		commandCh:  commandCh,
-		logger:     params.Logger,
-		app:        app,
-		pages:      pages,
-		sourceView: sourceView,
-		destView:   destView,
+		ch:        ch,
+		commandCh: commandCh,
+		logger:    params.Logger,
+		app:       app,
+		pages:     pages,
+		sourceViews: sourceViews{
+			url:    urlTextView,
+			status: statusTextView,
+			health: healthTextView,
+			cpu:    cpuTextView,
+			mem:    memTextView,
+			rx:     rxTextView,
+		},
+		destView: destView,
 	}
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -192,31 +255,34 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 			SetSelectable(false)
 	}
 
-	a.sourceView.Clear()
-	a.sourceView.SetCell(0, 0, headerCell("[grey]"+headerName, 3))
-	a.sourceView.SetCell(0, 1, headerCell("[grey]"+headerURL, 3))
-	a.sourceView.SetCell(0, 2, headerCell("[grey]"+headerStatus, 2))
-	a.sourceView.SetCell(0, 3, headerCell("[grey]"+headerContainer, 2))
-	a.sourceView.SetCell(0, 4, headerCell("[grey]"+headerHealth, 2))
-	a.sourceView.SetCell(0, 5, headerCell("[grey]"+headerCPU, 1))
-	a.sourceView.SetCell(0, 6, headerCell("[grey]"+headerMem, 1))
-	a.sourceView.SetCell(0, 7, headerCell("[grey]"+headerRx, 1))
-
-	a.sourceView.SetCell(1, 0, tview.NewTableCell("Local server"))
-	a.sourceView.SetCell(1, 1, tview.NewTableCell(state.Source.RTMPURL))
-
+	a.sourceViews.url.SetText(state.Source.RTMPURL)
 	if state.Source.Live {
-		a.sourceView.SetCell(1, 2, tview.NewTableCell("[black:green]receiving"))
+		a.sourceViews.status.SetText("[black:green]receiving")
 	} else if state.Source.Container.State == "running" && state.Source.Container.HealthState == "healthy" {
-		a.sourceView.SetCell(1, 2, tview.NewTableCell("[black:yellow]ready"))
+		a.sourceViews.status.SetText("[black:yellow]ready")
 	} else {
-		a.sourceView.SetCell(1, 2, tview.NewTableCell("[white:red]not ready"))
+		a.sourceViews.status.SetText("[white:red]not ready")
 	}
-	a.sourceView.SetCell(1, 3, tview.NewTableCell("[white]"+state.Source.Container.State))
-	a.sourceView.SetCell(1, 4, tview.NewTableCell("[white]"+cmp.Or(state.Source.Container.HealthState, "starting")))
-	a.sourceView.SetCell(1, 5, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", state.Source.Container.CPUPercent)))
-	a.sourceView.SetCell(1, 6, tview.NewTableCell("[white]"+fmt.Sprintf("%.1f", float64(state.Source.Container.MemoryUsageBytes)/1024/1024)))
-	a.sourceView.SetCell(1, 7, tview.NewTableCell("[white]"+fmt.Sprintf("%d", state.Source.Container.RxRate)))
+
+	a.sourceViews.health.SetText("[white]" + cmp.Or(state.Source.Container.HealthState, dash))
+
+	cpuPercent := dash
+	if state.Source.Container.State == "running" {
+		cpuPercent = fmt.Sprintf("%.1f", state.Source.Container.CPUPercent)
+	}
+	a.sourceViews.cpu.SetText("[white]" + cpuPercent)
+
+	memUsage := dash
+	if state.Source.Container.State == "running" {
+		memUsage = fmt.Sprintf("%.1f", float64(state.Source.Container.MemoryUsageBytes)/1024/1024)
+	}
+	a.sourceViews.mem.SetText("[white]" + memUsage)
+
+	rxRate := dash
+	if state.Source.Container.State == "running" {
+		rxRate = fmt.Sprintf("%d", state.Source.Container.RxRate)
+	}
+	a.sourceViews.rx.SetText("[white]" + rxRate)
 
 	a.destView.Clear()
 	a.destView.SetCell(0, 0, headerCell("[grey]"+headerName, 3))
@@ -230,7 +296,7 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 
 	for i, dest := range state.Destinations {
 		a.destView.SetCell(i+1, 0, tview.NewTableCell(dest.Name))
-		a.destView.SetCell(i+1, 1, tview.NewTableCell(truncate(dest.URL, 50)).SetReference(dest.URL))
+		a.destView.SetCell(i+1, 1, tview.NewTableCell(dest.URL).SetReference(dest.URL).SetMaxWidth(20))
 		switch dest.Status {
 		case domain.DestinationStatusLive:
 			a.destView.SetCell(
@@ -292,11 +358,4 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 // Close closes the terminal user interface.
 func (a *Actor) Close() {
 	a.app.Stop()
-}
-
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "…"
 }
