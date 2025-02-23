@@ -255,6 +255,7 @@ func (a *Client) runContainerLoop(
 				containerErrC <- err
 				return
 			case <-ctx.Done():
+				containerErrC <- ctx.Err()
 				return
 			}
 		}

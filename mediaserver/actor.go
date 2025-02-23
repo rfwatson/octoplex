@@ -32,6 +32,8 @@ type action func()
 
 // Actor is responsible for managing the media server.
 type Actor struct {
+	ctx                       context.Context
+	cancel                    context.CancelFunc
 	actorC                    chan action
 	stateC                    chan domain.Source
 	containerClient           *container.Client
@@ -61,8 +63,11 @@ type StartActorParams struct {
 // Callers must consume the state channel exposed via [C].
 func StartActor(ctx context.Context, params StartActorParams) *Actor {
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
+	ctx, cancel := context.WithCancel(ctx)
 
 	actor := &Actor{
+		ctx:                       ctx,
+		cancel:                    cancel,
 		apiPort:                   cmp.Or(params.APIPort, defaultAPIPort),
 		rtmpPort:                  cmp.Or(params.RTMPPort, defaultRTMPPort),
 		fetchIngressStateInterval: cmp.Or(params.FetchIngressStateInterval, defaultFetchIngressStateInterval),
@@ -138,13 +143,13 @@ func (s *Actor) Close() error {
 		return fmt.Errorf("remove containers: %w", err)
 	}
 
-	close(s.actorC)
+	s.cancel()
 
 	return nil
 }
 
-// actorLoop is the main loop of the media server actor. It only exits when the
-// actor is closed.
+// actorLoop is the main loop of the media server actor. It exits when the
+// actor is closed, or the parent context is cancelled.
 func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan error) {
 	fetchStateT := time.NewTicker(s.fetchIngressStateInterval)
 	defer fetchStateT.Stop()
@@ -198,9 +203,11 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 			}
 		case action, ok := <-s.actorC:
 			if !ok {
-				return
+				continue
 			}
 			action()
+		case <-s.ctx.Done():
+			return
 		}
 	}
 }
