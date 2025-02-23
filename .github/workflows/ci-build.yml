@@ -19,8 +19,12 @@ jobs:
         curl https://mise.run | sh
         echo "$HOME/.local/share/mise/bin" >> $GITHUB_PATH
         echo "$HOME/.local/share/mise/shims" >> $GITHUB_PATH
-    - name: install nscd
-      run: sudo apt-get -y update && sudo apt-get -y --no-install-recommends install nscd
+    - name: install OS dependencies
+      run: |
+        sudo apt-get -y update && \
+          sudo apt-get -y --no-install-recommends install \
+            nscd \
+            libx11-dev
     - name: setup ffmpeg
       uses: FedericoCarboni/setup-ffmpeg@v3
       with:

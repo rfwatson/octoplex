@@ -11,6 +11,7 @@ import (
 	"git.netflux.io/rob/termstream/domain"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"golang.design/x/clipboard"
 )
 
 type sourceViews struct {
@@ -41,8 +42,9 @@ type action func()
 // StartActorParams contains the parameters for starting a new terminal user
 // interface.
 type StartActorParams struct {
-	ChanSize int
-	Logger   *slog.Logger
+	ChanSize           int
+	Logger             *slog.Logger
+	ClipboardAvailable bool
 }
 
 // StartActor starts the terminal user interface actor.
@@ -104,9 +106,12 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	rxTextView := tview.NewTextView().SetDynamicColors(true).SetText("[white]" + dash)
 	rightCol.AddItem(rxTextView, 1, 0, false)
 
-	aboutView := tview.NewBox()
+	aboutView := tview.NewFlex()
+	aboutView.SetDirection(tview.FlexRow)
 	aboutView.SetBorder(true)
 	aboutView.SetTitle("Actions")
+	aboutView.AddItem(tview.NewTextView().SetText("[C] Copy ingress URL"), 1, 0, false)
+
 	sidebar.AddItem(aboutView, 0, 1, false)
 
 	destView := tview.NewTable()
@@ -158,24 +163,13 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'c', 'C':
+				actor.copySourceURLToClipboard(params.ClipboardAvailable)
+			}
 		case tcell.KeyCtrlC:
-			modal := tview.NewModal()
-			modal.SetText("Are you sure you want to quit?").
-				AddButtons([]string{"Quit", "Cancel"}).
-				SetBackgroundColor(tcell.ColorBlack).
-				SetTextColor(tcell.ColorWhite).
-				SetDoneFunc(func(buttonIndex int, _ string) {
-					if buttonIndex == 1 || buttonIndex == -1 {
-						pages.RemovePage("modal")
-						app.SetFocus(destView)
-						return
-					}
-
-					commandCh <- CommandQuit{}
-				})
-			modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
-
-			pages.AddPage("modal", modal, true, true)
+			actor.confirmQuit()
 			return nil
 		}
 
@@ -329,17 +323,10 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 							Background(tcell.ColorGreen),
 					),
 			)
-		case domain.DestinationStatusStarting:
-			label := "starting"
-			if dest.Container.RestartCount > 0 {
-				label = "restarting"
-			}
-			a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+rightPad(label, statusLen)))
-		case domain.DestinationStatusOffAir:
-			a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+rightPad("off-air", statusLen)))
 		default:
-			panic("unknown destination state")
+			a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+rightPad("off-air", statusLen)))
 		}
+
 		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+rightPad(cmp.Or(dest.Container.State, dash), 10)))
 
 		healthState := dash
@@ -373,6 +360,50 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 // Close closes the terminal user interface.
 func (a *Actor) Close() {
 	a.app.Stop()
+}
+
+func (a *Actor) copySourceURLToClipboard(clipboardAvailable bool) {
+	var text string
+	if clipboardAvailable {
+		clipboard.Write(clipboard.FmtText, []byte(a.sourceViews.url.GetText(true)))
+		text = "Ingress URL copied to clipboard"
+	} else {
+		text = "Copy to clipboard not available"
+	}
+
+	modal := tview.NewModal()
+	modal.SetText(text).
+		AddButtons([]string{"Ok"}).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetTextColor(tcell.ColorWhite).
+		SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+
+	modal.SetDoneFunc(func(buttonIndex int, _ string) {
+		a.pages.RemovePage("modal")
+		a.app.SetFocus(a.destView)
+	})
+
+	a.pages.AddPage("modal", modal, true, true)
+}
+
+func (a *Actor) confirmQuit() {
+	modal := tview.NewModal()
+	modal.SetText("Are you sure you want to quit?").
+		AddButtons([]string{"Quit", "Cancel"}).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetTextColor(tcell.ColorWhite).
+		SetDoneFunc(func(buttonIndex int, _ string) {
+			if buttonIndex == 1 || buttonIndex == -1 {
+				a.pages.RemovePage("modal")
+				a.app.SetFocus(a.destView)
+				return
+			}
+
+			a.commandCh <- CommandQuit{}
+		})
+	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+
+	a.pages.AddPage("modal", modal, true, true)
 }
 
 func rightPad(s string, n int) string {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	"git.netflux.io/rob/termstream/config"
@@ -22,17 +21,16 @@ func Run(
 	ctx context.Context,
 	cfg config.Config,
 	dockerClient container.DockerClient,
+	clipboardAvailable bool,
+	logger *slog.Logger,
 ) error {
 	state := new(domain.AppState)
 	applyConfig(cfg, state)
 
-	logFile, err := os.OpenFile(cfg.LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		return fmt.Errorf("error opening log file: %w", err)
-	}
-	logger := slog.New(slog.NewTextHandler(logFile, nil))
-
-	ui, err := terminal.StartActor(ctx, terminal.StartActorParams{Logger: logger.With("component", "ui")})
+	ui, err := terminal.StartActor(ctx, terminal.StartActorParams{
+		ClipboardAvailable: clipboardAvailable,
+		Logger:             logger.With("component", "ui"),
+	})
 	if err != nil {
 		return fmt.Errorf("start tui: %w", err)
 	}
