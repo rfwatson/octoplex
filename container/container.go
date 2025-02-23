@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"git.netflux.io/rob/termstream/domain"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
@@ -35,8 +34,8 @@ type DockerClient interface {
 	io.Closer
 
 	ContainerCreate(context.Context, *container.Config, *container.HostConfig, *network.NetworkingConfig, *ocispec.Platform, string) (container.CreateResponse, error)
-	ContainerInspect(context.Context, string) (types.ContainerJSON, error)
-	ContainerList(context.Context, container.ListOptions) ([]types.Container, error)
+	ContainerInspect(context.Context, string) (container.InspectResponse, error)
+	ContainerList(context.Context, container.ListOptions) ([]container.Summary, error)
 	ContainerRemove(context.Context, string, container.RemoveOptions) error
 	ContainerStart(context.Context, string, container.StartOptions) error
 	ContainerStats(context.Context, string, bool) (container.StatsResponseReader, error)
@@ -414,7 +413,7 @@ func (a *Client) RemoveContainers(ctx context.Context, labels map[string]string)
 	return nil
 }
 
-func (a *Client) containersMatchingLabels(ctx context.Context, labels map[string]string) ([]types.Container, error) {
+func (a *Client) containersMatchingLabels(ctx context.Context, labels map[string]string) ([]container.Summary, error) {
 	filterArgs := filters.NewArgs(
 		filters.Arg("label", "app=termstream"),
 		filters.Arg("label", "app-id="+a.id.String()),

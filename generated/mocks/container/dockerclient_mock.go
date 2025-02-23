@@ -14,8 +14,6 @@ import (
 
 	network "github.com/docker/docker/api/types/network"
 
-	types "github.com/docker/docker/api/types"
-
 	typescontainer "github.com/docker/docker/api/types/container"
 
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -141,22 +139,22 @@ func (_c *DockerClient_ContainerCreate_Call) RunAndReturn(run func(context.Conte
 }
 
 // ContainerInspect provides a mock function with given fields: _a0, _a1
-func (_m *DockerClient) ContainerInspect(_a0 context.Context, _a1 string) (types.ContainerJSON, error) {
+func (_m *DockerClient) ContainerInspect(_a0 context.Context, _a1 string) (typescontainer.InspectResponse, error) {
 	ret := _m.Called(_a0, _a1)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ContainerInspect")
 	}
 
-	var r0 types.ContainerJSON
+	var r0 typescontainer.InspectResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) (types.ContainerJSON, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string) (typescontainer.InspectResponse, error)); ok {
 		return rf(_a0, _a1)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) types.ContainerJSON); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string) typescontainer.InspectResponse); ok {
 		r0 = rf(_a0, _a1)
 	} else {
-		r0 = ret.Get(0).(types.ContainerJSON)
+		r0 = ret.Get(0).(typescontainer.InspectResponse)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
@@ -187,34 +185,34 @@ func (_c *DockerClient_ContainerInspect_Call) Run(run func(_a0 context.Context, 
 	return _c
 }
 
-func (_c *DockerClient_ContainerInspect_Call) Return(_a0 types.ContainerJSON, _a1 error) *DockerClient_ContainerInspect_Call {
+func (_c *DockerClient_ContainerInspect_Call) Return(_a0 typescontainer.InspectResponse, _a1 error) *DockerClient_ContainerInspect_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *DockerClient_ContainerInspect_Call) RunAndReturn(run func(context.Context, string) (types.ContainerJSON, error)) *DockerClient_ContainerInspect_Call {
+func (_c *DockerClient_ContainerInspect_Call) RunAndReturn(run func(context.Context, string) (typescontainer.InspectResponse, error)) *DockerClient_ContainerInspect_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ContainerList provides a mock function with given fields: _a0, _a1
-func (_m *DockerClient) ContainerList(_a0 context.Context, _a1 typescontainer.ListOptions) ([]types.Container, error) {
+func (_m *DockerClient) ContainerList(_a0 context.Context, _a1 typescontainer.ListOptions) ([]typescontainer.Summary, error) {
 	ret := _m.Called(_a0, _a1)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ContainerList")
 	}
 
-	var r0 []types.Container
+	var r0 []typescontainer.Summary
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, typescontainer.ListOptions) ([]types.Container, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, typescontainer.ListOptions) ([]typescontainer.Summary, error)); ok {
 		return rf(_a0, _a1)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, typescontainer.ListOptions) []types.Container); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, typescontainer.ListOptions) []typescontainer.Summary); ok {
 		r0 = rf(_a0, _a1)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]types.Container)
+			r0 = ret.Get(0).([]typescontainer.Summary)
 		}
 	}
 
@@ -246,12 +244,12 @@ func (_c *DockerClient_ContainerList_Call) Run(run func(_a0 context.Context, _a1
 	return _c
 }
 
-func (_c *DockerClient_ContainerList_Call) Return(_a0 []types.Container, _a1 error) *DockerClient_ContainerList_Call {
+func (_c *DockerClient_ContainerList_Call) Return(_a0 []typescontainer.Summary, _a1 error) *DockerClient_ContainerList_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *DockerClient_ContainerList_Call) RunAndReturn(run func(context.Context, typescontainer.ListOptions) ([]types.Container, error)) *DockerClient_ContainerList_Call {
+func (_c *DockerClient_ContainerList_Call) RunAndReturn(run func(context.Context, typescontainer.ListOptions) ([]typescontainer.Summary, error)) *DockerClient_ContainerList_Call {
 	_c.Call.Return(run)
 	return _c
 }

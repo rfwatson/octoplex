@@ -10,7 +10,6 @@ import (
 	"git.netflux.io/rob/termstream/container"
 	containermocks "git.netflux.io/rob/termstream/generated/mocks/container"
 	"git.netflux.io/rob/termstream/testhelpers"
-	"github.com/docker/docker/api/types"
 	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
@@ -67,7 +66,7 @@ func TestClientRunContainer(t *testing.T) {
 	dockerClient.
 		EXPECT().
 		ContainerInspect(mock.Anything, "123").
-		Return(types.ContainerJSON{ContainerJSONBase: &types.ContainerJSONBase{State: &types.ContainerState{Status: "exited"}}}, nil)
+		Return(dockercontainer.InspectResponse{ContainerJSONBase: &dockercontainer.ContainerJSONBase{State: &dockercontainer.State{Status: "exited"}}}, nil)
 	dockerClient.
 		EXPECT().
 		Events(mock.Anything, events.ListOptions{Filters: filters.NewArgs(filters.Arg("container", "123"), filters.Arg("type", "container"))}).
@@ -167,7 +166,7 @@ func TestClientClose(t *testing.T) {
 	dockerClient.
 		EXPECT().
 		ContainerList(mock.Anything, mock.Anything).
-		Return([]types.Container{{ID: "123"}}, nil)
+		Return([]dockercontainer.Summary{{ID: "123"}}, nil)
 	dockerClient.
 		EXPECT().
 		ContainerStop(mock.Anything, "123", mock.Anything).
