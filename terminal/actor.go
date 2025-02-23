@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 
 	"git.netflux.io/rob/termstream/domain"
@@ -251,7 +252,6 @@ const (
 	headerMem       = "Mem M"
 	headerRx        = "Rx Kbps"
 	headerTx        = "Tx Kbps"
-	headerAction    = "Action"
 	headerTracks    = "Tracks"
 )
 
@@ -280,7 +280,7 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 		a.sourceViews.status.SetText("[white:red]not ready")
 	}
 
-	a.sourceViews.health.SetText("[white]" + cmp.Or(state.Source.Container.HealthState, dash))
+	a.sourceViews.health.SetText("[white]" + cmp.Or(rightPad(state.Source.Container.HealthState, 9), dash))
 
 	cpuPercent := dash
 	if state.Source.Container.State == "running" {
@@ -313,12 +313,13 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 	for i, dest := range state.Destinations {
 		a.destView.SetCell(i+1, 0, tview.NewTableCell(dest.Name))
 		a.destView.SetCell(i+1, 1, tview.NewTableCell(dest.URL).SetReference(dest.URL).SetMaxWidth(20))
+		const statusLen = 10
 		switch dest.Status {
 		case domain.DestinationStatusLive:
 			a.destView.SetCell(
 				i+1,
 				2,
-				tview.NewTableCell("sending").
+				tview.NewTableCell(rightPad("sending", statusLen)).
 					SetTextColor(tcell.ColorBlack).
 					SetBackgroundColor(tcell.ColorGreen).
 					SetSelectedStyle(
@@ -331,41 +332,39 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 		case domain.DestinationStatusStarting:
 			label := "starting"
 			if dest.Container.RestartCount > 0 {
-				label = fmt.Sprintf("restarting (%d)", dest.Container.RestartCount)
+				label = "restarting"
 			}
-			a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+label))
+			a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+rightPad(label, statusLen)))
 		case domain.DestinationStatusOffAir:
-			a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]off-air"))
+			a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+rightPad("off-air", statusLen)))
 		default:
 			panic("unknown destination state")
 		}
-		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+cmp.Or(dest.Container.State, dash)))
+		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+rightPad(cmp.Or(dest.Container.State, dash), 10)))
 
 		healthState := dash
 		if dest.Status == domain.DestinationStatusLive {
 			healthState = "healthy"
 		}
-		a.destView.SetCell(i+1, 4, tview.NewTableCell("[white]"+healthState))
+		a.destView.SetCell(i+1, 4, tview.NewTableCell("[white]"+rightPad(healthState, 7)))
 
 		cpuPercent := dash
 		if dest.Container.State == "running" {
 			cpuPercent = fmt.Sprintf("%.1f", dest.Container.CPUPercent)
 		}
-		a.destView.SetCell(i+1, 5, tview.NewTableCell("[white]"+cpuPercent))
+		a.destView.SetCell(i+1, 5, tview.NewTableCell("[white]"+rightPad(cpuPercent, 4)))
 
 		memoryUsage := dash
 		if dest.Container.State == "running" {
 			memoryUsage = fmt.Sprintf("%.1f", float64(dest.Container.MemoryUsageBytes)/1000/1000)
 		}
-		a.destView.SetCell(i+1, 6, tview.NewTableCell("[white]"+memoryUsage))
+		a.destView.SetCell(i+1, 6, tview.NewTableCell("[white]"+rightPad(memoryUsage, 4)))
 
 		txRate := dash
 		if dest.Container.State == "running" {
-			txRate = "[white]" + fmt.Sprintf("%d", dest.Container.TxRate)
+			txRate = "[white]" + rightPad(strconv.Itoa(dest.Container.TxRate), 4)
 		}
 		a.destView.SetCell(i+1, 7, tview.NewTableCell(txRate))
-
-		a.destView.SetCell(i+1, 8, tview.NewTableCell("[green]Tab to go live"))
 	}
 
 	a.app.Draw()
@@ -374,4 +373,11 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 // Close closes the terminal user interface.
 func (a *Actor) Close() {
 	a.app.Stop()
+}
+
+func rightPad(s string, n int) string {
+	if s == "" {
+		return s
+	}
+	return s + strings.Repeat(" ", n-len(s))
 }
