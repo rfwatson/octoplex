@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const defaultLogFile = "termstream.log"
+const defaultLogFile = "octoplex.log"
 
 // Destination holds the configuration for a destination.
 type Destination struct {

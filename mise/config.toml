@@ -28,3 +28,9 @@ description = "Run linters"
 dir = "{{cwd}}"
 run = "golangci-lint run"
 alias = "l"
+
+[tasks.generate_mocks]
+description = "Generate mocks"
+dir = "{{cwd}}"
+run = "go tool mockery"
+alias = "m"

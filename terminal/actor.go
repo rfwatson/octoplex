@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"git.netflux.io/rob/termstream/domain"
+	"git.netflux.io/rob/octoplex/domain"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"golang.design/x/clipboard"

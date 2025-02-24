@@ -6,7 +6,7 @@ import (
 	"io"
 	"testing"
 
-	"git.netflux.io/rob/termstream/config"
+	"git.netflux.io/rob/octoplex/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,7 +54,7 @@ func TestConfig(t *testing.T) {
 			name: "no logfile",
 			r:    bytes.NewReader(configNoLogfile),
 			want: func(t *testing.T, cfg config.Config) {
-				assert.Equal(t, "termstream.log", cfg.LogFile)
+				assert.Equal(t, "octoplex.log", cfg.LogFile)
 			},
 		},
 		{
@@ -93,6 +93,6 @@ func TestConfig(t *testing.T) {
 func TestConfigDefault(t *testing.T) {
 	cfg, err := config.Load(config.Default())
 	require.NoError(t, err)
-	assert.Equal(t, "termstream.log", cfg.LogFile)
+	assert.Equal(t, "octoplex.log", cfg.LogFile)
 	assert.Empty(t, cfg.Destinations)
 }

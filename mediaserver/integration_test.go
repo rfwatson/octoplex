@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"git.netflux.io/rob/termstream/container"
-	"git.netflux.io/rob/termstream/mediaserver"
-	"git.netflux.io/rob/termstream/testhelpers"
+	"git.netflux.io/rob/octoplex/container"
+	"git.netflux.io/rob/octoplex/mediaserver"
+	"git.netflux.io/rob/octoplex/testhelpers"
 	"github.com/docker/docker/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -6,10 +6,10 @@ outpkg: "{{ .PackageName }}"
 issue-845-fix: true
 resolve-type-alias: false
 packages:
-  git.netflux.io/rob/termstream/container:
+  git.netflux.io/rob/octoplex/container:
     interfaces:
       DockerClient:
-  git.netflux.io/rob/termstream/mediaserver:
+  git.netflux.io/rob/octoplex/mediaserver:
     interfaces:
       httpClient:
         config:

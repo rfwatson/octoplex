@@ -3,7 +3,7 @@ package shortid_test
 import (
 	"testing"
 
-	"git.netflux.io/rob/termstream/shortid"
+	"git.netflux.io/rob/octoplex/shortid"
 	"github.com/stretchr/testify/assert"
 )
 

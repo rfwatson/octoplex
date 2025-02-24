@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"os"
 
-	"git.netflux.io/rob/termstream/app"
-	"git.netflux.io/rob/termstream/config"
+	"git.netflux.io/rob/octoplex/app"
+	"git.netflux.io/rob/octoplex/config"
 	dockerclient "github.com/docker/docker/client"
 	"golang.design/x/clipboard"
 )

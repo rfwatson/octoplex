@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"git.netflux.io/rob/termstream/container"
-	containermocks "git.netflux.io/rob/termstream/generated/mocks/container"
-	"git.netflux.io/rob/termstream/testhelpers"
+	"git.netflux.io/rob/octoplex/container"
+	containermocks "git.netflux.io/rob/octoplex/generated/mocks/container"
+	"git.netflux.io/rob/octoplex/testhelpers"
 	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"

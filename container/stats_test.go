@@ -7,8 +7,8 @@ import (
 	"io"
 	"testing"
 
-	containermocks "git.netflux.io/rob/termstream/generated/mocks/container"
-	"git.netflux.io/rob/termstream/testhelpers"
+	containermocks "git.netflux.io/rob/octoplex/generated/mocks/container"
+	"git.netflux.io/rob/octoplex/testhelpers"
 	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

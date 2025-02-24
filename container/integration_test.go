@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"git.netflux.io/rob/termstream/container"
-	"git.netflux.io/rob/termstream/shortid"
-	"git.netflux.io/rob/termstream/testhelpers"
+	"git.netflux.io/rob/octoplex/container"
+	"git.netflux.io/rob/octoplex/shortid"
+	"git.netflux.io/rob/octoplex/testhelpers"
 	typescontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/stretchr/testify/assert"
@@ -24,7 +24,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 	logger := testhelpers.NewTestLogger()
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	require.NoError(t, err)
-	containerName := "termstream-test-" + shortid.New().String()
+	containerName := "octoplex-test-" + shortid.New().String()
 	component := "test-start-stop"
 
 	client, err := container.NewClient(ctx, apiClient, logger)
@@ -173,7 +173,7 @@ func TestContainerRestart(t *testing.T) {
 	logger := testhelpers.NewTestLogger()
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	require.NoError(t, err)
-	containerName := "termstream-test-" + shortid.New().String()
+	containerName := "octoplex-test-" + shortid.New().String()
 	component := "test-restart"
 
 	client, err := container.NewClient(ctx, apiClient, logger)

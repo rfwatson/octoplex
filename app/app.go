@@ -6,12 +6,12 @@ import (
 	"log/slog"
 	"time"
 
-	"git.netflux.io/rob/termstream/config"
-	"git.netflux.io/rob/termstream/container"
-	"git.netflux.io/rob/termstream/domain"
-	"git.netflux.io/rob/termstream/mediaserver"
-	"git.netflux.io/rob/termstream/multiplexer"
-	"git.netflux.io/rob/termstream/terminal"
+	"git.netflux.io/rob/octoplex/config"
+	"git.netflux.io/rob/octoplex/container"
+	"git.netflux.io/rob/octoplex/domain"
+	"git.netflux.io/rob/octoplex/mediaserver"
+	"git.netflux.io/rob/octoplex/multiplexer"
+	"git.netflux.io/rob/octoplex/terminal"
 )
 
 const uiUpdateInterval = 2 * time.Second

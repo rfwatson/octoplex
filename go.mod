@@ -1,4 +1,4 @@
-module git.netflux.io/rob/termstream
+module git.netflux.io/rob/octoplex
 
 go 1.24.0
 
