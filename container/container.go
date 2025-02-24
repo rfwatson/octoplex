@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"git.netflux.io/rob/termstream/domain"
+	"git.netflux.io/rob/termstream/shortid"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
-	"github.com/google/uuid"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -51,7 +51,7 @@ type DockerClient interface {
 // Client provides a thin wrapper around the Docker API client, and provides
 // additional functionality such as exposing container stats.
 type Client struct {
-	id        uuid.UUID
+	id        shortid.ID
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
@@ -62,7 +62,7 @@ type Client struct {
 
 // NewClient creates a new Client.
 func NewClient(ctx context.Context, apiClient DockerClient, logger *slog.Logger) (*Client, error) {
-	id := uuid.New()
+	id := shortid.New()
 	network, err := apiClient.NetworkCreate(ctx, "termstream-"+id.String(), network.CreateOptions{Driver: "bridge"})
 	if err != nil {
 		return nil, fmt.Errorf("network create: %w", err)

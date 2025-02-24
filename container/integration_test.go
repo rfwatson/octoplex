@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"git.netflux.io/rob/termstream/container"
+	"git.netflux.io/rob/termstream/shortid"
 	"git.netflux.io/rob/termstream/testhelpers"
 	typescontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,7 +24,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 	logger := testhelpers.NewTestLogger()
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	require.NoError(t, err)
-	containerName := "termstream-test-" + uuid.NewString()
+	containerName := "termstream-test-" + shortid.New().String()
 	component := "test-start-stop"
 
 	client, err := container.NewClient(ctx, apiClient, logger)
@@ -173,7 +173,7 @@ func TestContainerRestart(t *testing.T) {
 	logger := testhelpers.NewTestLogger()
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	require.NoError(t, err)
-	containerName := "termstream-test-" + uuid.NewString()
+	containerName := "termstream-test-" + shortid.New().String()
 	component := "test-restart"
 
 	client, err := container.NewClient(ctx, apiClient, logger)
