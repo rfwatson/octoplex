@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 
@@ -17,15 +16,20 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := run(ctx, config.FromFile()); err != nil {
+	if err := run(ctx); err != nil {
 		_, _ = os.Stderr.WriteString("Error: " + err.Error() + "\n")
 	}
 }
 
-func run(ctx context.Context, cfgReader io.Reader) error {
-	cfg, err := config.Load(cfgReader)
+func run(ctx context.Context) error {
+	configService, err := config.NewDefaultService()
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return fmt.Errorf("build config service: %w", err)
+	}
+
+	cfg, err := configService.ReadOrCreateConfig()
+	if err != nil {
+		return fmt.Errorf("read or create config: %w", err)
 	}
 
 	logFile, err := os.OpenFile(cfg.LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)

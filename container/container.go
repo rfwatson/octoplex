@@ -63,7 +63,7 @@ type Client struct {
 // NewClient creates a new Client.
 func NewClient(ctx context.Context, apiClient DockerClient, logger *slog.Logger) (*Client, error) {
 	id := shortid.New()
-	network, err := apiClient.NetworkCreate(ctx, "octoplex-"+id.String(), network.CreateOptions{Driver: "bridge"})
+	network, err := apiClient.NetworkCreate(ctx, domain.AppName+"-"+id.String(), network.CreateOptions{Driver: "bridge"})
 	if err != nil {
 		return nil, fmt.Errorf("network create: %w", err)
 	}
@@ -159,12 +159,12 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 		containerConfig := *params.ContainerConfig
 		containerConfig.Labels = make(map[string]string)
 		maps.Copy(containerConfig.Labels, params.ContainerConfig.Labels)
-		containerConfig.Labels["app"] = "octoplex"
+		containerConfig.Labels["app"] = domain.AppName
 		containerConfig.Labels["app-id"] = a.id.String()
 
 		var name string
 		if params.Name != "" {
-			name = "octoplex-" + a.id.String() + "-" + params.Name
+			name = domain.AppName + "-" + a.id.String() + "-" + params.Name
 		}
 
 		createResp, err := a.apiClient.ContainerCreate(
@@ -415,7 +415,7 @@ func (a *Client) RemoveContainers(ctx context.Context, labels map[string]string)
 
 func (a *Client) containersMatchingLabels(ctx context.Context, labels map[string]string) ([]container.Summary, error) {
 	filterArgs := filters.NewArgs(
-		filters.Arg("label", "app=octoplex"),
+		filters.Arg("label", "app="+domain.AppName),
 		filters.Arg("label", "app-id="+a.id.String()),
 	)
 	for k, v := range labels {
