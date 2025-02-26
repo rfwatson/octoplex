@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
+	"syscall"
 
 	"git.netflux.io/rob/octoplex/app"
 	"git.netflux.io/rob/octoplex/config"
+	"git.netflux.io/rob/octoplex/domain"
 	dockerclient "github.com/docker/docker/client"
 	"golang.design/x/clipboard"
 )
@@ -25,6 +29,25 @@ func run(ctx context.Context) error {
 	configService, err := config.NewDefaultService()
 	if err != nil {
 		return fmt.Errorf("build config service: %w", err)
+	}
+
+	flag.Parse()
+	if narg := flag.NArg(); narg > 1 {
+		flag.Usage()
+		return fmt.Errorf("too many arguments")
+	} else if narg == 1 {
+		switch flag.Arg(0) {
+		case "edit-config":
+			return editConfigFile(configService.Path())
+		case "print-config":
+			return printConfigPath(configService.Path())
+		case "version":
+			return printVersion()
+		case "help", "-h", "--help":
+			// TODO: improve help message
+			flag.Usage()
+			return nil
+		}
 	}
 
 	cfg, err := configService.ReadOrCreateConfig()
@@ -57,4 +80,37 @@ func run(ctx context.Context) error {
 		clipboardAvailable,
 		logger,
 	)
+}
+
+// editConfigFile opens the config file in the user's editor.
+func editConfigFile(configPath string) error {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+	binary, err := exec.LookPath(editor)
+	if err != nil {
+		return fmt.Errorf("look path: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Editing config file: %s\n", configPath)
+	fmt.Println(binary)
+
+	if err := syscall.Exec(binary, []string{"--", configPath}, os.Environ()); err != nil {
+		return fmt.Errorf("exec: %w", err)
+	}
+
+	return nil
+}
+
+// printConfigPath prints the path to the config file to stderr.
+func printConfigPath(configPath string) error {
+	fmt.Fprintln(os.Stderr, configPath)
+	return nil
+}
+
+// printVersion prints the version of the application to stderr.
+func printVersion() error {
+	fmt.Fprintf(os.Stderr, "%s version %s\n", domain.AppName, "0.0.0")
+	return nil
 }

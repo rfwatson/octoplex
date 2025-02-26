@@ -40,7 +40,7 @@ func NewService(configDirFunc ConfigDirFunc) (*Service, error) {
 // ReadOrCreateConfig reads the configuration from the file at the given path or
 // creates it with default values.
 func (s *Service) ReadOrCreateConfig() (cfg Config, _ error) {
-	if _, err := os.Stat(s.path()); os.IsNotExist(err) {
+	if _, err := os.Stat(s.Path()); os.IsNotExist(err) {
 		return s.createConfig()
 	} else if err != nil {
 		return cfg, fmt.Errorf("stat: %w", err)
@@ -50,7 +50,7 @@ func (s *Service) ReadOrCreateConfig() (cfg Config, _ error) {
 }
 
 func (s *Service) readConfig() (cfg Config, _ error) {
-	contents, err := os.ReadFile(s.path())
+	contents, err := os.ReadFile(s.Path())
 	if err != nil {
 		return cfg, fmt.Errorf("read file: %w", err)
 	}
@@ -80,14 +80,14 @@ func (s *Service) createConfig() (cfg Config, _ error) {
 		return cfg, fmt.Errorf("marshal: %w", err)
 	}
 
-	if err = os.WriteFile(s.path(), yamlBytes, 0644); err != nil {
+	if err = os.WriteFile(s.Path(), yamlBytes, 0644); err != nil {
 		return cfg, fmt.Errorf("write file: %w", err)
 	}
 
 	return cfg, nil
 }
 
-func (s *Service) path() string {
+func (s *Service) Path() string {
 	return filepath.Join(s.configDir, "config.yaml")
 }
 
