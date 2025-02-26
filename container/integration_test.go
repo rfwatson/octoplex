@@ -30,7 +30,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 	client, err := container.NewClient(ctx, apiClient, logger)
 	require.NoError(t, err)
 
-	running, err := client.ContainerRunning(ctx, map[string]string{"component": component})
+	running, err := client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{"component": component}))
 	require.NoError(t, err)
 	assert.False(t, running)
 
@@ -51,7 +51,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			running, err = client.ContainerRunning(ctx, map[string]string{"component": component})
+			running, err = client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{"component": component}))
 			return err == nil && running
 		},
 		5*time.Second,
@@ -62,7 +62,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 	client.Close()
 	require.NoError(t, <-errC)
 
-	running, err = client.ContainerRunning(ctx, map[string]string{"component": component})
+	running, err = client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{"component": component}))
 	require.NoError(t, err)
 	assert.False(t, running)
 }
@@ -117,7 +117,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			running, _ := client.ContainerRunning(ctx, map[string]string{"group": "test1"})
+			running, _ := client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{"group": "test1"}))
 			return running
 		},
 		5*time.Second,
@@ -128,7 +128,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			running, _ := client.ContainerRunning(ctx, map[string]string{"group": "test2"})
+			running, _ := client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{"group": "test2"}))
 			return running
 		},
 		2*time.Second,
@@ -137,7 +137,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 	)
 
 	// remove group 1
-	err = client.RemoveContainers(ctx, map[string]string{"group": "test1"})
+	err = client.RemoveContainers(ctx, client.ContainersWithLabels(map[string]string{"group": "test1"}))
 	require.NoError(t, err)
 
 	// check group 1 is not running
@@ -145,7 +145,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 		t,
 		func() bool {
 			var running bool
-			running, err = client.ContainerRunning(ctx, map[string]string{"group": "test1"})
+			running, err = client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{"group": "test1"}))
 			return err == nil && !running
 		},
 		2*time.Second,
@@ -154,7 +154,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 	)
 
 	// check group 2 is still running
-	running, err := client.ContainerRunning(ctx, map[string]string{"group": "test2"})
+	running, err := client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{"group": "test2"}))
 	require.NoError(t, err)
 	assert.True(t, running)
 
