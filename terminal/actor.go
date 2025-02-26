@@ -212,6 +212,37 @@ func (a *Actor) actorLoop(ctx context.Context) {
 	}
 }
 
+// ShowStartupCheckModal shows a modal dialog to the user, asking if they want
+// to kill a running instance of Octoplex.
+//
+// The method will block until the user has made a choice, after which the
+// channel will receive true if the user wants to quit the other instance, or
+// false to quit this instance.
+func (a *Actor) ShowStartupCheckModal() <-chan bool {
+	done := make(chan bool)
+
+	modal := tview.NewModal()
+	modal.SetText("Another instance of Octoplex may already be running. Pressing continue will close that instance. Continue?").
+		AddButtons([]string{"Continue", "Exit"}).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetTextColor(tcell.ColorWhite).
+		SetDoneFunc(func(buttonIndex int, _ string) {
+			if buttonIndex == 0 {
+				done <- true
+				a.pages.RemovePage("modal")
+				a.app.SetFocus(a.destView)
+			} else {
+				done <- false
+			}
+		})
+	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+
+	a.pages.AddPage("modal", modal, true, true)
+	a.app.Draw()
+
+	return done
+}
+
 // SetState sets the state of the terminal user interface.
 func (a *Actor) SetState(state domain.AppState) {
 	a.ch <- func() {
@@ -221,7 +252,7 @@ func (a *Actor) SetState(state domain.AppState) {
 				AddButtons([]string{"Quit"}).
 				SetBackgroundColor(tcell.ColorBlack).
 				SetTextColor(tcell.ColorWhite).
-				SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+				SetDoneFunc(func(int, string) {
 					// TODO: improve app cleanup
 					a.app.Stop()
 				})

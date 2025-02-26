@@ -344,7 +344,7 @@ func (a *Client) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), stopTimeout)
 	defer cancel()
 
-	containerList, err := a.containersMatchingLabels(ctx, nil)
+	containerList, err := a.containersMatchingLabels(ctx, a.instanceLabels())
 	if err != nil {
 		return fmt.Errorf("container list: %w", err)
 	}
@@ -382,8 +382,8 @@ func (a *Client) removeContainer(ctx context.Context, id string) error {
 }
 
 // ContainerRunning checks if a container with the given labels is running.
-func (a *Client) ContainerRunning(ctx context.Context, labels map[string]string) (bool, error) {
-	containers, err := a.containersMatchingLabels(ctx, labels)
+func (a *Client) ContainerRunning(ctx context.Context, labelOptions LabelOptions) (bool, error) {
+	containers, err := a.containersMatchingLabels(ctx, labelOptions())
 	if err != nil {
 		return false, fmt.Errorf("container list: %w", err)
 	}
@@ -398,8 +398,8 @@ func (a *Client) ContainerRunning(ctx context.Context, labels map[string]string)
 }
 
 // RemoveContainers removes all containers with the given labels.
-func (a *Client) RemoveContainers(ctx context.Context, labels map[string]string) error {
-	containers, err := a.containersMatchingLabels(ctx, labels)
+func (a *Client) RemoveContainers(ctx context.Context, labelOptions LabelOptions) error {
+	containers, err := a.containersMatchingLabels(ctx, labelOptions())
 	if err != nil {
 		return fmt.Errorf("container list: %w", err)
 	}
@@ -413,11 +413,27 @@ func (a *Client) RemoveContainers(ctx context.Context, labels map[string]string)
 	return nil
 }
 
+// LabelOptions is a function that returns a map of labels.
+type LabelOptions func() map[string]string
+
+// ContainersWithLabels returns a LabelOptions function that returns the labels for
+// this app instance.
+func (a *Client) ContainersWithLabels(extraLabels map[string]string) LabelOptions {
+	return func() map[string]string {
+		return a.instanceLabels(extraLabels)
+	}
+}
+
+// AllContainers returns a LabelOptions function that returns the labels for any
+// app instance.
+func AllContainers() LabelOptions {
+	return func() map[string]string {
+		return map[string]string{"app": domain.AppName}
+	}
+}
+
 func (a *Client) containersMatchingLabels(ctx context.Context, labels map[string]string) ([]container.Summary, error) {
-	filterArgs := filters.NewArgs(
-		filters.Arg("label", "app="+domain.AppName),
-		filters.Arg("label", "app-id="+a.id.String()),
-	)
+	filterArgs := filters.NewArgs()
 	for k, v := range labels {
 		filterArgs.Add("label", k+"="+v)
 	}
@@ -425,6 +441,21 @@ func (a *Client) containersMatchingLabels(ctx context.Context, labels map[string
 		All:     true,
 		Filters: filterArgs,
 	})
+}
+
+func (a *Client) instanceLabels(extraLabels ...map[string]string) map[string]string {
+	labels := map[string]string{
+		"app":    domain.AppName,
+		"app-id": a.id.String(),
+	}
+
+	for _, el := range extraLabels {
+		for k, v := range el {
+			labels[k] = v
+		}
+	}
+
+	return labels
 }
 
 func shortID(id string) string {

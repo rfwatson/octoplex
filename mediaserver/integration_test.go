@@ -25,7 +25,7 @@ func TestIntegrationMediaServerStartStop(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, containerClient.Close()) })
 
-	running, err := containerClient.ContainerRunning(t.Context(), map[string]string{"component": component})
+	running, err := containerClient.ContainerRunning(t.Context(), containerClient.ContainersWithLabels(map[string]string{"component": component}))
 	require.NoError(t, err)
 	assert.False(t, running)
 
@@ -42,7 +42,7 @@ func TestIntegrationMediaServerStartStop(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			running, err = containerClient.ContainerRunning(t.Context(), map[string]string{"component": component})
+			running, err = containerClient.ContainerRunning(t.Context(), containerClient.ContainersWithLabels(map[string]string{"component": component}))
 			return err == nil && running
 		},
 		time.Second*10,
@@ -91,7 +91,7 @@ func TestIntegrationMediaServerStartStop(t *testing.T) {
 
 	mediaServer.Close()
 
-	running, err = containerClient.ContainerRunning(t.Context(), map[string]string{"component": component})
+	running, err = containerClient.ContainerRunning(t.Context(), containerClient.ContainersWithLabels(map[string]string{"component": component}))
 	require.NoError(t, err)
 	assert.False(t, running)
 }

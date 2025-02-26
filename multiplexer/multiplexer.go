@@ -85,7 +85,7 @@ func (a *Actor) ToggleDestination(url string) {
 		if _, ok := a.currURLs[url]; ok {
 			a.logger.Info("Stopping live stream", "url", url)
 
-			if err := a.containerClient.RemoveContainers(a.ctx, labels); err != nil {
+			if err := a.containerClient.RemoveContainers(a.ctx, a.containerClient.ContainersWithLabels(labels)); err != nil {
 				// TODO: error handling
 				a.logger.Error("Failed to stop live stream", "url", url, "err", err)
 			}
@@ -171,7 +171,10 @@ func (a *Actor) C() <-chan State {
 
 // Close closes the actor.
 func (a *Actor) Close() error {
-	if err := a.containerClient.RemoveContainers(context.Background(), map[string]string{"component": componentName}); err != nil {
+	if err := a.containerClient.RemoveContainers(
+		context.Background(),
+		a.containerClient.ContainersWithLabels(map[string]string{"component": componentName}),
+	); err != nil {
 		return fmt.Errorf("remove containers: %w", err)
 	}
 

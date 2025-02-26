@@ -139,7 +139,10 @@ func (s *Actor) State() domain.Source {
 
 // Close closes the media server actor.
 func (s *Actor) Close() error {
-	if err := s.containerClient.RemoveContainers(context.Background(), map[string]string{"component": componentName}); err != nil {
+	if err := s.containerClient.RemoveContainers(
+		context.Background(),
+		s.containerClient.ContainersWithLabels(map[string]string{"component": componentName}),
+	); err != nil {
 		return fmt.Errorf("remove containers: %w", err)
 	}
 
@@ -169,6 +172,11 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 		case containerState := <-containerStateC:
 			s.state.Container = containerState
 
+			if s.state.Container.State == "exited" {
+				fetchStateT.Stop()
+				s.handleContainerExit(nil)
+			}
+
 			sendState()
 
 			continue
@@ -185,17 +193,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 			}
 
 			fetchStateT.Stop()
-
-			if s.state.Container.ExitCode != nil {
-				s.state.ExitReason = fmt.Sprintf("Server process exited with code %d.", *s.state.Container.ExitCode)
-			} else {
-				s.state.ExitReason = "Server process exited unexpectedly."
-			}
-			if err != nil {
-				s.state.ExitReason += "\n\n" + err.Error()
-			}
-
-			s.state.Live = false
+			s.handleContainerExit(err)
 
 			sendState()
 		case <-fetchStateT.C:
@@ -233,6 +231,19 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 			return
 		}
 	}
+}
+
+func (s *Actor) handleContainerExit(err error) {
+	if s.state.Container.ExitCode != nil {
+		s.state.ExitReason = fmt.Sprintf("Server process exited with code %d.", *s.state.Container.ExitCode)
+	} else {
+		s.state.ExitReason = "Server process exited unexpectedly."
+	}
+	if err != nil {
+		s.state.ExitReason += "\n\n" + err.Error()
+	}
+
+	s.state.Live = false
 }
 
 // rtmpURL returns the RTMP URL for the media server, accessible from the host.

@@ -45,6 +45,18 @@ func Run(
 	}
 	defer containerClient.Close()
 
+	if exists, err := containerClient.ContainerRunning(ctx, container.AllContainers()); err != nil {
+		return fmt.Errorf("check existing containers: %w", err)
+	} else if exists {
+		if <-ui.ShowStartupCheckModal() {
+			if err = containerClient.RemoveContainers(ctx, container.AllContainers()); err != nil {
+				return fmt.Errorf("remove existing containers: %w", err)
+			}
+		} else {
+			return nil
+		}
+	}
+
 	srv := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "mediaserver"),
