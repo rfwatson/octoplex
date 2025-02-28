@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"syscall"
 
 	"git.netflux.io/rob/octoplex/app"
@@ -73,12 +74,23 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("new docker client: %w", err)
 	}
 
+	buildInfo, ok := debug.ReadBuildInfo()
+	if !ok {
+		return fmt.Errorf("read build info: %w", err)
+	}
+
 	return app.Run(
 		ctx,
-		cfg,
-		dockerClient,
-		clipboardAvailable,
-		logger,
+		app.RunParams{
+			Config:             cfg,
+			DockerClient:       dockerClient,
+			ClipboardAvailable: clipboardAvailable,
+			BuildInfo: domain.BuildInfo{
+				GoVersion: buildInfo.GoVersion,
+				Version:   buildInfo.Main.Version,
+			},
+			Logger: logger,
+		},
 	)
 }
 

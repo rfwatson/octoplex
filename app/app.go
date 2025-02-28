@@ -14,32 +14,34 @@ import (
 	"git.netflux.io/rob/octoplex/terminal"
 )
 
-const uiUpdateInterval = 2 * time.Second
+// RunParams holds the parameters for running the application.
+type RunParams struct {
+	Config             config.Config
+	DockerClient       container.DockerClient
+	ClipboardAvailable bool
+	BuildInfo          domain.BuildInfo
+	Logger             *slog.Logger
+}
 
 // Run starts the application, and blocks until it exits.
-func Run(
-	ctx context.Context,
-	cfg config.Config,
-	dockerClient container.DockerClient,
-	clipboardAvailable bool,
-	logger *slog.Logger,
-) error {
-	state := new(domain.AppState)
-	applyConfig(cfg, state)
+func Run(ctx context.Context, params RunParams) error {
+	state := newStateFromRunParams(params)
+	logger := params.Logger
 
 	ui, err := terminal.StartActor(ctx, terminal.StartActorParams{
-		ClipboardAvailable: clipboardAvailable,
+		ClipboardAvailable: params.ClipboardAvailable,
+		BuildInfo:          params.BuildInfo,
 		Logger:             logger.With("component", "ui"),
 	})
 	if err != nil {
-		return fmt.Errorf("start tui: %w", err)
+		return fmt.Errorf("start terminal user interface: %w", err)
 	}
 	defer ui.Close()
 
 	updateUI := func() { ui.SetState(*state) }
 	updateUI()
 
-	containerClient, err := container.NewClient(ctx, dockerClient, logger.With("component", "container_client"))
+	containerClient, err := container.NewClient(ctx, params.DockerClient, logger.With("component", "container_client"))
 	if err != nil {
 		return fmt.Errorf("new container client: %w", err)
 	}
@@ -70,8 +72,9 @@ func Run(
 	})
 	defer mp.Close()
 
-	uiTicker := time.NewTicker(uiUpdateInterval)
-	defer uiTicker.Stop()
+	const uiUpdateInterval = 2 * time.Second
+	uiUpdateT := time.NewTicker(uiUpdateInterval)
+	defer uiUpdateT.Stop()
 
 	for {
 		select {
@@ -89,7 +92,7 @@ func Run(
 			case terminal.CommandQuit:
 				return nil
 			}
-		case <-uiTicker.C:
+		case <-uiUpdateT.C:
 			updateUI()
 		case serverState := <-srv.C():
 			applyServerState(serverState, state)
@@ -120,13 +123,17 @@ func applyMultiplexerState(mpState multiplexer.State, appState *domain.AppState)
 	}
 }
 
-// applyConfig applies the configuration to the app state.
-func applyConfig(cfg config.Config, appState *domain.AppState) {
-	appState.Destinations = make([]domain.Destination, 0, len(cfg.Destinations))
-	for _, dest := range cfg.Destinations {
-		appState.Destinations = append(appState.Destinations, domain.Destination{
+// newStateFromRunParams creates a new app state from the run parameters.
+func newStateFromRunParams(params RunParams) *domain.AppState {
+	var state domain.AppState
+
+	state.Destinations = make([]domain.Destination, 0, len(params.Config.Destinations))
+	for _, dest := range params.Config.Destinations {
+		state.Destinations = append(state.Destinations, domain.Destination{
 			Name: dest.Name,
 			URL:  dest.URL,
 		})
 	}
+
+	return &state
 }

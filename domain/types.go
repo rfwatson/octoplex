@@ -6,6 +6,13 @@ import "time"
 type AppState struct {
 	Source       Source
 	Destinations []Destination
+	BuildInfo    BuildInfo
+}
+
+// BuildInfo holds information about the build.
+type BuildInfo struct {
+	GoVersion string
+	Version   string
 }
 
 // Source represents the source, currently always the mediaserver.

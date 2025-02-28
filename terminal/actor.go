@@ -30,6 +30,7 @@ type Actor struct {
 	pages       *tview.Pages
 	ch          chan action
 	commandCh   chan Command
+	buildInfo   domain.BuildInfo
 	logger      *slog.Logger
 	sourceViews sourceViews
 	destView    *tview.Table
@@ -45,6 +46,7 @@ type StartActorParams struct {
 	ChanSize           int
 	Logger             *slog.Logger
 	ClipboardAvailable bool
+	BuildInfo          domain.BuildInfo
 }
 
 // StartActor starts the terminal user interface actor.
@@ -110,7 +112,8 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	aboutView.SetDirection(tview.FlexRow)
 	aboutView.SetBorder(true)
 	aboutView.SetTitle("Actions")
-	aboutView.AddItem(tview.NewTextView().SetText("[C] Copy ingress URL"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetText("[C] Copy ingress RTMP URL"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetText("[?] About"), 1, 0, false)
 
 	sidebar.AddItem(aboutView, 0, 1, false)
 
@@ -146,6 +149,7 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	actor := &Actor{
 		ch:        ch,
 		commandCh: commandCh,
+		buildInfo: params.BuildInfo,
 		logger:    params.Logger,
 		app:       app,
 		pages:     pages,
@@ -167,6 +171,8 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 			switch event.Rune() {
 			case 'c', 'C':
 				actor.copySourceURLToClipboard(params.ClipboardAvailable)
+			case '?':
+				actor.showAbout()
 			}
 		case tcell.KeyCtrlC:
 			actor.confirmQuit()
@@ -431,6 +437,26 @@ func (a *Actor) confirmQuit() {
 			}
 
 			a.commandCh <- CommandQuit{}
+		})
+	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+
+	a.pages.AddPage("modal", modal, true, true)
+}
+
+func (a *Actor) showAbout() {
+	modal := tview.NewModal()
+	modal.SetText(fmt.Sprintf(
+		"%s: live stream multiplexer\n\nv0.0.0 %s (%s)",
+		domain.AppName,
+		a.buildInfo.Version,
+		a.buildInfo.GoVersion,
+	)).
+		AddButtons([]string{"Ok"}).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetTextColor(tcell.ColorWhite).
+		SetDoneFunc(func(buttonIndex int, _ string) {
+			a.pages.RemovePage("modal")
+			a.app.SetFocus(a.destView)
 		})
 	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
