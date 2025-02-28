@@ -48,6 +48,14 @@ type DockerClient interface {
 	NetworkRemove(context.Context, string) error
 }
 
+const (
+	LabelPrefix    = "io.netflux.octoplex."
+	LabelApp       = LabelPrefix + "app"
+	LabelAppID     = LabelPrefix + "app-id"
+	LabelComponent = LabelPrefix + "component"
+	LabelURL       = LabelPrefix + "url"
+)
+
 // Client provides a thin wrapper around the Docker API client, and provides
 // additional functionality such as exposing container stats.
 type Client struct {
@@ -159,8 +167,8 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 		containerConfig := *params.ContainerConfig
 		containerConfig.Labels = make(map[string]string)
 		maps.Copy(containerConfig.Labels, params.ContainerConfig.Labels)
-		containerConfig.Labels["app"] = domain.AppName
-		containerConfig.Labels["app-id"] = a.id.String()
+		containerConfig.Labels[LabelApp] = domain.AppName
+		containerConfig.Labels[LabelAppID] = a.id.String()
 
 		var name string
 		if params.Name != "" {
@@ -428,7 +436,7 @@ func (a *Client) ContainersWithLabels(extraLabels map[string]string) LabelOption
 // app instance.
 func AllContainers() LabelOptions {
 	return func() map[string]string {
-		return map[string]string{"app": domain.AppName}
+		return map[string]string{LabelApp: domain.AppName}
 	}
 }
 
@@ -445,8 +453,8 @@ func (a *Client) containersMatchingLabels(ctx context.Context, labels map[string
 
 func (a *Client) instanceLabels(extraLabels ...map[string]string) map[string]string {
 	labels := map[string]string{
-		"app":    domain.AppName,
-		"app-id": a.id.String(),
+		LabelApp:   domain.AppName,
+		LabelAppID: a.id.String(),
 	}
 
 	for _, el := range extraLabels {

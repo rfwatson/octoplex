@@ -96,7 +96,7 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 					"MTX_API=yes",
 				},
 				Labels: map[string]string{
-					"component": componentName,
+					container.LabelComponent: componentName,
 				},
 				Healthcheck: &typescontainer.HealthConfig{
 					Test:          []string{"CMD", "curl", "-f", "http://localhost:9997/v3/paths/list"},
@@ -141,7 +141,7 @@ func (s *Actor) State() domain.Source {
 func (s *Actor) Close() error {
 	if err := s.containerClient.RemoveContainers(
 		context.Background(),
-		s.containerClient.ContainersWithLabels(map[string]string{"component": componentName}),
+		s.containerClient.ContainersWithLabels(map[string]string{container.LabelComponent: componentName}),
 	); err != nil {
 		return fmt.Errorf("remove containers: %w", err)
 	}

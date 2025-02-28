@@ -80,7 +80,10 @@ func NewActor(ctx context.Context, params NewActorParams) *Actor {
 // ToggleDestination toggles the destination stream between on and off.
 func (a *Actor) ToggleDestination(url string) {
 	a.actorC <- func() {
-		labels := map[string]string{"component": componentName, "url": url}
+		labels := map[string]string{
+			container.LabelComponent: componentName,
+			container.LabelURL:       url,
+		}
 
 		if _, ok := a.currURLs[url]; ok {
 			a.logger.Info("Stopping live stream", "url", url)
@@ -173,7 +176,7 @@ func (a *Actor) C() <-chan State {
 func (a *Actor) Close() error {
 	if err := a.containerClient.RemoveContainers(
 		context.Background(),
-		a.containerClient.ContainersWithLabels(map[string]string{"component": componentName}),
+		a.containerClient.ContainersWithLabels(map[string]string{container.LabelComponent: componentName}),
 	); err != nil {
 		return fmt.Errorf("remove containers: %w", err)
 	}

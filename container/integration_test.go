@@ -30,7 +30,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 	client, err := container.NewClient(ctx, apiClient, logger)
 	require.NoError(t, err)
 
-	running, err := client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{"component": component}))
+	running, err := client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{container.LabelComponent: component}))
 	require.NoError(t, err)
 	assert.False(t, running)
 
@@ -39,7 +39,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 		ChanSize: 1,
 		ContainerConfig: &typescontainer.Config{
 			Image:  "netfluxio/mediamtx-alpine:latest",
-			Labels: map[string]string{"component": component},
+			Labels: map[string]string{container.LabelComponent: component},
 		},
 		HostConfig: &typescontainer.HostConfig{
 			NetworkMode: "default",
@@ -51,7 +51,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			running, err = client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{"component": component}))
+			running, err = client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{container.LabelComponent: component}))
 			return err == nil && running
 		},
 		5*time.Second,
@@ -62,7 +62,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 	client.Close()
 	require.NoError(t, <-errC)
 
-	running, err = client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{"component": component}))
+	running, err = client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{container.LabelComponent: component}))
 	require.NoError(t, err)
 	assert.False(t, running)
 }
@@ -84,7 +84,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 		ChanSize: 1,
 		ContainerConfig: &typescontainer.Config{
 			Image:  "netfluxio/mediamtx-alpine:latest",
-			Labels: map[string]string{"component": component, "group": "test1"},
+			Labels: map[string]string{container.LabelComponent: component, "group": "test1"},
 		},
 		HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
 	})
@@ -95,7 +95,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 		ChanSize: 1,
 		ContainerConfig: &typescontainer.Config{
 			Image:  "netfluxio/mediamtx-alpine:latest",
-			Labels: map[string]string{"component": component, "group": "test1"},
+			Labels: map[string]string{container.LabelComponent: component, "group": "test1"},
 		},
 		HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
 	})
@@ -106,7 +106,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 		ChanSize: 1,
 		ContainerConfig: &typescontainer.Config{
 			Image:  "netfluxio/mediamtx-alpine:latest",
-			Labels: map[string]string{"component": component, "group": "test2"},
+			Labels: map[string]string{container.LabelComponent: component, "group": "test2"},
 		},
 		HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
 	})
@@ -186,7 +186,7 @@ func TestContainerRestart(t *testing.T) {
 		ContainerConfig: &typescontainer.Config{
 			Image:  "alpine:latest",
 			Cmd:    []string{"sleep", "1"},
-			Labels: map[string]string{"component": component},
+			Labels: map[string]string{container.LabelComponent: component},
 		},
 		HostConfig: &typescontainer.HostConfig{
 			NetworkMode:   "default",
