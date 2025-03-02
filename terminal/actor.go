@@ -464,8 +464,11 @@ func (a *Actor) showAbout() {
 }
 
 func rightPad(s string, n int) string {
-	if s == "" {
+	if s == "" || len(s) == n {
 		return s
+	}
+	if len(s) > n {
+		return s[:n]
 	}
 	return s + strings.Repeat(" ", n-len(s))
 }
