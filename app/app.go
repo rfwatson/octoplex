@@ -28,7 +28,7 @@ func Run(ctx context.Context, params RunParams) error {
 	state := newStateFromRunParams(params)
 	logger := params.Logger
 
-	ui, err := terminal.StartActor(ctx, terminal.StartActorParams{
+	ui, err := terminal.StartUI(ctx, terminal.StartParams{
 		ClipboardAvailable: params.ClipboardAvailable,
 		BuildInfo:          params.BuildInfo,
 		Logger:             logger.With("component", "ui"),
@@ -50,7 +50,7 @@ func Run(ctx context.Context, params RunParams) error {
 	if exists, err := containerClient.ContainerRunning(ctx, container.AllContainers()); err != nil {
 		return fmt.Errorf("check existing containers: %w", err)
 	} else if exists {
-		if <-ui.ShowStartupCheckModal() {
+		if ui.ShowStartupCheckModal() {
 			if err = containerClient.RemoveContainers(ctx, container.AllContainers()); err != nil {
 				return fmt.Errorf("remove existing containers: %w", err)
 			}

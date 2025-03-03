@@ -24,11 +24,10 @@ type sourceViews struct {
 	rx     *tview.TextView
 }
 
-// Actor is responsible for managing the terminal user interface.
-type Actor struct {
+// UI is responsible for managing the terminal user interface.
+type UI struct {
 	app         *tview.Application
 	pages       *tview.Pages
-	ch          chan action
 	commandCh   chan Command
 	buildInfo   domain.BuildInfo
 	logger      *slog.Logger
@@ -36,23 +35,20 @@ type Actor struct {
 	destView    *tview.Table
 }
 
-const defaultChanSize = 64
-
-type action func()
-
-// StartActorParams contains the parameters for starting a new terminal user
+// StartParams contains the parameters for starting a new terminal user
 // interface.
-type StartActorParams struct {
+type StartParams struct {
 	ChanSize           int
 	Logger             *slog.Logger
 	ClipboardAvailable bool
 	BuildInfo          domain.BuildInfo
 }
 
-// StartActor starts the terminal user interface actor.
-func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
+const defaultChanSize = 64
+
+// StartUI starts the terminal user interface.
+func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
-	ch := make(chan action, chanSize)
 	commandCh := make(chan Command, chanSize)
 
 	app := tview.NewApplication()
@@ -146,8 +142,7 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 	app.SetFocus(destView)
 	app.EnableMouse(false)
 
-	actor := &Actor{
-		ch:        ch,
+	ui := &UI{
 		commandCh: commandCh,
 		buildInfo: params.BuildInfo,
 		logger:    params.Logger,
@@ -170,50 +165,48 @@ func StartActor(ctx context.Context, params StartActorParams) (*Actor, error) {
 		case tcell.KeyRune:
 			switch event.Rune() {
 			case 'c', 'C':
-				actor.copySourceURLToClipboard(params.ClipboardAvailable)
+				ui.copySourceURLToClipboard(params.ClipboardAvailable)
 			case '?':
-				actor.showAbout()
+				ui.showAbout()
 			}
 		case tcell.KeyCtrlC:
-			actor.confirmQuit()
+			ui.confirmQuit()
 			return nil
 		}
 
 		return event
 	})
-	go actor.actorLoop(ctx)
 
-	return actor, nil
+	go ui.run(ctx)
+
+	return ui, nil
 }
 
 // C returns a channel that receives commands from the user interface.
-func (a *Actor) C() <-chan Command {
-	return a.commandCh
+func (ui *UI) C() <-chan Command {
+	return ui.commandCh
 }
 
-func (a *Actor) actorLoop(ctx context.Context) {
+func (ui *UI) run(ctx context.Context) {
+	defer close(ui.commandCh)
+
 	uiDone := make(chan struct{})
 	go func() {
 		defer func() {
 			uiDone <- struct{}{}
 		}()
 
-		if err := a.app.Run(); err != nil {
-			a.logger.Error("tui application error", "err", err)
+		if err := ui.app.Run(); err != nil {
+			ui.logger.Error("tui application error", "err", err)
 		}
 	}()
 
 	for {
 		select {
 		case <-ctx.Done():
-			a.logger.Info("Context done")
+			return
 		case <-uiDone:
-			close(a.commandCh)
-		case action, ok := <-a.ch:
-			if !ok {
-				return
-			}
-			action()
+			return
 		}
 	}
 }
@@ -224,51 +217,68 @@ func (a *Actor) actorLoop(ctx context.Context) {
 // The method will block until the user has made a choice, after which the
 // channel will receive true if the user wants to quit the other instance, or
 // false to quit this instance.
-func (a *Actor) ShowStartupCheckModal() <-chan bool {
+func (ui *UI) ShowStartupCheckModal() bool {
 	done := make(chan bool)
 
-	modal := tview.NewModal()
-	modal.SetText("Another instance of Octoplex may already be running. Pressing continue will close that instance. Continue?").
-		AddButtons([]string{"Continue", "Exit"}).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetTextColor(tcell.ColorWhite).
-		SetDoneFunc(func(buttonIndex int, _ string) {
-			if buttonIndex == 0 {
-				done <- true
-				a.pages.RemovePage("modal")
-				a.app.SetFocus(a.destView)
-			} else {
-				done <- false
-			}
-		})
-	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+	ui.app.QueueUpdateDraw(func() {
+		modal := tview.NewModal()
+		modal.SetText("Another instance of Octoplex may already be running. Pressing continue will close that instance. Continue?").
+			AddButtons([]string{"Continue", "Exit"}).
+			SetBackgroundColor(tcell.ColorBlack).
+			SetTextColor(tcell.ColorWhite).
+			SetDoneFunc(func(buttonIndex int, _ string) {
+				if buttonIndex == 0 {
+					ui.pages.RemovePage("modal")
+					ui.app.SetFocus(ui.destView)
+					done <- true
+				} else {
+					done <- false
+				}
+			})
+		modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
-	a.pages.AddPage("modal", modal, true, true)
-	a.app.Draw()
+		ui.pages.AddPage("modal", modal, true, true)
+	})
 
-	return done
+	return <-done
+}
+
+func (ui *UI) handleMediaServerClosed(exitReason string) {
+	done := make(chan struct{})
+
+	ui.app.QueueUpdateDraw(func() {
+		modal := tview.NewModal()
+		modal.SetText("Mediaserver error: " + exitReason).
+			AddButtons([]string{"Quit"}).
+			SetBackgroundColor(tcell.ColorBlack).
+			SetTextColor(tcell.ColorWhite).
+			SetDoneFunc(func(int, string) {
+				ui.logger.Info("closing app")
+				// TODO: improve app cleanup
+				done <- struct{}{}
+
+				ui.app.Stop()
+			})
+		modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+
+		ui.pages.AddPage("modal", modal, true, true)
+	})
+
+	<-done
 }
 
 // SetState sets the state of the terminal user interface.
-func (a *Actor) SetState(state domain.AppState) {
-	a.ch <- func() {
-		if state.Source.ExitReason != "" {
-			modal := tview.NewModal()
-			modal.SetText("Mediaserver error: " + state.Source.ExitReason).
-				AddButtons([]string{"Quit"}).
-				SetBackgroundColor(tcell.ColorBlack).
-				SetTextColor(tcell.ColorWhite).
-				SetDoneFunc(func(int, string) {
-					// TODO: improve app cleanup
-					a.app.Stop()
-				})
-			modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
-
-			a.pages.AddPage("modal", modal, true, true)
-		}
-
-		a.redrawFromState(state)
+func (ui *UI) SetState(state domain.AppState) {
+	if state.Source.ExitReason != "" {
+		ui.handleMediaServerClosed(state.Source.ExitReason)
 	}
+
+	// The state is mutable so can't be passed into QueueUpdateDraw, which
+	// passes it to another goroutine, without cloning it first.
+	stateClone := state.Clone()
+	ui.app.QueueUpdateDraw(func() {
+		ui.redrawFromState(stateClone)
+	})
 }
 
 const dash = "—"
@@ -286,7 +296,7 @@ const (
 	headerTracks    = "Tracks"
 )
 
-func (a *Actor) redrawFromState(state domain.AppState) {
+func (ui *UI) redrawFromState(state domain.AppState) {
 	headerCell := func(content string, expansion int) *tview.TableCell {
 		return tview.
 			NewTableCell(content).
@@ -295,59 +305,59 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 			SetSelectable(false)
 	}
 
-	a.sourceViews.url.SetText(state.Source.RTMPURL)
+	ui.sourceViews.url.SetText(state.Source.RTMPURL)
 
 	tracks := dash
 	if state.Source.Live && len(state.Source.Tracks) > 0 {
 		tracks = strings.Join(state.Source.Tracks, ", ")
 	}
-	a.sourceViews.tracks.SetText(tracks)
+	ui.sourceViews.tracks.SetText(tracks)
 
 	if state.Source.Live {
-		a.sourceViews.status.SetText("[black:green]receiving")
+		ui.sourceViews.status.SetText("[black:green]receiving")
 	} else if state.Source.Container.State == "running" && state.Source.Container.HealthState == "healthy" {
-		a.sourceViews.status.SetText("[black:yellow]ready")
+		ui.sourceViews.status.SetText("[black:yellow]ready")
 	} else {
-		a.sourceViews.status.SetText("[white:red]not ready")
+		ui.sourceViews.status.SetText("[white:red]not ready")
 	}
 
-	a.sourceViews.health.SetText("[white]" + cmp.Or(rightPad(state.Source.Container.HealthState, 9), dash))
+	ui.sourceViews.health.SetText("[white]" + cmp.Or(rightPad(state.Source.Container.HealthState, 9), dash))
 
 	cpuPercent := dash
 	if state.Source.Container.State == "running" {
 		cpuPercent = fmt.Sprintf("%.1f", state.Source.Container.CPUPercent)
 	}
-	a.sourceViews.cpu.SetText("[white]" + cpuPercent)
+	ui.sourceViews.cpu.SetText("[white]" + cpuPercent)
 
 	memUsage := dash
 	if state.Source.Container.State == "running" {
 		memUsage = fmt.Sprintf("%.1f", float64(state.Source.Container.MemoryUsageBytes)/1024/1024)
 	}
-	a.sourceViews.mem.SetText("[white]" + memUsage)
+	ui.sourceViews.mem.SetText("[white]" + memUsage)
 
 	rxRate := dash
 	if state.Source.Container.State == "running" {
 		rxRate = fmt.Sprintf("%d", state.Source.Container.RxRate)
 	}
-	a.sourceViews.rx.SetText("[white]" + rxRate)
+	ui.sourceViews.rx.SetText("[white]" + rxRate)
 
-	a.destView.Clear()
-	a.destView.SetCell(0, 0, headerCell("[grey]"+headerName, 3))
-	a.destView.SetCell(0, 1, headerCell("[grey]"+headerURL, 3))
-	a.destView.SetCell(0, 2, headerCell("[grey]"+headerStatus, 2))
-	a.destView.SetCell(0, 3, headerCell("[grey]"+headerContainer, 2))
-	a.destView.SetCell(0, 4, headerCell("[grey]"+headerHealth, 2))
-	a.destView.SetCell(0, 5, headerCell("[grey]"+headerCPU, 1))
-	a.destView.SetCell(0, 6, headerCell("[grey]"+headerMem, 1))
-	a.destView.SetCell(0, 7, headerCell("[grey]"+headerTx, 1))
+	ui.destView.Clear()
+	ui.destView.SetCell(0, 0, headerCell("[grey]"+headerName, 3))
+	ui.destView.SetCell(0, 1, headerCell("[grey]"+headerURL, 3))
+	ui.destView.SetCell(0, 2, headerCell("[grey]"+headerStatus, 2))
+	ui.destView.SetCell(0, 3, headerCell("[grey]"+headerContainer, 2))
+	ui.destView.SetCell(0, 4, headerCell("[grey]"+headerHealth, 2))
+	ui.destView.SetCell(0, 5, headerCell("[grey]"+headerCPU, 1))
+	ui.destView.SetCell(0, 6, headerCell("[grey]"+headerMem, 1))
+	ui.destView.SetCell(0, 7, headerCell("[grey]"+headerTx, 1))
 
 	for i, dest := range state.Destinations {
-		a.destView.SetCell(i+1, 0, tview.NewTableCell(dest.Name))
-		a.destView.SetCell(i+1, 1, tview.NewTableCell(dest.URL).SetReference(dest.URL).SetMaxWidth(20))
+		ui.destView.SetCell(i+1, 0, tview.NewTableCell(dest.Name))
+		ui.destView.SetCell(i+1, 1, tview.NewTableCell(dest.URL).SetReference(dest.URL).SetMaxWidth(20))
 		const statusLen = 10
 		switch dest.Status {
 		case domain.DestinationStatusLive:
-			a.destView.SetCell(
+			ui.destView.SetCell(
 				i+1,
 				2,
 				tview.NewTableCell(rightPad("sending", statusLen)).
@@ -361,48 +371,46 @@ func (a *Actor) redrawFromState(state domain.AppState) {
 					),
 			)
 		default:
-			a.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+rightPad("off-air", statusLen)))
+			ui.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+rightPad("off-air", statusLen)))
 		}
 
-		a.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+rightPad(cmp.Or(dest.Container.State, dash), 10)))
+		ui.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+rightPad(cmp.Or(dest.Container.State, dash), 10)))
 
 		healthState := dash
 		if dest.Status == domain.DestinationStatusLive {
 			healthState = "healthy"
 		}
-		a.destView.SetCell(i+1, 4, tview.NewTableCell("[white]"+rightPad(healthState, 7)))
+		ui.destView.SetCell(i+1, 4, tview.NewTableCell("[white]"+rightPad(healthState, 7)))
 
 		cpuPercent := dash
 		if dest.Container.State == "running" {
 			cpuPercent = fmt.Sprintf("%.1f", dest.Container.CPUPercent)
 		}
-		a.destView.SetCell(i+1, 5, tview.NewTableCell("[white]"+rightPad(cpuPercent, 4)))
+		ui.destView.SetCell(i+1, 5, tview.NewTableCell("[white]"+rightPad(cpuPercent, 4)))
 
 		memoryUsage := dash
 		if dest.Container.State == "running" {
 			memoryUsage = fmt.Sprintf("%.1f", float64(dest.Container.MemoryUsageBytes)/1000/1000)
 		}
-		a.destView.SetCell(i+1, 6, tview.NewTableCell("[white]"+rightPad(memoryUsage, 4)))
+		ui.destView.SetCell(i+1, 6, tview.NewTableCell("[white]"+rightPad(memoryUsage, 4)))
 
 		txRate := dash
 		if dest.Container.State == "running" {
 			txRate = "[white]" + rightPad(strconv.Itoa(dest.Container.TxRate), 4)
 		}
-		a.destView.SetCell(i+1, 7, tview.NewTableCell(txRate))
+		ui.destView.SetCell(i+1, 7, tview.NewTableCell(txRate))
 	}
-
-	a.app.Draw()
 }
 
 // Close closes the terminal user interface.
-func (a *Actor) Close() {
-	a.app.Stop()
+func (ui *UI) Close() {
+	ui.app.Stop()
 }
 
-func (a *Actor) copySourceURLToClipboard(clipboardAvailable bool) {
+func (ui *UI) copySourceURLToClipboard(clipboardAvailable bool) {
 	var text string
 	if clipboardAvailable {
-		clipboard.Write(clipboard.FmtText, []byte(a.sourceViews.url.GetText(true)))
+		clipboard.Write(clipboard.FmtText, []byte(ui.sourceViews.url.GetText(true)))
 		text = "Ingress URL copied to clipboard"
 	} else {
 		text = "Copy to clipboard not available"
@@ -416,14 +424,14 @@ func (a *Actor) copySourceURLToClipboard(clipboardAvailable bool) {
 		SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
 	modal.SetDoneFunc(func(buttonIndex int, _ string) {
-		a.pages.RemovePage("modal")
-		a.app.SetFocus(a.destView)
+		ui.pages.RemovePage("modal")
+		ui.app.SetFocus(ui.destView)
 	})
 
-	a.pages.AddPage("modal", modal, true, true)
+	ui.pages.AddPage("modal", modal, true, true)
 }
 
-func (a *Actor) confirmQuit() {
+func (ui *UI) confirmQuit() {
 	modal := tview.NewModal()
 	modal.SetText("Are you sure you want to quit?").
 		AddButtons([]string{"Quit", "Cancel"}).
@@ -431,36 +439,36 @@ func (a *Actor) confirmQuit() {
 		SetTextColor(tcell.ColorWhite).
 		SetDoneFunc(func(buttonIndex int, _ string) {
 			if buttonIndex == 1 || buttonIndex == -1 {
-				a.pages.RemovePage("modal")
-				a.app.SetFocus(a.destView)
+				ui.pages.RemovePage("modal")
+				ui.app.SetFocus(ui.destView)
 				return
 			}
 
-			a.commandCh <- CommandQuit{}
+			ui.commandCh <- CommandQuit{}
 		})
 	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
-	a.pages.AddPage("modal", modal, true, true)
+	ui.pages.AddPage("modal", modal, true, true)
 }
 
-func (a *Actor) showAbout() {
+func (ui *UI) showAbout() {
 	modal := tview.NewModal()
 	modal.SetText(fmt.Sprintf(
 		"%s: live stream multiplexer\n\nv0.0.0 %s (%s)",
 		domain.AppName,
-		a.buildInfo.Version,
-		a.buildInfo.GoVersion,
+		ui.buildInfo.Version,
+		ui.buildInfo.GoVersion,
 	)).
 		AddButtons([]string{"Ok"}).
 		SetBackgroundColor(tcell.ColorBlack).
 		SetTextColor(tcell.ColorWhite).
 		SetDoneFunc(func(buttonIndex int, _ string) {
-			a.pages.RemovePage("modal")
-			a.app.SetFocus(a.destView)
+			ui.pages.RemovePage("modal")
+			ui.app.SetFocus(ui.destView)
 		})
 	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
-	a.pages.AddPage("modal", modal, true, true)
+	ui.pages.AddPage("modal", modal, true, true)
 }
 
 func rightPad(s string, n int) string {

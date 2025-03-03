@@ -1,12 +1,24 @@
 package domain
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // AppState holds application state.
 type AppState struct {
 	Source       Source
 	Destinations []Destination
 	BuildInfo    BuildInfo
+}
+
+// Clone performs a deep copy of AppState.
+func (s *AppState) Clone() AppState {
+	return AppState{
+		Source:       s.Source,
+		Destinations: slices.Clone(s.Destinations),
+		BuildInfo:    s.BuildInfo,
+	}
 }
 
 // BuildInfo holds information about the build.
