@@ -75,7 +75,7 @@ func Run(ctx context.Context, params RunParams) error {
 	})
 	defer mp.Close()
 
-	const uiUpdateInterval = 2 * time.Second
+	const uiUpdateInterval = time.Second
 	uiUpdateT := time.NewTicker(uiUpdateInterval)
 	defer uiUpdateT.Stop()
 

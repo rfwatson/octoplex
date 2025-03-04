@@ -60,7 +60,9 @@ func TestIntegrationMediaServerStartStop(t *testing.T) {
 		t,
 		func() bool {
 			currState := mediaServer.State()
-			return currState.Live && currState.Container.HealthState == "healthy"
+			return currState.Live &&
+				!currState.LiveChangedAt.IsZero() &&
+				currState.Container.HealthState == "healthy"
 		},
 		time.Second*5,
 		time.Second,

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 
 	"git.netflux.io/rob/octoplex/domain"
 	"github.com/gdamore/tcell/v2"
@@ -319,7 +320,12 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 	ui.sourceViews.tracks.SetText(tracks)
 
 	if state.Source.Live {
-		ui.sourceViews.status.SetText("[black:green]receiving")
+		var durStr string
+		if !state.Source.LiveChangedAt.IsZero() {
+			durStr = fmt.Sprintf(" (%s)", time.Since(state.Source.LiveChangedAt).Round(time.Second))
+		}
+
+		ui.sourceViews.status.SetText("[black:green]receiving" + durStr)
 	} else if state.Source.Container.State == "running" && state.Source.Container.HealthState == "healthy" {
 		ui.sourceViews.status.SetText("[black:yellow]ready")
 	} else {

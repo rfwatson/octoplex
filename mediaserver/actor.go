@@ -204,6 +204,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 			}
 			if ingressState.ready != s.state.Live || ingressState.listeners != s.state.Listeners {
 				s.state.Live = ingressState.ready
+				s.state.LiveChangedAt = time.Now()
 				s.state.Listeners = ingressState.listeners
 				resetFetchTracksT(time.Second)
 				sendState()

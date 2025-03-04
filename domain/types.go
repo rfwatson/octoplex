@@ -31,6 +31,7 @@ type BuildInfo struct {
 type Source struct {
 	Container       Container
 	Live            bool
+	LiveChangedAt   time.Time
 	Listeners       int
 	Tracks          []string
 	RTMPURL         string
