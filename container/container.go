@@ -59,13 +59,15 @@ const (
 // Client provides a thin wrapper around the Docker API client, and provides
 // additional functionality such as exposing container stats.
 type Client struct {
-	id        shortid.ID
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	apiClient DockerClient
-	networkID string
-	logger    *slog.Logger
+	id           shortid.ID
+	ctx          context.Context
+	cancel       context.CancelFunc
+	mu           sync.Mutex
+	wg           sync.WaitGroup
+	apiClient    DockerClient
+	networkID    string
+	pulledImages map[string]struct{}
+	logger       *slog.Logger
 }
 
 // NewClient creates a new Client.
@@ -79,12 +81,13 @@ func NewClient(ctx context.Context, apiClient DockerClient, logger *slog.Logger)
 	ctx, cancel := context.WithCancel(ctx)
 
 	client := &Client{
-		id:        id,
-		ctx:       ctx,
-		cancel:    cancel,
-		apiClient: apiClient,
-		networkID: network.ID,
-		logger:    logger,
+		id:           id,
+		ctx:          ctx,
+		cancel:       cancel,
+		apiClient:    apiClient,
+		networkID:    network.ID,
+		pulledImages: make(map[string]struct{}),
+		logger:       logger,
 	}
 
 	return client, nil
@@ -154,15 +157,10 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 		defer a.wg.Done()
 		defer close(errC)
 
-		containerStateC <- domain.Container{State: "pulling"}
-
-		pullReader, err := a.apiClient.ImagePull(ctx, params.ContainerConfig.Image, image.PullOptions{})
-		if err != nil {
+		if err := a.pullImageIfNeeded(ctx, params.ContainerConfig.Image, containerStateC); err != nil {
 			sendError(fmt.Errorf("image pull: %w", err))
 			return
 		}
-		_, _ = io.Copy(io.Discard, pullReader)
-		_ = pullReader.Close()
 
 		containerConfig := *params.ContainerConfig
 		containerConfig.Labels = make(map[string]string)
@@ -206,6 +204,32 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 	}()
 
 	return containerStateC, errC
+}
+
+// pullImageIfNeeded pulls the image if it has not already been pulled.
+func (a *Client) pullImageIfNeeded(ctx context.Context, imageName string, containerStateC chan<- domain.Container) error {
+	a.mu.Lock()
+	_, ok := a.pulledImages[imageName]
+	a.mu.Unlock()
+
+	if ok {
+		return nil
+	}
+
+	containerStateC <- domain.Container{State: "pulling"}
+
+	pullReader, err := a.apiClient.ImagePull(ctx, imageName, image.PullOptions{})
+	if err != nil {
+		return err
+	}
+	_, _ = io.Copy(io.Discard, pullReader)
+	_ = pullReader.Close()
+
+	a.mu.Lock()
+	a.pulledImages[imageName] = struct{}{}
+	a.mu.Unlock()
+
+	return nil
 }
 
 // runContainerLoop is the control loop for a single container. It returns only
