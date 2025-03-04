@@ -42,6 +42,7 @@ type StartParams struct {
 	Logger             *slog.Logger
 	ClipboardAvailable bool
 	BuildInfo          domain.BuildInfo
+	Screen             tcell.Screen
 }
 
 const defaultChanSize = 64
@@ -52,6 +53,10 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	commandCh := make(chan Command, chanSize)
 
 	app := tview.NewApplication()
+
+	// Allow the tcell screen to be overridden for integration tests. If
+	// params.Screen is nil, the real terminal is used.
+	app.SetScreen(params.Screen)
 
 	sidebar := tview.NewFlex()
 	sidebar.SetDirection(tview.FlexRow)

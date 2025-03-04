@@ -12,12 +12,14 @@ import (
 	"git.netflux.io/rob/octoplex/mediaserver"
 	"git.netflux.io/rob/octoplex/multiplexer"
 	"git.netflux.io/rob/octoplex/terminal"
+	"github.com/gdamore/tcell/v2"
 )
 
 // RunParams holds the parameters for running the application.
 type RunParams struct {
 	Config             config.Config
 	DockerClient       container.DockerClient
+	Screen             tcell.Screen
 	ClipboardAvailable bool
 	BuildInfo          domain.BuildInfo
 	Logger             *slog.Logger
@@ -29,6 +31,7 @@ func Run(ctx context.Context, params RunParams) error {
 	logger := params.Logger
 
 	ui, err := terminal.StartUI(ctx, terminal.StartParams{
+		Screen:             params.Screen,
 		ClipboardAvailable: params.ClipboardAvailable,
 		BuildInfo:          params.BuildInfo,
 		Logger:             logger.With("component", "ui"),
