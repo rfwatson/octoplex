@@ -185,7 +185,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 			sendError(fmt.Errorf("container create: %w", err))
 			return
 		}
-		containerStateC <- domain.Container{ID: createResp.ID, State: "created"}
+		containerStateC <- domain.Container{ID: createResp.ID, Status: domain.ContainerStatusCreated}
 
 		if err = a.apiClient.NetworkConnect(ctx, a.networkID, createResp.ID, nil); err != nil {
 			sendError(fmt.Errorf("network connect: %w", err))
@@ -198,7 +198,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 		}
 		a.logger.Info("Started container", "id", shortID(createResp.ID), "duration", time.Since(now))
 
-		containerStateC <- domain.Container{ID: createResp.ID, State: "running"}
+		containerStateC <- domain.Container{ID: createResp.ID, Status: domain.ContainerStatusRunning}
 
 		a.runContainerLoop(ctx, createResp.ID, params.NetworkCountConfig, containerStateC, errC)
 	}()
@@ -216,7 +216,7 @@ func (a *Client) pullImageIfNeeded(ctx context.Context, imageName string, contai
 		return nil
 	}
 
-	containerStateC <- domain.Container{State: "pulling"}
+	containerStateC <- domain.Container{Status: domain.ContainerStatusPulling}
 
 	pullReader, err := a.apiClient.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
@@ -292,7 +292,7 @@ func (a *Client) runContainerLoop(
 		}
 	}()
 
-	state := &domain.Container{ID: containerID, State: "running"}
+	state := &domain.Container{ID: containerID, Status: domain.ContainerStatusRunning}
 	sendState := func() { stateC <- *state }
 	sendState()
 
@@ -308,7 +308,7 @@ func (a *Client) runContainerLoop(
 				containerState = "exited"
 			}
 
-			state.State = containerState
+			state.Status = containerState
 			state.CPUPercent = 0
 			state.MemoryUsageBytes = 0
 			state.HealthState = "unhealthy"
@@ -338,7 +338,7 @@ func (a *Client) runContainerLoop(
 			}
 
 			if evt.Action == "start" {
-				state.State = "running"
+				state.Status = domain.ContainerStatusRunning
 				sendState()
 				continue
 			}

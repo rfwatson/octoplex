@@ -146,7 +146,7 @@ func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, er
 		case containerState := <-containerStateC:
 			state.Container = containerState
 
-			if containerState.State == "running" {
+			if containerState.Status == "running" {
 				if hasElapsedSince(5*time.Second, containerState.RxSince) {
 					state.Status = domain.DestinationStatusLive
 				} else {

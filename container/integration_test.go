@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"git.netflux.io/rob/octoplex/container"
+	"git.netflux.io/rob/octoplex/domain"
 	"git.netflux.io/rob/octoplex/shortid"
 	"git.netflux.io/rob/octoplex/testhelpers"
 	typescontainer "github.com/docker/docker/api/types/container"
@@ -196,11 +197,11 @@ func TestContainerRestart(t *testing.T) {
 	testhelpers.ChanRequireNoError(t, errC)
 
 	containerState := <-containerStateC
-	assert.Equal(t, "pulling", containerState.State)
+	assert.Equal(t, "pulling", containerState.Status)
 	containerState = <-containerStateC
-	assert.Equal(t, "created", containerState.State)
+	assert.Equal(t, "created", containerState.Status)
 	containerState = <-containerStateC
-	assert.Equal(t, "running", containerState.State)
+	assert.Equal(t, "running", containerState.Status)
 
 	err = nil // reset error
 	done := make(chan struct{})
@@ -210,9 +211,9 @@ func TestContainerRestart(t *testing.T) {
 		var count int
 		for {
 			containerState = <-containerStateC
-			if containerState.State == "restarting" {
+			if containerState.Status == domain.ContainerStatusRestarting {
 				break
-			} else if containerState.State == "exited" {
+			} else if containerState.Status == domain.ContainerStatusExited {
 				err = errors.New("container exited unexpectedly")
 			} else if count >= 5 {
 				err = errors.New("container did not enter restarting state")

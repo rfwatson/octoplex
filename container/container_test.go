@@ -89,10 +89,10 @@ func TestClientRunContainer(t *testing.T) {
 		require.NoError(t, <-errC)
 	}()
 
-	assert.Equal(t, "pulling", (<-containerStateC).State)
-	assert.Equal(t, "created", (<-containerStateC).State)
-	assert.Equal(t, "running", (<-containerStateC).State)
-	assert.Equal(t, "running", (<-containerStateC).State)
+	assert.Equal(t, "pulling", (<-containerStateC).Status)
+	assert.Equal(t, "created", (<-containerStateC).Status)
+	assert.Equal(t, "running", (<-containerStateC).Status)
+	assert.Equal(t, "running", (<-containerStateC).Status)
 
 	// Enough time for events channel to receive a message:
 	time.Sleep(100 * time.Millisecond)
@@ -100,7 +100,7 @@ func TestClientRunContainer(t *testing.T) {
 	containerWaitC <- dockercontainer.WaitResponse{StatusCode: 1}
 
 	state := <-containerStateC
-	assert.Equal(t, "exited", state.State)
+	assert.Equal(t, "exited", state.Status)
 	assert.Equal(t, "unhealthy", state.HealthState)
 	require.NotNil(t, state.ExitCode)
 	assert.Equal(t, 1, *state.ExitCode)
@@ -146,8 +146,8 @@ func TestClientRunContainerErrorStartingContainer(t *testing.T) {
 		HostConfig:      &dockercontainer.HostConfig{},
 	})
 
-	assert.Equal(t, "pulling", (<-containerStateC).State)
-	assert.Equal(t, "created", (<-containerStateC).State)
+	assert.Equal(t, "pulling", (<-containerStateC).Status)
+	assert.Equal(t, "created", (<-containerStateC).Status)
 
 	err = <-errC
 	require.EqualError(t, err, "container start: error starting container")

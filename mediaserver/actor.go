@@ -172,7 +172,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 		case containerState := <-containerStateC:
 			s.state.Container = containerState
 
-			if s.state.Container.State == "exited" {
+			if s.state.Container.Status == domain.ContainerStatusExited {
 				fetchStateT.Stop()
 				s.handleContainerExit(nil)
 			}

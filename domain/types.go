@@ -55,13 +55,24 @@ type Destination struct {
 	URL       string
 }
 
-// Container represents the current state of an individual container.
+// Container status strings.
 //
-// The source of truth is always the Docker daemon, this struct is used only
-// for passing asynchronous state.
+// TODO: refactor to strictly reflect Docker status strings.
+const (
+	ContainerStatusPulling    = "pulling" // Does not correspond to a Docker status.
+	ContainerStatusCreated    = "created"
+	ContainerStatusRunning    = "running"
+	ContainerStatusPaused     = "paused"
+	ContainerStatusRestarting = "restarting"
+	ContainerStatusRemoving   = "removing"
+	ContainerStatusExited     = "exited"
+	ContainerStatusDead       = "dead"
+)
+
+// Container represents the current state of an individual container.
 type Container struct {
 	ID               string
-	State            string
+	Status           string
 	HealthState      string
 	CPUPercent       float64
 	MemoryUsageBytes uint64

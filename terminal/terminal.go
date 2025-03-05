@@ -326,7 +326,7 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 		}
 
 		ui.sourceViews.status.SetText("[black:green]receiving" + durStr)
-	} else if state.Source.Container.State == "running" && state.Source.Container.HealthState == "healthy" {
+	} else if state.Source.Container.Status == domain.ContainerStatusRunning && state.Source.Container.HealthState == "healthy" {
 		ui.sourceViews.status.SetText("[black:yellow]ready")
 	} else {
 		ui.sourceViews.status.SetText("[white:red]not ready")
@@ -335,19 +335,19 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 	ui.sourceViews.health.SetText("[white]" + cmp.Or(rightPad(state.Source.Container.HealthState, 9), dash))
 
 	cpuPercent := dash
-	if state.Source.Container.State == "running" {
+	if state.Source.Container.Status == domain.ContainerStatusRunning {
 		cpuPercent = fmt.Sprintf("%.1f", state.Source.Container.CPUPercent)
 	}
 	ui.sourceViews.cpu.SetText("[white]" + cpuPercent)
 
 	memUsage := dash
-	if state.Source.Container.State == "running" {
+	if state.Source.Container.Status == domain.ContainerStatusRunning {
 		memUsage = fmt.Sprintf("%.1f", float64(state.Source.Container.MemoryUsageBytes)/1024/1024)
 	}
 	ui.sourceViews.mem.SetText("[white]" + memUsage)
 
 	rxRate := dash
-	if state.Source.Container.State == "running" {
+	if state.Source.Container.Status == domain.ContainerStatusRunning {
 		rxRate = fmt.Sprintf("%d", state.Source.Container.RxRate)
 	}
 	ui.sourceViews.rx.SetText("[white]" + rxRate)
@@ -385,7 +385,7 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 			ui.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+rightPad("off-air", statusLen)))
 		}
 
-		ui.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+rightPad(cmp.Or(dest.Container.State, dash), 10)))
+		ui.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+rightPad(cmp.Or(dest.Container.Status, dash), 10)))
 
 		healthState := dash
 		if dest.Status == domain.DestinationStatusLive {
@@ -394,19 +394,19 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 		ui.destView.SetCell(i+1, 4, tview.NewTableCell("[white]"+rightPad(healthState, 7)))
 
 		cpuPercent := dash
-		if dest.Container.State == "running" {
+		if dest.Container.Status == domain.ContainerStatusRunning {
 			cpuPercent = fmt.Sprintf("%.1f", dest.Container.CPUPercent)
 		}
 		ui.destView.SetCell(i+1, 5, tview.NewTableCell("[white]"+rightPad(cpuPercent, 4)))
 
 		memoryUsage := dash
-		if dest.Container.State == "running" {
+		if dest.Container.Status == domain.ContainerStatusRunning {
 			memoryUsage = fmt.Sprintf("%.1f", float64(dest.Container.MemoryUsageBytes)/1000/1000)
 		}
 		ui.destView.SetCell(i+1, 6, tview.NewTableCell("[white]"+rightPad(memoryUsage, 4)))
 
 		txRate := dash
-		if dest.Container.State == "running" {
+		if dest.Container.Status == domain.ContainerStatusRunning {
 			txRate = "[white]" + rightPad(strconv.Itoa(dest.Container.TxRate), 4)
 		}
 		ui.destView.SetCell(i+1, 7, tview.NewTableCell(txRate))
