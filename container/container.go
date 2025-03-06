@@ -274,7 +274,7 @@ func (a *Client) runContainerLoop(
 				}
 
 				// Race condition: the container may have already restarted.
-				restarting := ctr.State.Status == "restarting" || ctr.State.Status == "running"
+				restarting := ctr.State.Status == domain.ContainerStatusRestarting || ctr.State.Status == domain.ContainerStatusRunning
 
 				containerRespC <- containerWaitResponse{WaitResponse: resp, restarting: restarting}
 				if !restarting {
@@ -303,9 +303,9 @@ func (a *Client) runContainerLoop(
 
 			var containerState string
 			if resp.restarting {
-				containerState = "restarting"
+				containerState = domain.ContainerStatusRestarting
 			} else {
-				containerState = "exited"
+				containerState = domain.ContainerStatusExited
 			}
 
 			state.Status = containerState
@@ -421,7 +421,7 @@ func (a *Client) ContainerRunning(ctx context.Context, labelOptions LabelOptions
 	}
 
 	for _, container := range containers {
-		if container.State == "running" || container.State == "restarting" {
+		if container.State == domain.ContainerStatusRunning || container.State == domain.ContainerStatusRestarting {
 			return true, nil
 		}
 	}

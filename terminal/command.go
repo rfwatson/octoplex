@@ -1,14 +1,23 @@
 package terminal
 
-// CommandToggleDestination toggles a destination from on-air to off-air, or
-// vice versa.
-type CommandToggleDestination struct {
+// CommandStartDestination starts a destination.
+type CommandStartDestination struct {
 	URL string
 }
 
 // Name implements the Command interface.
-func (c CommandToggleDestination) Name() string {
-	return "toggle_destination"
+func (c CommandStartDestination) Name() string {
+	return "start_destination"
+}
+
+// CommandStopDestination stops a destination.
+type CommandStopDestination struct {
+	URL string
+}
+
+// Name implements the Command interface.
+func (c CommandStopDestination) Name() string {
+	return "stop_destination"
 }
 
 // CommandQuit quits the app.
