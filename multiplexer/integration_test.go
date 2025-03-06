@@ -30,9 +30,15 @@ func TestIntegrationMultiplexer(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, running)
 
+	// We need to avoid clashing with other integration tests, e.g. mediaserver.
+	const (
+		apiPort  = 9998
+		rtmpPort = 19350
+	)
+
 	srv := mediaserver.StartActor(t.Context(), mediaserver.StartActorParams{
-		RTMPPort:                  19350,
-		APIPort:                   9998,
+		RTMPPort:                  rtmpPort,
+		APIPort:                   apiPort,
 		FetchIngressStateInterval: 250 * time.Millisecond,
 		ContainerClient:           containerClient,
 		ChanSize:                  1,
@@ -63,16 +69,16 @@ func TestIntegrationMultiplexer(t *testing.T) {
 
 	requireListeners(t, srv, 0)
 
-	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test1")
-	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test2")
-	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test3")
+	mp.StartDestination("rtmp://mediaserver:19350/destination/test1")
+	mp.StartDestination("rtmp://mediaserver:19350/destination/test2")
+	mp.StartDestination("rtmp://mediaserver:19350/destination/test3")
 	requireListeners(t, srv, 3)
 
-	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test3")
+	mp.StopDestination("rtmp://mediaserver:19350/destination/test3")
 	requireListeners(t, srv, 2)
 
-	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test2")
-	mp.ToggleDestination("rtmp://mediaserver:19350/destination/test1")
+	mp.StopDestination("rtmp://mediaserver:19350/destination/test2")
+	mp.StopDestination("rtmp://mediaserver:19350/destination/test1")
 	requireListeners(t, srv, 0)
 }
 

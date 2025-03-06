@@ -3,6 +3,7 @@
 package mediaserver_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -29,7 +30,17 @@ func TestIntegrationMediaServerStartStop(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, running)
 
+	// We need to avoid clashing with other integration tests, e.g. multiplexer.
+	const (
+		apiPort  = 9999
+		rtmpPort = 1937
+	)
+
+	rtmpURL := fmt.Sprintf("rtmp://localhost:%d/live", rtmpPort)
+
 	mediaServer := mediaserver.StartActor(t.Context(), mediaserver.StartActorParams{
+		RTMPPort:                  rtmpPort,
+		APIPort:                   apiPort,
 		FetchIngressStateInterval: 500 * time.Millisecond,
 		ChanSize:                  1,
 		ContainerClient:           containerClient,
@@ -52,9 +63,9 @@ func TestIntegrationMediaServerStartStop(t *testing.T) {
 
 	state := mediaServer.State()
 	assert.False(t, state.Live)
-	assert.Equal(t, "rtmp://localhost:1935/live", state.RTMPURL)
+	assert.Equal(t, rtmpURL, state.RTMPURL)
 
-	testhelpers.StreamFLV(t, "rtmp://localhost:1935/live")
+	testhelpers.StreamFLV(t, rtmpURL)
 
 	require.Eventually(
 		t,

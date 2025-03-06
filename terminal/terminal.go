@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"git.netflux.io/rob/octoplex/domain"
@@ -25,15 +26,33 @@ type sourceViews struct {
 	rx     *tview.TextView
 }
 
+// startState represents the state of a destination from the point of view of
+// the user interface: either started, starting or not started.
+type startState int
+
+const (
+	startStateNotStarted startState = iota
+	startStateStarting
+	startStateStarted
+)
+
 // UI is responsible for managing the terminal user interface.
 type UI struct {
+	commandCh chan Command
+	buildInfo domain.BuildInfo
+	logger    *slog.Logger
+
+	// tview state
+
 	app         *tview.Application
 	pages       *tview.Pages
-	commandCh   chan Command
-	buildInfo   domain.BuildInfo
-	logger      *slog.Logger
 	sourceViews sourceViews
 	destView    *tview.Table
+
+	// other mutable state
+
+	mu               sync.Mutex
+	urlsToStartState map[string]startState
 }
 
 // StartParams contains the parameters for starting a new terminal user
@@ -114,6 +133,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	aboutView.SetDirection(tview.FlexRow)
 	aboutView.SetBorder(true)
 	aboutView.SetTitle("Actions")
+	aboutView.AddItem(tview.NewTextView().SetText("[Space] Toggle destination"), 1, 0, false)
 	aboutView.AddItem(tview.NewTextView().SetText("[C] Copy ingress RTMP URL"), 1, 0, false)
 	aboutView.AddItem(tview.NewTextView().SetText("[?] About"), 1, 0, false)
 
@@ -125,16 +145,6 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	destView.SetSelectable(true, false)
 	destView.SetWrapSelection(true, false)
 	destView.SetSelectedStyle(tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorDarkSlateGrey))
-	destView.SetDoneFunc(func(key tcell.Key) {
-		const urlCol = 1
-		row, _ := destView.GetSelection()
-		url, ok := destView.GetCell(row, urlCol).GetReference().(string)
-		if !ok {
-			return
-		}
-
-		commandCh <- CommandToggleDestination{URL: url}
-	})
 
 	flex := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
@@ -163,13 +173,16 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 			mem:    memTextView,
 			rx:     rxTextView,
 		},
-		destView: destView,
+		destView:         destView,
+		urlsToStartState: make(map[string]startState),
 	}
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyRune:
 			switch event.Rune() {
+			case ' ':
+				ui.toggleDestination()
 			case 'c', 'C':
 				ui.copySourceURLToClipboard(params.ClipboardAvailable)
 			case '?':
@@ -249,6 +262,24 @@ func (ui *UI) ShowStartupCheckModal() bool {
 	return <-done
 }
 
+// SetState sets the state of the terminal user interface.
+func (ui *UI) SetState(state domain.AppState) {
+	if state.Source.ExitReason != "" {
+		ui.handleMediaServerClosed(state.Source.ExitReason)
+	}
+
+	ui.mu.Lock()
+	for _, dest := range state.Destinations {
+		ui.urlsToStartState[dest.URL] = containerStateToStartState(dest.Container.Status)
+	}
+	ui.mu.Unlock()
+
+	// The state is mutable so can't be passed into QueueUpdateDraw, which
+	// passes it to another goroutine, without cloning it first.
+	stateClone := state.Clone()
+	ui.app.QueueUpdateDraw(func() { ui.redrawFromState(stateClone) })
+}
+
 func (ui *UI) handleMediaServerClosed(exitReason string) {
 	done := make(chan struct{})
 
@@ -271,20 +302,6 @@ func (ui *UI) handleMediaServerClosed(exitReason string) {
 	})
 
 	<-done
-}
-
-// SetState sets the state of the terminal user interface.
-func (ui *UI) SetState(state domain.AppState) {
-	if state.Source.ExitReason != "" {
-		ui.handleMediaServerClosed(state.Source.ExitReason)
-	}
-
-	// The state is mutable so can't be passed into QueueUpdateDraw, which
-	// passes it to another goroutine, without cloning it first.
-	stateClone := state.Clone()
-	ui.app.QueueUpdateDraw(func() {
-		ui.redrawFromState(stateClone)
-	})
 }
 
 const dash = "—"
@@ -418,6 +435,42 @@ func (ui *UI) Close() {
 	ui.app.Stop()
 }
 
+func (ui *UI) toggleDestination() {
+	const urlCol = 1
+	row, _ := ui.destView.GetSelection()
+	url, ok := ui.destView.GetCell(row, urlCol).GetReference().(string)
+	if !ok {
+		return
+	}
+
+	// Communicating with the multiplexer/container client is asynchronous. To
+	// ensure we can limit each destination to a single container we need some
+	// kind of local mutable state which synchronously tracks the "start state"
+	// of each destination.
+	//
+	// Something about this approach feels a tiny bit hacky. Either of these
+	// approaches would be nicer, if one could be made to work:
+	//
+	// 1. Store the state in the *tview.Table, which would mean not recreating
+	// the cells on each redraw.
+	// 2. Piggy-back on the tview goroutine to handle synchronization, but that
+	// seems to introduce deadlocks and/or UI bugs.
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+
+	ss := ui.urlsToStartState[url]
+	switch ss {
+	case startStateNotStarted:
+		ui.urlsToStartState[url] = startStateStarting
+		ui.commandCh <- CommandStartDestination{URL: url}
+	case startStateStarting:
+		// do nothing
+		return
+	case startStateStarted:
+		ui.commandCh <- CommandStopDestination{URL: url}
+	}
+}
+
 func (ui *UI) copySourceURLToClipboard(clipboardAvailable bool) {
 	var text string
 	if clipboardAvailable {
@@ -480,6 +533,18 @@ func (ui *UI) showAbout() {
 	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
 	ui.pages.AddPage("modal", modal, true, true)
+}
+
+// comtainerStateToStartState converts a container state to a start state.
+func containerStateToStartState(containerState string) startState {
+	switch containerState {
+	case domain.ContainerStatusPulling, domain.ContainerStatusCreated:
+		return startStateStarting
+	case domain.ContainerStatusRunning, domain.ContainerStatusRestarting, domain.ContainerStatusPaused, domain.ContainerStatusRemoving:
+		return startStateStarted
+	default:
+		return startStateNotStarted
+	}
 }
 
 func rightPad(s string, n int) string {

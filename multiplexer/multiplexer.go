@@ -77,23 +77,10 @@ func NewActor(ctx context.Context, params NewActorParams) *Actor {
 	return actor
 }
 
-// ToggleDestination toggles the destination stream between on and off.
-func (a *Actor) ToggleDestination(url string) {
+// StartDestination starts a destination stream.
+func (a *Actor) StartDestination(url string) {
 	a.actorC <- func() {
-		labels := map[string]string{
-			container.LabelComponent: componentName,
-			container.LabelURL:       url,
-		}
-
 		if _, ok := a.currURLs[url]; ok {
-			a.logger.Info("Stopping live stream", "url", url)
-
-			if err := a.containerClient.RemoveContainers(a.ctx, a.containerClient.ContainersWithLabels(labels)); err != nil {
-				// TODO: error handling
-				a.logger.Error("Failed to stop live stream", "url", url, "err", err)
-			}
-
-			delete(a.currURLs, url)
 			return
 		}
 
@@ -109,7 +96,10 @@ func (a *Actor) ToggleDestination(url string) {
 					"-f", "flv",
 					url,
 				},
-				Labels: labels,
+				Labels: map[string]string{
+					container.LabelComponent: componentName,
+					container.LabelURL:       url,
+				},
 			},
 			HostConfig: &typescontainer.HostConfig{
 				NetworkMode:   "default",
@@ -130,6 +120,30 @@ func (a *Actor) ToggleDestination(url string) {
 	}
 }
 
+// StopDestination stops a destination stream.
+func (a *Actor) StopDestination(url string) {
+	a.actorC <- func() {
+		if _, ok := a.currURLs[url]; !ok {
+			return
+		}
+
+		a.logger.Info("Stopping live stream", "url", url)
+
+		if err := a.containerClient.RemoveContainers(
+			a.ctx,
+			a.containerClient.ContainersWithLabels(map[string]string{
+				container.LabelComponent: componentName,
+				container.LabelURL:       url,
+			}),
+		); err != nil {
+			// TODO: error handling
+			a.logger.Error("Failed to stop live stream", "url", url, "err", err)
+		}
+
+		delete(a.currURLs, url)
+	}
+}
+
 // destLoop is the actor loop for a destination stream.
 func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, errC <-chan error) {
 	defer func() {
@@ -146,7 +160,7 @@ func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, er
 		case containerState := <-containerStateC:
 			state.Container = containerState
 
-			if containerState.Status == "running" {
+			if containerState.Status == domain.ContainerStatusRunning {
 				if hasElapsedSince(5*time.Second, containerState.RxSince) {
 					state.Status = domain.DestinationStatusLive
 				} else {

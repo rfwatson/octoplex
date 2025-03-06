@@ -90,8 +90,10 @@ func Run(ctx context.Context, params RunParams) error {
 
 			logger.Info("Command received", "cmd", cmd.Name())
 			switch c := cmd.(type) {
-			case terminal.CommandToggleDestination:
-				mp.ToggleDestination(c.URL)
+			case terminal.CommandStartDestination:
+				mp.StartDestination(c.URL)
+			case terminal.CommandStopDestination:
+				mp.StopDestination(c.URL)
 			case terminal.CommandQuit:
 				return nil
 			}
