@@ -41,14 +41,14 @@ func Run(ctx context.Context, params RunParams) error {
 	}
 	defer ui.Close()
 
-	updateUI := func() { ui.SetState(*state) }
-	updateUI()
-
 	containerClient, err := container.NewClient(ctx, params.DockerClient, logger.With("component", "container_client"))
 	if err != nil {
-		return fmt.Errorf("new container client: %w", err)
+		return err
 	}
 	defer containerClient.Close()
+
+	updateUI := func() { ui.SetState(*state) }
+	updateUI()
 
 	if exists, err := containerClient.ContainerRunning(ctx, container.AllContainers()); err != nil {
 		return fmt.Errorf("check existing containers: %w", err)
