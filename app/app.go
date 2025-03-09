@@ -61,6 +61,7 @@ func Run(ctx context.Context, params RunParams) error {
 			return nil
 		}
 	}
+	ui.AllowQuit()
 
 	srv := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
 		ContainerClient: containerClient,

@@ -53,6 +53,7 @@ type UI struct {
 
 	mu               sync.Mutex
 	urlsToStartState map[string]startState
+	allowQuit        bool
 }
 
 // StartParams contains the parameters for starting a new terminal user
@@ -240,12 +241,11 @@ func (ui *UI) ShowStartupCheckModal() bool {
 	done := make(chan bool)
 
 	ui.app.QueueUpdateDraw(func() {
-		modal := tview.NewModal()
-		modal.SetText("Another instance of Octoplex may already be running. Pressing continue will close that instance. Continue?").
-			AddButtons([]string{"Continue", "Exit"}).
-			SetBackgroundColor(tcell.ColorBlack).
-			SetTextColor(tcell.ColorWhite).
-			SetDoneFunc(func(buttonIndex int, _ string) {
+		ui.showModal(
+			modalGroupStartupCheck,
+			"Another instance of Octoplex may already be running. Pressing continue will close that instance. Continue?",
+			[]string{"Continue", "Exit"},
+			func(buttonIndex int, _ string) {
 				if buttonIndex == 0 {
 					ui.pages.RemovePage("modal")
 					ui.app.SetFocus(ui.destView)
@@ -253,13 +253,24 @@ func (ui *UI) ShowStartupCheckModal() bool {
 				} else {
 					done <- false
 				}
-			})
-		modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
-
-		ui.pages.AddPage("modal", modal, true, true)
+			},
+		)
 	})
 
 	return <-done
+}
+
+// AllowQuit enables the quit action.
+func (ui *UI) AllowQuit() {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+
+	// This is required to prevent the user from quitting during the startup
+	// check modal, when the main event loop is not yet running, and avoid an
+	// unexpected user experience. It might be nice to find a way to remove this
+	// but it probably means refactoring the mediaserver actor to separate
+	// starting the server from starting the event loop.
+	ui.allowQuit = true
 }
 
 // SetState sets the state of the terminal user interface.
@@ -278,6 +289,44 @@ func (ui *UI) SetState(state domain.AppState) {
 	// passes it to another goroutine, without cloning it first.
 	stateClone := state.Clone()
 	ui.app.QueueUpdateDraw(func() { ui.redrawFromState(stateClone) })
+}
+
+// modalGroup represents a specific modal of which only one may be shown
+// simultaneously.
+type modalGroup string
+
+const (
+	modalGroupAbout        modalGroup = "about"
+	modalGroupQuit         modalGroup = "quit"
+	modalGroupStartupCheck modalGroup = "startup-check"
+	modalGroupClipboard    modalGroup = "clipboard"
+)
+
+func (ui *UI) showModal(group modalGroup, text string, buttons []string, doneFunc func(int, string)) {
+	modalName := "modal-" + string(group)
+	if ui.pages.HasPage(modalName) {
+		return
+	}
+
+	modal := tview.NewModal()
+	modal.SetText(text).
+		AddButtons(buttons).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetTextColor(tcell.ColorWhite).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			ui.pages.RemovePage(modalName)
+
+			if ui.pages.GetPageCount() == 1 {
+				ui.app.SetFocus(ui.destView)
+			}
+
+			if doneFunc != nil {
+				doneFunc(buttonIndex, buttonLabel)
+			}
+		}).
+		SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+
+	ui.pages.AddPage(modalName, modal, true, true)
 }
 
 func (ui *UI) handleMediaServerClosed(exitReason string) {
@@ -480,59 +529,50 @@ func (ui *UI) copySourceURLToClipboard(clipboardAvailable bool) {
 		text = "Copy to clipboard not available"
 	}
 
-	modal := tview.NewModal()
-	modal.SetText(text).
-		AddButtons([]string{"Ok"}).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetTextColor(tcell.ColorWhite).
-		SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
-
-	modal.SetDoneFunc(func(buttonIndex int, _ string) {
-		ui.pages.RemovePage("modal")
-		ui.app.SetFocus(ui.destView)
-	})
-
-	ui.pages.AddPage("modal", modal, true, true)
+	ui.showModal(
+		modalGroupClipboard,
+		text,
+		[]string{"Ok"},
+		nil,
+	)
 }
 
 func (ui *UI) confirmQuit() {
-	modal := tview.NewModal()
-	modal.SetText("Are you sure you want to quit?").
-		AddButtons([]string{"Quit", "Cancel"}).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetTextColor(tcell.ColorWhite).
-		SetDoneFunc(func(buttonIndex int, _ string) {
-			if buttonIndex == 1 || buttonIndex == -1 {
-				ui.pages.RemovePage("modal")
-				ui.app.SetFocus(ui.destView)
+	var allowQuit bool
+	ui.mu.Lock()
+	allowQuit = ui.allowQuit
+	ui.mu.Unlock()
+
+	if !allowQuit {
+		return
+	}
+
+	ui.showModal(
+		modalGroupQuit,
+		"Are you sure you want to quit?",
+		[]string{"Quit", "Cancel"},
+		func(buttonIndex int, _ string) {
+			if buttonIndex == 0 {
+				ui.logger.Info("quitting")
+				ui.commandCh <- CommandQuit{}
 				return
 			}
-
-			ui.commandCh <- CommandQuit{}
-		})
-	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
-
-	ui.pages.AddPage("modal", modal, true, true)
+		},
+	)
 }
 
 func (ui *UI) showAbout() {
-	modal := tview.NewModal()
-	modal.SetText(fmt.Sprintf(
-		"%s: live stream multiplexer\n\nv0.0.0 %s (%s)",
-		domain.AppName,
-		ui.buildInfo.Version,
-		ui.buildInfo.GoVersion,
-	)).
-		AddButtons([]string{"Ok"}).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetTextColor(tcell.ColorWhite).
-		SetDoneFunc(func(buttonIndex int, _ string) {
-			ui.pages.RemovePage("modal")
-			ui.app.SetFocus(ui.destView)
-		})
-	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
-
-	ui.pages.AddPage("modal", modal, true, true)
+	ui.showModal(
+		modalGroupAbout,
+		fmt.Sprintf(
+			"%s: live stream multiplexer\n\nv0.0.0 %s (%s)",
+			domain.AppName,
+			ui.buildInfo.Version,
+			ui.buildInfo.GoVersion,
+		),
+		[]string{"Ok"},
+		nil,
+	)
 }
 
 // comtainerStateToStartState converts a container state to a start state.
