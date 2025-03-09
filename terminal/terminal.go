@@ -62,6 +62,7 @@ type StartParams struct {
 	ChanSize           int
 	Logger             *slog.Logger
 	ClipboardAvailable bool
+	ConfigFilePath     string
 	BuildInfo          domain.BuildInfo
 	Screen             tcell.Screen
 }
@@ -135,7 +136,8 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	aboutView.SetBorder(true)
 	aboutView.SetTitle("Actions")
 	aboutView.AddItem(tview.NewTextView().SetText("[Space] Toggle destination"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetText("[C] Copy ingress RTMP URL"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetText("[u] Copy ingress RTMP URL"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetText("[c] Copy config file path"), 1, 0, false)
 	aboutView.AddItem(tview.NewTextView().SetText("[?] About"), 1, 0, false)
 
 	sidebar.AddItem(aboutView, 0, 1, false)
@@ -184,8 +186,10 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 			switch event.Rune() {
 			case ' ':
 				ui.toggleDestination()
-			case 'c', 'C':
+			case 'u', 'U':
 				ui.copySourceURLToClipboard(params.ClipboardAvailable)
+			case 'c', 'C':
+				ui.copyConfigFilePathToClipboard(params.ClipboardAvailable, params.ConfigFilePath)
 			case '?':
 				ui.showAbout()
 			}
@@ -522,9 +526,32 @@ func (ui *UI) toggleDestination() {
 
 func (ui *UI) copySourceURLToClipboard(clipboardAvailable bool) {
 	var text string
+
+	url := ui.sourceViews.url.GetText(true)
 	if clipboardAvailable {
-		clipboard.Write(clipboard.FmtText, []byte(ui.sourceViews.url.GetText(true)))
-		text = "Ingress URL copied to clipboard"
+		clipboard.Write(clipboard.FmtText, []byte(url))
+		text = "Ingress URL copied to clipboard:\n\n" + url
+	} else {
+		text = "Copy to clipboard not available:\n\n" + url
+	}
+
+	ui.showModal(
+		modalGroupClipboard,
+		text,
+		[]string{"Ok"},
+		nil,
+	)
+}
+
+func (ui *UI) copyConfigFilePathToClipboard(clipboardAvailable bool, configFilePath string) {
+	var text string
+	if clipboardAvailable {
+		if configFilePath != "" {
+			clipboard.Write(clipboard.FmtText, []byte(configFilePath))
+			text = "Configuration file path copied to clipboard:\n\n" + configFilePath
+		} else {
+			text = "Configuration file path not set"
+		}
 	} else {
 		text = "Copy to clipboard not available"
 	}

@@ -85,6 +85,7 @@ func run(ctx context.Context) error {
 			Config:             cfg,
 			DockerClient:       dockerClient,
 			ClipboardAvailable: clipboardAvailable,
+			ConfigFilePath:     configService.Path(),
 			BuildInfo: domain.BuildInfo{
 				GoVersion: buildInfo.GoVersion,
 				Version:   buildInfo.Main.Version,

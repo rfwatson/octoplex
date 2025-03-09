@@ -21,6 +21,7 @@ type RunParams struct {
 	DockerClient       container.DockerClient
 	Screen             tcell.Screen
 	ClipboardAvailable bool
+	ConfigFilePath     string
 	BuildInfo          domain.BuildInfo
 	Logger             *slog.Logger
 }
@@ -33,6 +34,7 @@ func Run(ctx context.Context, params RunParams) error {
 	ui, err := terminal.StartUI(ctx, terminal.StartParams{
 		Screen:             params.Screen,
 		ClipboardAvailable: params.ClipboardAvailable,
+		ConfigFilePath:     params.ConfigFilePath,
 		BuildInfo:          params.BuildInfo,
 		Logger:             logger.With("component", "ui"),
 	})
