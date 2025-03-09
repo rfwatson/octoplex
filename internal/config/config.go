@@ -1,6 +1,6 @@
 package config
 
-import "git.netflux.io/rob/octoplex/domain"
+import "git.netflux.io/rob/octoplex/internal/domain"
 
 const defaultLogFile = domain.AppName + ".log"
 

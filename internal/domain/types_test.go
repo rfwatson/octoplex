@@ -3,7 +3,7 @@ package domain_test
 import (
 	"testing"
 
-	"git.netflux.io/rob/octoplex/domain"
+	"git.netflux.io/rob/octoplex/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
 

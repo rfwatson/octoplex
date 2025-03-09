@@ -12,8 +12,8 @@ import (
 	typescontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 
-	"git.netflux.io/rob/octoplex/container"
-	"git.netflux.io/rob/octoplex/domain"
+	"git.netflux.io/rob/octoplex/internal/container"
+	"git.netflux.io/rob/octoplex/internal/domain"
 )
 
 const (

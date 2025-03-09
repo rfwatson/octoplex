@@ -10,9 +10,9 @@ import (
 	"runtime/debug"
 	"syscall"
 
-	"git.netflux.io/rob/octoplex/app"
-	"git.netflux.io/rob/octoplex/config"
-	"git.netflux.io/rob/octoplex/domain"
+	"git.netflux.io/rob/octoplex/internal/app"
+	"git.netflux.io/rob/octoplex/internal/config"
+	"git.netflux.io/rob/octoplex/internal/domain"
 	dockerclient "github.com/docker/docker/client"
 	"golang.design/x/clipboard"
 )

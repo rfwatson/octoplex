@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"git.netflux.io/rob/octoplex/config"
-	"git.netflux.io/rob/octoplex/shortid"
+	"git.netflux.io/rob/octoplex/internal/config"
+	"git.netflux.io/rob/octoplex/internal/shortid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

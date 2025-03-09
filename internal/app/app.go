@@ -6,12 +6,12 @@ import (
 	"log/slog"
 	"time"
 
-	"git.netflux.io/rob/octoplex/config"
-	"git.netflux.io/rob/octoplex/container"
-	"git.netflux.io/rob/octoplex/domain"
-	"git.netflux.io/rob/octoplex/mediaserver"
-	"git.netflux.io/rob/octoplex/multiplexer"
-	"git.netflux.io/rob/octoplex/terminal"
+	"git.netflux.io/rob/octoplex/internal/config"
+	"git.netflux.io/rob/octoplex/internal/container"
+	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/mediaserver"
+	"git.netflux.io/rob/octoplex/internal/multiplexer"
+	"git.netflux.io/rob/octoplex/internal/terminal"
 	"github.com/gdamore/tcell/v2"
 )
 

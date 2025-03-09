@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"git.netflux.io/rob/octoplex/domain"
+	"git.netflux.io/rob/octoplex/internal/domain"
 	"gopkg.in/yaml.v3"
 )
 

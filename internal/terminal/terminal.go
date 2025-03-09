@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"git.netflux.io/rob/octoplex/domain"
+	"git.netflux.io/rob/octoplex/internal/domain"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"golang.design/x/clipboard"

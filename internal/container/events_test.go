@@ -5,8 +5,8 @@ import (
 	"io"
 	"testing"
 
-	containermocks "git.netflux.io/rob/octoplex/generated/mocks/container"
-	"git.netflux.io/rob/octoplex/testhelpers"
+	containermocks "git.netflux.io/rob/octoplex/internal/generated/mocks/container"
+	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"github.com/docker/docker/api/types/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

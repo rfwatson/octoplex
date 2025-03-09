@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"git.netflux.io/rob/octoplex/container"
-	"git.netflux.io/rob/octoplex/mediaserver"
-	"git.netflux.io/rob/octoplex/testhelpers"
+	"git.netflux.io/rob/octoplex/internal/container"
+	"git.netflux.io/rob/octoplex/internal/mediaserver"
+	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"github.com/docker/docker/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -11,8 +11,8 @@ import (
 
 	typescontainer "github.com/docker/docker/api/types/container"
 
-	"git.netflux.io/rob/octoplex/container"
-	"git.netflux.io/rob/octoplex/domain"
+	"git.netflux.io/rob/octoplex/internal/container"
+	"git.netflux.io/rob/octoplex/internal/domain"
 )
 
 type action func()

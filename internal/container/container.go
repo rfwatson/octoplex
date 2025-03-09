@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"git.netflux.io/rob/octoplex/domain"
-	"git.netflux.io/rob/octoplex/shortid"
+	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/shortid"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
