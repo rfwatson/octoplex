@@ -1,5 +1,5 @@
 [env]
-GOTOOLCHAIN = "go1.24.0"
+GOTOOLCHAIN = "go1.24.1"
 
 [tasks.test]
 description = "Run tests"
