@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"git.netflux.io/rob/octoplex/internal/config"
@@ -17,6 +18,9 @@ var configComplete []byte
 
 //go:embed testdata/no-logfile.yml
 var configNoLogfile []byte
+
+//go:embed testdata/logfile.yml
+var configLogfile []byte
 
 //go:embed testdata/no-name.yml
 var configNoName []byte
@@ -34,7 +38,7 @@ func TestConfigServiceCreateConfig(t *testing.T) {
 
 	cfg, err := service.ReadOrCreateConfig()
 	require.NoError(t, err)
-	require.Equal(t, "octoplex.log", cfg.LogFile)
+	require.Empty(t, cfg.LogFile, "expected no log file")
 
 	p := filepath.Join(configDir(suffix), "config.yaml")
 	_, err = os.Stat(p)
@@ -55,7 +59,10 @@ func TestConfigServiceReadConfig(t *testing.T) {
 				require.Equal(
 					t,
 					config.Config{
-						LogFile: "test.log",
+						LogFile: config.LogFile{
+							Enabled: true,
+							Path:    "test.log",
+						},
 						Destinations: []config.Destination{
 							{
 								Name: "my stream",
@@ -66,10 +73,17 @@ func TestConfigServiceReadConfig(t *testing.T) {
 			},
 		},
 		{
-			name:        "no logfile",
+			name:        "logging enabled, no logfile",
 			configBytes: configNoLogfile,
 			want: func(t *testing.T, cfg config.Config) {
-				assert.Equal(t, "octoplex.log", cfg.LogFile)
+				assert.True(t, strings.HasSuffix(cfg.LogFile.Path, "/octoplex/octoplex.log"))
+			},
+		},
+		{
+			name:        "logging enabled, logfile",
+			configBytes: configLogfile,
+			want: func(t *testing.T, cfg config.Config) {
+				assert.Equal(t, "/tmp/octoplex.log", cfg.LogFile.Path)
 			},
 		},
 		{

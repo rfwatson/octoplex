@@ -13,7 +13,9 @@ import (
 
 // Service provides configuration services.
 type Service struct {
-	configDir string
+	userConfigDir string
+	appConfigDir  string
+	appStateDir   string
 }
 
 // ConfigDirFunc is a function that returns the user configuration directory.
@@ -26,14 +28,29 @@ func NewDefaultService() (*Service, error) {
 }
 
 // NewService creates a new service with provided ConfigDirFunc.
+//
+// The app data directories (config and state) are created if they do not
+// exist.
 func NewService(configDirFunc ConfigDirFunc) (*Service, error) {
-	userConfigDir, err := configDirFunc()
+	configDir, err := configDirFunc()
 	if err != nil {
 		return nil, fmt.Errorf("user config dir: %w", err)
 	}
 
+	appConfigDir, err := createAppConfigDir(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("app config dir: %w", err)
+	}
+
+	appStateDir, err := createAppStateDir()
+	if err != nil {
+		return nil, fmt.Errorf("app state dir: %w", err)
+	}
+
 	return &Service{
-		configDir: filepath.Join(userConfigDir, domain.AppName),
+		userConfigDir: configDir,
+		appConfigDir:  appConfigDir,
+		appStateDir:   appStateDir,
 	}, nil
 }
 
@@ -59,7 +76,7 @@ func (s *Service) readConfig() (cfg Config, _ error) {
 		return cfg, fmt.Errorf("unmarshal: %w", err)
 	}
 
-	setDefaults(&cfg)
+	s.setDefaults(&cfg)
 
 	if err = validate(cfg); err != nil {
 		return cfg, err
@@ -69,11 +86,11 @@ func (s *Service) readConfig() (cfg Config, _ error) {
 }
 
 func (s *Service) createConfig() (cfg Config, _ error) {
-	if err := os.MkdirAll(s.configDir, 0744); err != nil {
+	if err := os.MkdirAll(s.appConfigDir, 0744); err != nil {
 		return cfg, fmt.Errorf("mkdir: %w", err)
 	}
 
-	setDefaults(&cfg)
+	s.setDefaults(&cfg)
 
 	yamlBytes, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -88,12 +105,12 @@ func (s *Service) createConfig() (cfg Config, _ error) {
 }
 
 func (s *Service) Path() string {
-	return filepath.Join(s.configDir, "config.yaml")
+	return filepath.Join(s.appConfigDir, "config.yaml")
 }
 
-func setDefaults(cfg *Config) {
-	if cfg.LogFile == "" {
-		cfg.LogFile = defaultLogFile
+func (s *Service) setDefaults(cfg *Config) {
+	if cfg.LogFile.Enabled && cfg.LogFile.Path == "" {
+		cfg.LogFile.Path = filepath.Join(s.appStateDir, domain.AppName+".log")
 	}
 
 	for i := range cfg.Destinations {

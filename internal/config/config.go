@@ -1,17 +1,19 @@
 package config
 
-import "git.netflux.io/rob/octoplex/internal/domain"
-
-const defaultLogFile = domain.AppName + ".log"
-
 // Destination holds the configuration for a destination.
 type Destination struct {
 	Name string `yaml:"name"`
 	URL  string `yaml:"url"`
 }
 
+// LogFile holds the configuration for the log file.
+type LogFile struct {
+	Enabled bool   `yaml:"enabled"`
+	Path    string `yaml:"path"`
+}
+
 // Config holds the configuration for the application.
 type Config struct {
-	LogFile      string        `yaml:"logfile"`
+	LogFile      LogFile       `yaml:"logfile"`
 	Destinations []Destination `yaml:"destinations"`
 }

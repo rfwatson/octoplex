@@ -1,5 +1,7 @@
 ---
-logfile: test.log
+logfile:
+  enabled: true
+  path: test.log
 destinations:
 - name: my stream
   url: rtmp://rtmp.example.com:1935/live

@@ -55,12 +55,10 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("read or create config: %w", err)
 	}
-
-	logFile, err := os.OpenFile(cfg.LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	logger, err := buildLogger(cfg.LogFile)
 	if err != nil {
-		return fmt.Errorf("error opening log file: %w", err)
+		return fmt.Errorf("build logger: %w", err)
 	}
-	logger := slog.New(slog.NewTextHandler(logFile, nil))
 
 	var clipboardAvailable bool
 	if err = clipboard.Init(); err != nil {
@@ -126,4 +124,18 @@ func printConfigPath(configPath string) error {
 func printVersion() error {
 	fmt.Fprintf(os.Stderr, "%s version %s\n", domain.AppName, "0.0.0")
 	return nil
+}
+
+// buildLogger builds the logger, which may be a no-op logger.
+func buildLogger(cfg config.LogFile) (*slog.Logger, error) {
+	if !cfg.Enabled {
+		return slog.New(slog.DiscardHandler), nil
+	}
+
+	fptr, err := os.OpenFile(cfg.Path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		return nil, fmt.Errorf("error opening log file: %w", err)
+	}
+
+	return slog.New(slog.NewTextHandler(fptr, nil)), nil
 }
