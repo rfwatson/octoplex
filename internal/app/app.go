@@ -106,7 +106,12 @@ func Run(ctx context.Context, params RunParams) error {
 			applyServerState(serverState, state)
 			updateUI()
 		case mpState := <-mp.C():
-			applyMultiplexerState(mpState, state)
+			destErrors := applyMultiplexerState(mpState, state)
+
+			for _, destError := range destErrors {
+				handleDestError(destError, mp, ui)
+			}
+
 			updateUI()
 		}
 	}
@@ -117,18 +122,49 @@ func applyServerState(serverState domain.Source, appState *domain.AppState) {
 	appState.Source = serverState
 }
 
+// destinationError holds the information needed to display a destination
+// error.
+type destinationError struct {
+	name string
+	url  string
+	err  error
+}
+
 // applyMultiplexerState applies the current multiplexer state to the app state.
-func applyMultiplexerState(mpState multiplexer.State, appState *domain.AppState) {
-	for i, dest := range appState.Destinations {
+//
+// It returns a list of destination errors that should be displayed to the user.
+func applyMultiplexerState(mpState multiplexer.State, appState *domain.AppState) []destinationError {
+	var errorsToDisplay []destinationError
+
+	for i := range appState.Destinations {
+		dest := &appState.Destinations[i]
+
 		if dest.URL != mpState.URL {
 			continue
 		}
 
-		appState.Destinations[i].Container = mpState.Container
-		appState.Destinations[i].Status = mpState.Status
+		if dest.Container.Err == nil && mpState.Container.Err != nil {
+			errorsToDisplay = append(errorsToDisplay, destinationError{
+				name: dest.Name,
+				url:  dest.URL,
+				err:  mpState.Container.Err,
+			})
+		}
+
+		dest.Container = mpState.Container
+		dest.Status = mpState.Status
 
 		break
 	}
+
+	return errorsToDisplay
+}
+
+// handleDestError displays a modal to the user, and stops the destination.
+func handleDestError(destError destinationError, mp *multiplexer.Actor, ui *terminal.UI) {
+	ui.ShowDestinationErrorModal(destError.name, destError.err)
+
+	mp.StopDestination(destError.url)
 }
 
 // newStateFromRunParams creates a new app state from the run parameters.

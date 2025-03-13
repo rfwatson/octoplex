@@ -234,6 +234,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 	}
 }
 
+// TODO: refactor to use container.Err?
 func (s *Actor) handleContainerExit(err error) {
 	if s.state.Container.ExitCode != nil {
 		s.state.ExitReason = fmt.Sprintf("Server process exited with code %d.", *s.state.Container.ExitCode)
