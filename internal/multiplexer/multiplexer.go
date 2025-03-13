@@ -84,6 +84,9 @@ func (a *Actor) StartDestination(url string) {
 			return
 		}
 
+		a.nextIndex++
+		a.currURLs[url] = struct{}{}
+
 		a.logger.Info("Starting live stream", "url", url)
 
 		containerStateC, errC := a.containerClient.RunContainer(a.ctx, container.RunContainerParams{
@@ -107,9 +110,6 @@ func (a *Actor) StartDestination(url string) {
 			},
 			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth1", Tx: "eth0"},
 		})
-
-		a.nextIndex++
-		a.currURLs[url] = struct{}{}
 
 		a.wg.Add(1)
 		go func() {
@@ -146,12 +146,6 @@ func (a *Actor) StopDestination(url string) {
 
 // destLoop is the actor loop for a destination stream.
 func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, errC <-chan error) {
-	defer func() {
-		a.actorC <- func() {
-			delete(a.currURLs, url)
-		}
-	}()
-
 	state := &State{URL: url}
 	sendState := func() { a.stateC <- *state }
 
@@ -171,10 +165,11 @@ func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, er
 			}
 			sendState()
 		case err := <-errC:
-			// TODO: error handling
 			if err != nil {
 				a.logger.Error("Error from container client", "err", err)
 			}
+			state.Container.Err = err
+			sendState()
 			return
 		}
 	}

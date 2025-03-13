@@ -251,7 +251,6 @@ func (ui *UI) ShowStartupCheckModal() bool {
 			[]string{"Continue", "Exit"},
 			func(buttonIndex int, _ string) {
 				if buttonIndex == 0 {
-					ui.pages.RemovePage("modal")
 					ui.app.SetFocus(ui.destView)
 					done <- true
 				} else {
@@ -262,6 +261,27 @@ func (ui *UI) ShowStartupCheckModal() bool {
 	})
 
 	return <-done
+}
+
+func (ui *UI) ShowDestinationErrorModal(name string, err error) {
+	done := make(chan struct{})
+
+	ui.app.QueueUpdateDraw(func() {
+		ui.showModal(
+			modalGroupStartupCheck,
+			fmt.Sprintf(
+				"Streaming to %s failed:\n\n%s",
+				cmp.Or(name, "this destination"),
+				err,
+			),
+			[]string{"Ok"},
+			func(int, string) {
+				done <- struct{}{}
+			},
+		)
+	})
+
+	<-done
 }
 
 // AllowQuit enables the quit action.
@@ -580,7 +600,6 @@ func (ui *UI) confirmQuit() {
 		[]string{"Quit", "Cancel"},
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.logger.Info("quitting")
 				ui.commandCh <- CommandQuit{}
 				return
 			}

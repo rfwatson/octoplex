@@ -263,11 +263,8 @@ func (a *Client) runContainerLoop(
 			case resp := <-respC:
 				// Check if the container is restarting. If it is not then we don't
 				// want to wait for it again and can return early.
-				//
-				// Low priority: is the API call necessary?
 				ctr, err := a.apiClient.ContainerInspect(ctx, containerID)
 				if err != nil {
-					// TODO: error handling?
 					a.logger.Error("Error inspecting container", "err", err, "id", shortID(containerID))
 					containerErrC <- err
 					return
@@ -282,7 +279,6 @@ func (a *Client) runContainerLoop(
 				}
 			case err := <-errC:
 				// Otherwise, this is probably unexpected and we need to handle it.
-				// TODO: improve handling
 				containerErrC <- err
 				return
 			case <-ctx.Done():

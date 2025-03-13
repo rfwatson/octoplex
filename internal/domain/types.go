@@ -39,6 +39,7 @@ type Source struct {
 	ExitReason      string
 }
 
+// DestinationStatus reflects the high-level status of a single destination.
 type DestinationStatus int
 
 const (
@@ -81,4 +82,5 @@ type Container struct {
 	RxSince          time.Time
 	RestartCount     int
 	ExitCode         *int
+	Err              error // Err is set if any error was received from the container client.
 }
