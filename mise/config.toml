@@ -10,13 +10,13 @@ alias = "t"
 [tasks.test_integration]
 description = "Run integration tests"
 dir = "{{cwd}}"
-run = "go test -v -tags=integration -run TestIntegration ./..."
+run = "go test -v -count 1 -parallel 1 -tags=integration -run TestIntegration ./..."
 alias = "ti"
 
 [tasks.test_ci]
 description = "Run tests in CI"
 dir = "{{cwd}}"
-run = "go test -v -race ./..."
+run = "go test -v -count 1 -parallel 1 -race ./..."
 
 [tasks.test_integration_ci]
 description = "Run integration tests in CI"
