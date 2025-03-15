@@ -12,14 +12,13 @@ import (
 	"git.netflux.io/rob/octoplex/internal/mediaserver"
 	"git.netflux.io/rob/octoplex/internal/multiplexer"
 	"git.netflux.io/rob/octoplex/internal/terminal"
-	"github.com/gdamore/tcell/v2"
 )
 
 // RunParams holds the parameters for running the application.
 type RunParams struct {
 	Config             config.Config
 	DockerClient       container.DockerClient
-	Screen             tcell.Screen
+	Screen             *terminal.Screen // Screen may be nil.
 	ClipboardAvailable bool
 	ConfigFilePath     string
 	BuildInfo          domain.BuildInfo

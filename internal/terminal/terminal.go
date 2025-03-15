@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,16 +45,33 @@ type UI struct {
 
 	// tview state
 
-	app         *tview.Application
-	pages       *tview.Pages
-	sourceViews sourceViews
-	destView    *tview.Table
+	app            *tview.Application
+	screen         tcell.Screen
+	screenCaptureC chan<- ScreenCapture
+	pages          *tview.Pages
+	sourceViews    sourceViews
+	destView       *tview.Table
 
 	// other mutable state
 
 	mu               sync.Mutex
 	urlsToStartState map[string]startState
 	allowQuit        bool
+}
+
+// Screen represents a terminal screen. This includes its desired dimensions,
+// which is required to initialize the tcell.SimulationScreen.
+type Screen struct {
+	Screen        tcell.Screen
+	Width, Height int
+	CaptureC      chan<- ScreenCapture
+}
+
+// ScreenCapture represents a screen capture, which is used for integration
+// testing with the tcell.SimulationScreen.
+type ScreenCapture struct {
+	Cells         []tcell.SimCell
+	Width, Height int
 }
 
 // StartParams contains the parameters for starting a new terminal user
@@ -64,7 +82,7 @@ type StartParams struct {
 	ClipboardAvailable bool
 	ConfigFilePath     string
 	BuildInfo          domain.BuildInfo
-	Screen             tcell.Screen
+	Screen             *Screen // Screen may be nil.
 }
 
 const defaultChanSize = 64
@@ -76,9 +94,17 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 
 	app := tview.NewApplication()
 
-	// Allow the tcell screen to be overridden for integration tests. If
-	// params.Screen is nil, the real terminal is used.
-	app.SetScreen(params.Screen)
+	var screen tcell.Screen
+	var screenCaptureC chan<- ScreenCapture
+	if params.Screen != nil {
+		screen = params.Screen.Screen
+		screenCaptureC = params.Screen.CaptureC
+		// Allow the tcell screen to be overridden for integration tests. If
+		// params.Screen is nil, the real terminal is used.
+		app.SetScreen(screen)
+		// SetSize must be called after SetScreen:
+		screen.SetSize(params.Screen.Width, params.Screen.Height)
+	}
 
 	sidebar := tview.NewFlex()
 	sidebar.SetDirection(tview.FlexRow)
@@ -162,11 +188,13 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	app.EnableMouse(false)
 
 	ui := &UI{
-		commandCh: commandCh,
-		buildInfo: params.BuildInfo,
-		logger:    params.Logger,
-		app:       app,
-		pages:     pages,
+		commandCh:      commandCh,
+		buildInfo:      params.BuildInfo,
+		logger:         params.Logger,
+		app:            app,
+		screen:         screen,
+		screenCaptureC: screenCaptureC,
+		pages:          pages,
 		sourceViews: sourceViews{
 			url:    urlTextView,
 			status: statusTextView,
@@ -200,6 +228,10 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 
 		return event
 	})
+
+	if ui.screenCaptureC != nil {
+		app.SetAfterDrawFunc(ui.captureScreen)
+	}
 
 	go ui.run(ctx)
 
@@ -295,6 +327,25 @@ func (ui *UI) AllowQuit() {
 	// but it probably means refactoring the mediaserver actor to separate
 	// starting the server from starting the event loop.
 	ui.allowQuit = true
+}
+
+// captureScreen captures the screen and sends it to the screenCaptureC
+// channel, which must have been set in StartParams.
+//
+// This is required for integration testing because GetContents() must be
+// called inside the tview goroutine to avoid data races.
+func (ui *UI) captureScreen(screen tcell.Screen) {
+	simScreen, ok := screen.(tcell.SimulationScreen)
+	if !ok {
+		ui.logger.Error("simulation screen not available")
+	}
+
+	cells, w, h := simScreen.GetContents()
+	ui.screenCaptureC <- ScreenCapture{
+		Cells:  slices.Clone(cells),
+		Width:  w,
+		Height: h,
+	}
 }
 
 // SetState sets the state of the terminal user interface.

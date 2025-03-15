@@ -27,6 +27,8 @@ func StreamFLV(t *testing.T, destURL string) {
 		"-f", "flv",
 		destURL,
 	)
+	// Uncomment to view output:
+	// cmd.Stderr = os.Stderr
 	require.NoError(t, cmd.Start())
 
 	t.Cleanup(func() {
