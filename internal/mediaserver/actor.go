@@ -202,11 +202,19 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 				s.logger.Error("Error fetching server state", "err", err)
 				continue
 			}
-			if ingressState.ready != s.state.Live || ingressState.listeners != s.state.Listeners {
+
+			var shouldSendState bool
+			if ingressState.ready != s.state.Live {
 				s.state.Live = ingressState.ready
 				s.state.LiveChangedAt = time.Now()
-				s.state.Listeners = ingressState.listeners
 				resetFetchTracksT(time.Second)
+				shouldSendState = true
+			}
+			if ingressState.listeners != s.state.Listeners {
+				s.state.Listeners = ingressState.listeners
+				shouldSendState = true
+			}
+			if shouldSendState {
 				sendState()
 			}
 		case <-fetchTracksT.C:
