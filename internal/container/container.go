@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,7 @@ type DockerClient interface {
 	ImagePull(context.Context, string, image.PullOptions) (io.ReadCloser, error)
 	NetworkConnect(context.Context, string, string, *network.EndpointSettings) error
 	NetworkCreate(context.Context, string, network.CreateOptions) (network.CreateResponse, error)
+	NetworkList(context.Context, network.ListOptions) ([]network.Summary, error)
 	NetworkRemove(context.Context, string) error
 }
 
@@ -73,7 +75,14 @@ type Client struct {
 // NewClient creates a new Client.
 func NewClient(ctx context.Context, apiClient DockerClient, logger *slog.Logger) (*Client, error) {
 	id := shortid.New()
-	network, err := apiClient.NetworkCreate(ctx, domain.AppName+"-"+id.String(), network.CreateOptions{Driver: "bridge"})
+	network, err := apiClient.NetworkCreate(
+		ctx,
+		domain.AppName+"-"+id.String(),
+		network.CreateOptions{
+			Driver: "bridge",
+			Labels: map[string]string{LabelApp: domain.AppName, LabelAppID: id.String()},
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("network create: %w", err)
 	}
@@ -439,6 +448,38 @@ func (a *Client) RemoveContainers(ctx context.Context, labelOptions LabelOptions
 	}
 
 	return nil
+}
+
+// RemoveUnusedNetworks removes all networks that are not used by any
+// container.
+func (a *Client) RemoveUnusedNetworks(ctx context.Context) error {
+	networks, err := a.otherNetworks(ctx)
+	if err != nil {
+		return fmt.Errorf("other networks: %w", err)
+	}
+
+	for _, network := range networks {
+		a.logger.Info("Removing network", "id", shortID(network.ID))
+		if err = a.apiClient.NetworkRemove(ctx, network.ID); err != nil {
+			a.logger.Error("Error removing network", "err", err, "id", shortID(network.ID))
+		}
+	}
+
+	return nil
+}
+
+func (a *Client) otherNetworks(ctx context.Context) ([]network.Summary, error) {
+	filterArgs := filters.NewArgs()
+	filterArgs.Add("label", LabelApp+"="+domain.AppName)
+
+	networks, err := a.apiClient.NetworkList(ctx, network.ListOptions{Filters: filterArgs})
+	if err != nil {
+		return nil, fmt.Errorf("network list: %w", err)
+	}
+
+	return slices.DeleteFunc(networks, func(n network.Summary) bool {
+		return n.ID == a.networkID
+	}), nil
 }
 
 // LabelOptions is a function that returns a map of labels.

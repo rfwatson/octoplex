@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	mocks "git.netflux.io/rob/octoplex/internal/generated/mocks/mediaserver"
+	"git.netflux.io/rob/octoplex/internal/mediaserver/mocks"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )

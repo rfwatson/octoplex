@@ -1,15 +1,15 @@
 with-expecter: true
-dir: "generated/mocks/{{ .InterfaceDirRelative }}"
+dir: "{{ .InterfaceDir }}/mocks"
 filename: "{{ .InterfaceName | lower }}_mock.go"
 mockname: "{{ .InterfaceName }}"
-outpkg: "{{ .PackageName }}"
+outpkg: mocks
 issue-845-fix: true
 resolve-type-alias: false
 packages:
-  git.netflux.io/rob/octoplex/container:
+  git.netflux.io/rob/octoplex/internal/container:
     interfaces:
       DockerClient:
-  git.netflux.io/rob/octoplex/mediaserver:
+  git.netflux.io/rob/octoplex/internal/mediaserver:
     interfaces:
       httpClient:
         config:

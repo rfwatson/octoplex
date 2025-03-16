@@ -51,12 +51,16 @@ func Run(ctx context.Context, params RunParams) error {
 	updateUI := func() { ui.SetState(*state) }
 	updateUI()
 
+	// TODO: check for unused networks.
 	if exists, err := containerClient.ContainerRunning(ctx, container.AllContainers()); err != nil {
 		return fmt.Errorf("check existing containers: %w", err)
 	} else if exists {
 		if ui.ShowStartupCheckModal() {
 			if err = containerClient.RemoveContainers(ctx, container.AllContainers()); err != nil {
 				return fmt.Errorf("remove existing containers: %w", err)
+			}
+			if err = containerClient.RemoveUnusedNetworks(ctx); err != nil {
+				return fmt.Errorf("remove unused networks: %w", err)
 			}
 		} else {
 			return nil

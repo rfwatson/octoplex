@@ -5,7 +5,7 @@ import (
 	"io"
 	"testing"
 
-	containermocks "git.netflux.io/rob/octoplex/internal/generated/mocks/container"
+	"git.netflux.io/rob/octoplex/internal/container/mocks"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"github.com/docker/docker/api/types/events"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +19,7 @@ func TestHandleEvents(t *testing.T) {
 
 	containerID := "b905f51b47242090ae504c184c7bc84d6274511ef763c1847039dcaa00a3ad27"
 
-	var dockerClient containermocks.DockerClient
+	var dockerClient mocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
 
 	dockerClient.

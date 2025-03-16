@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/container"
-	containermocks "git.netflux.io/rob/octoplex/internal/generated/mocks/container"
+	"git.netflux.io/rob/octoplex/internal/container/mocks"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
@@ -32,12 +32,14 @@ func TestClientRunContainer(t *testing.T) {
 	eventsC := make(chan events.Message)
 	eventsErrC := make(chan error)
 
-	var dockerClient containermocks.DockerClient
+	var dockerClient mocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
 
 	dockerClient.
 		EXPECT().
-		NetworkCreate(mock.Anything, mock.Anything, network.CreateOptions{Driver: "bridge"}).
+		NetworkCreate(mock.Anything, mock.Anything, mock.MatchedBy(func(opts network.CreateOptions) bool {
+			return opts.Driver == "bridge" && len(opts.Labels) > 0
+		})).
 		Return(network.CreateResponse{ID: "test-network"}, nil)
 	dockerClient.
 		EXPECT().
@@ -112,12 +114,14 @@ func TestClientRunContainer(t *testing.T) {
 func TestClientRunContainerErrorStartingContainer(t *testing.T) {
 	logger := testhelpers.NewTestLogger()
 
-	var dockerClient containermocks.DockerClient
+	var dockerClient mocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
 
 	dockerClient.
 		EXPECT().
-		NetworkCreate(mock.Anything, mock.Anything, network.CreateOptions{Driver: "bridge"}).
+		NetworkCreate(mock.Anything, mock.Anything, mock.MatchedBy(func(opts network.CreateOptions) bool {
+			return opts.Driver == "bridge" && len(opts.Labels) > 0
+		})).
 		Return(network.CreateResponse{ID: "test-network"}, nil)
 	dockerClient.
 		EXPECT().
@@ -156,12 +160,14 @@ func TestClientRunContainerErrorStartingContainer(t *testing.T) {
 func TestClientClose(t *testing.T) {
 	logger := testhelpers.NewTestLogger()
 
-	var dockerClient containermocks.DockerClient
+	var dockerClient mocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
 
 	dockerClient.
 		EXPECT().
-		NetworkCreate(mock.Anything, mock.Anything, network.CreateOptions{Driver: "bridge"}).
+		NetworkCreate(mock.Anything, mock.Anything, mock.MatchedBy(func(opts network.CreateOptions) bool {
+			return opts.Driver == "bridge" && len(opts.Labels) > 0
+		})).
 		Return(network.CreateResponse{ID: "test-network"}, nil)
 	dockerClient.
 		EXPECT().
@@ -188,4 +194,34 @@ func TestClientClose(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, containerClient.Close())
+}
+
+func TestRemoveUnusedNetworks(t *testing.T) {
+	logger := testhelpers.NewTestLogger()
+
+	var dockerClient mocks.DockerClient
+	defer dockerClient.AssertExpectations(t)
+
+	dockerClient.
+		EXPECT().
+		NetworkCreate(mock.Anything, mock.Anything, mock.MatchedBy(func(opts network.CreateOptions) bool {
+			return opts.Driver == "bridge" && len(opts.Labels) > 0
+		})).
+		Return(network.CreateResponse{ID: "test-network"}, nil)
+	dockerClient.
+		EXPECT().
+		NetworkList(mock.Anything, mock.Anything).
+		Return([]network.Summary{
+			{ID: "test-network"},
+			{ID: "another-network"},
+		}, nil)
+	dockerClient.
+		EXPECT().
+		NetworkRemove(mock.Anything, "another-network").
+		Return(nil)
+
+	containerClient, err := container.NewClient(t.Context(), &dockerClient, logger)
+	require.NoError(t, err)
+
+	require.NoError(t, containerClient.RemoveUnusedNetworks(t.Context()))
 }
