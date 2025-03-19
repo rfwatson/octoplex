@@ -80,6 +80,10 @@ type Container struct {
 	RxRate           int
 	TxRate           int
 	RxSince          time.Time
+	ImageName        string
+	PullStatus       string // PullStatus is the status of the image pull.
+	PullProgress     string // PullProgress is the "progress string" of the image pull.
+	PullPercent      int    // PullPercent is the percentage of the image that has been pulled.
 	RestartCount     int
 	ExitCode         *int
 	Err              error // Err is set if any error was received from the container client.

@@ -167,6 +167,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 		defer close(errC)
 
 		if err := a.pullImageIfNeeded(ctx, params.ContainerConfig.Image, containerStateC); err != nil {
+			a.logger.Error("Error pulling image", "err", err)
 			sendError(fmt.Errorf("image pull: %w", err))
 			return
 		}
@@ -209,10 +210,28 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 
 		containerStateC <- domain.Container{ID: createResp.ID, Status: domain.ContainerStatusRunning}
 
-		a.runContainerLoop(ctx, createResp.ID, params.NetworkCountConfig, containerStateC, errC)
+		a.runContainerLoop(
+			ctx,
+			createResp.ID,
+			params.ContainerConfig.Image,
+			params.NetworkCountConfig,
+			containerStateC,
+			errC,
+		)
 	}()
 
 	return containerStateC, errC
+}
+
+type pullProgressDetail struct {
+	Curr  int64 `json:"current"`
+	Total int64 `json:"total"`
+}
+
+type pullProgress struct {
+	Status   string             `json:"status"`
+	Detail   pullProgressDetail `json:"progressDetail"`
+	Progress string             `json:"progress"`
 }
 
 // pullImageIfNeeded pulls the image if it has not already been pulled.
@@ -225,14 +244,9 @@ func (a *Client) pullImageIfNeeded(ctx context.Context, imageName string, contai
 		return nil
 	}
 
-	containerStateC <- domain.Container{Status: domain.ContainerStatusPulling}
-
-	pullReader, err := a.apiClient.ImagePull(ctx, imageName, image.PullOptions{})
-	if err != nil {
+	if err := handleImagePull(ctx, imageName, a.apiClient, containerStateC); err != nil {
 		return err
 	}
-	_, _ = io.Copy(io.Discard, pullReader)
-	_ = pullReader.Close()
 
 	a.mu.Lock()
 	a.pulledImages[imageName] = struct{}{}
@@ -246,6 +260,7 @@ func (a *Client) pullImageIfNeeded(ctx context.Context, imageName string, contai
 func (a *Client) runContainerLoop(
 	ctx context.Context,
 	containerID string,
+	imageName string,
 	networkCountConfig NetworkCountConfig,
 	stateC chan<- domain.Container,
 	errC chan<- error,
@@ -297,7 +312,11 @@ func (a *Client) runContainerLoop(
 		}
 	}()
 
-	state := &domain.Container{ID: containerID, Status: domain.ContainerStatusRunning}
+	state := &domain.Container{
+		ID:        containerID,
+		Status:    domain.ContainerStatusRunning,
+		ImageName: imageName,
+	}
 	sendState := func() { stateC <- *state }
 	sendState()
 

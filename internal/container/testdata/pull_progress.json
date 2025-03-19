@@ -1,0 +1,51 @@
+{"status":"Pulling from netfluxio/mediamtx-alpine","id":"latest"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"1f3e46996e29"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"6e814715152b"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"f6273376c644"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"3c07878de45f"}
+{"status":"Waiting","progressDetail":{},"id":"3c07878de45f"}
+{"status":"Downloading","progressDetail":{"current":31487,"total":3069027},"progress":"[\u003e                                                  ]  31.49kB/3.069MB","id":"6e814715152b"}
+{"status":"Downloading","progressDetail":{"current":37415,"total":3641715},"progress":"[\u003e                                                  ]  37.41kB/3.642MB","id":"1f3e46996e29"}
+{"status":"Downloading","progressDetail":{"current":163098,"total":16182831},"progress":"[\u003e                                                  ]  163.1kB/16.18MB","id":"f6273376c644"}
+{"status":"Downloading","progressDetail":{"current":927991,"total":3069027},"progress":"[===============\u003e                                   ]    928kB/3.069MB","id":"6e814715152b"}
+{"status":"Downloading","progressDetail":{"current":330958,"total":3641715},"progress":"[====\u003e                                              ]    331kB/3.642MB","id":"1f3e46996e29"}
+{"status":"Downloading","progressDetail":{"current":1652998,"total":16182831},"progress":"[=====\u003e                                             ]  1.653MB/16.18MB","id":"f6273376c644"}
+{"status":"Downloading","progressDetail":{"current":915681,"total":3641715},"progress":"[============\u003e                                      ]  915.7kB/3.642MB","id":"1f3e46996e29"}
+{"status":"Downloading","progressDetail":{"current":1956087,"total":3069027},"progress":"[===============================\u003e                   ]  1.956MB/3.069MB","id":"6e814715152b"}
+{"status":"Downloading","progressDetail":{"current":2324742,"total":16182831},"progress":"[=======\u003e                                           ]  2.325MB/16.18MB","id":"f6273376c644"}
+{"status":"Verifying Checksum","progressDetail":{},"id":"6e814715152b"}
+{"status":"Download complete","progressDetail":{},"id":"6e814715152b"}
+{"status":"Downloading","progressDetail":{"current":1603809,"total":3641715},"progress":"[======================\u003e                            ]  1.604MB/3.642MB","id":"1f3e46996e29"}
+{"status":"Downloading","progressDetail":{"current":5654790,"total":16182831},"progress":"[=================\u003e                                 ]  5.655MB/16.18MB","id":"f6273376c644"}
+{"status":"Downloading","progressDetail":{"current":2291937,"total":3641715},"progress":"[===============================\u003e                   ]  2.292MB/3.642MB","id":"1f3e46996e29"}
+{"status":"Downloading","progressDetail":{"current":8653062,"total":16182831},"progress":"[==========================\u003e                        ]  8.653MB/16.18MB","id":"f6273376c644"}
+{"status":"Downloading","progressDetail":{"current":3025121,"total":3641715},"progress":"[=========================================\u003e         ]  3.025MB/3.642MB","id":"1f3e46996e29"}
+{"status":"Downloading","progressDetail":{"current":11663622,"total":16182831},"progress":"[====================================\u003e              ]  11.66MB/16.18MB","id":"f6273376c644"}
+{"status":"Verifying Checksum","progressDetail":{},"id":"1f3e46996e29"}
+{"status":"Download complete","progressDetail":{},"id":"1f3e46996e29"}
+{"status":"Extracting","progressDetail":{"current":65536,"total":3641715},"progress":"[\u003e                                                  ]  65.54kB/3.642MB","id":"1f3e46996e29"}
+{"status":"Downloading","progressDetail":{"current":14141702,"total":16182831},"progress":"[===========================================\u003e       ]  14.14MB/16.18MB","id":"f6273376c644"}
+{"status":"Verifying Checksum","progressDetail":{},"id":"f6273376c644"}
+{"status":"Download complete","progressDetail":{},"id":"f6273376c644"}
+{"status":"Extracting","progressDetail":{"current":2424832,"total":3641715},"progress":"[=================================\u003e                 ]  2.425MB/3.642MB","id":"1f3e46996e29"}
+{"status":"Extracting","progressDetail":{"current":3641715,"total":3641715},"progress":"[==================================================\u003e]  3.642MB/3.642MB","id":"1f3e46996e29"}
+{"status":"Extracting","progressDetail":{"current":3641715,"total":3641715},"progress":"[==================================================\u003e]  3.642MB/3.642MB","id":"1f3e46996e29"}
+{"status":"Pull complete","progressDetail":{},"id":"1f3e46996e29"}
+{"status":"Extracting","progressDetail":{"current":32768,"total":3069027},"progress":"[\u003e                                                  ]  32.77kB/3.069MB","id":"6e814715152b"}
+{"status":"Downloading","progressDetail":{"current":1369,"total":7593},"progress":"[=========\u003e                                         ]  1.369kB/7.593kB","id":"3c07878de45f"}
+{"status":"Downloading","progressDetail":{"current":7593,"total":7593},"progress":"[==================================================\u003e]  7.593kB/7.593kB","id":"3c07878de45f"}
+{"status":"Download complete","progressDetail":{},"id":"3c07878de45f"}
+{"status":"Extracting","progressDetail":{"current":2031616,"total":3069027},"progress":"[=================================\u003e                 ]  2.032MB/3.069MB","id":"6e814715152b"}
+{"status":"Extracting","progressDetail":{"current":3069027,"total":3069027},"progress":"[==================================================\u003e]  3.069MB/3.069MB","id":"6e814715152b"}
+{"status":"Pull complete","progressDetail":{},"id":"6e814715152b"}
+{"status":"Extracting","progressDetail":{"current":163840,"total":16182831},"progress":"[\u003e                                                  ]  163.8kB/16.18MB","id":"f6273376c644"}
+{"status":"Extracting","progressDetail":{"current":3112960,"total":16182831},"progress":"[=========\u003e                                         ]  3.113MB/16.18MB","id":"f6273376c644"}
+{"status":"Extracting","progressDetail":{"current":5734400,"total":16182831},"progress":"[=================\u003e                                 ]  5.734MB/16.18MB","id":"f6273376c644"}
+{"status":"Extracting","progressDetail":{"current":11632640,"total":16182831},"progress":"[===================================\u003e               ]  11.63MB/16.18MB","id":"f6273376c644"}
+{"status":"Extracting","progressDetail":{"current":16182831,"total":16182831},"progress":"[==================================================\u003e]  16.18MB/16.18MB","id":"f6273376c644"}
+{"status":"Pull complete","progressDetail":{},"id":"f6273376c644"}
+{"status":"Extracting","progressDetail":{"current":7593,"total":7593},"progress":"[==================================================\u003e]  7.593kB/7.593kB","id":"3c07878de45f"}
+{"status":"Extracting","progressDetail":{"current":7593,"total":7593},"progress":"[==================================================\u003e]  7.593kB/7.593kB","id":"3c07878de45f"}
+{"status":"Pull complete","progressDetail":{},"id":"3c07878de45f"}
+{"status":"Digest: sha256:6edf95a345caa2c173bf24125164500283d10814cc441f2d8861054b4f755ac4"}
+{"status":"Status: Downloaded newer image for netfluxio/mediamtx-alpine:latest"}

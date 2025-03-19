@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -45,12 +46,13 @@ type UI struct {
 
 	// tview state
 
-	app            *tview.Application
-	screen         tcell.Screen
-	screenCaptureC chan<- ScreenCapture
-	pages          *tview.Pages
-	sourceViews    sourceViews
-	destView       *tview.Table
+	app               *tview.Application
+	screen            tcell.Screen
+	screenCaptureC    chan<- ScreenCapture
+	pages             *tview.Pages
+	sourceViews       sourceViews
+	destView          *tview.Table
+	pullProgressModal *tview.Modal
 
 	// other mutable state
 
@@ -175,6 +177,12 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	destView.SetWrapSelection(true, false)
 	destView.SetSelectedStyle(tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorDarkSlateGrey))
 
+	pullProgressModal := tview.NewModal()
+	pullProgressModal.
+		SetBackgroundColor(tcell.ColorBlack).
+		SetTextColor(tcell.ColorWhite).
+		SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+
 	flex := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
 		AddItem(sidebar, 40, 0, false).
@@ -204,8 +212,9 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 			mem:    memTextView,
 			rx:     rxTextView,
 		},
-		destView:         destView,
-		urlsToStartState: make(map[string]startState),
+		destView:          destView,
+		pullProgressModal: pullProgressModal,
+		urlsToStartState:  make(map[string]startState),
 	}
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -354,6 +363,8 @@ func (ui *UI) SetState(state domain.AppState) {
 		ui.handleMediaServerClosed(state.Source.ExitReason)
 	}
 
+	ui.updatePullProgress(state)
+
 	ui.mu.Lock()
 	for _, dest := range state.Destinations {
 		ui.urlsToStartState[dest.URL] = containerStateToStartState(dest.Container.Status)
@@ -366,6 +377,63 @@ func (ui *UI) SetState(state domain.AppState) {
 	ui.app.QueueUpdateDraw(func() { ui.redrawFromState(stateClone) })
 }
 
+func (ui *UI) updatePullProgress(state domain.AppState) {
+	pullingContainers := make(map[string]domain.Container)
+
+	isPulling := func(containerState string, pullPercent int) bool {
+		return containerState == domain.ContainerStatusPulling && pullPercent > 0
+	}
+
+	if isPulling(state.Source.Container.Status, state.Source.Container.PullPercent) {
+		pullingContainers[state.Source.Container.ImageName] = state.Source.Container
+	}
+
+	for _, dest := range state.Destinations {
+		if isPulling(dest.Container.Status, dest.Container.PullPercent) {
+			pullingContainers[dest.Container.ImageName] = dest.Container
+		}
+	}
+
+	if len(pullingContainers) == 0 {
+		ui.hideModal(modalGroupPullProgress)
+		return
+	}
+
+	// We don't really expect two images to be pulling simultaneously, but it's
+	// easy enough to handle.
+	imageNames := slices.Collect(maps.Keys(pullingContainers))
+	slices.Sort(imageNames)
+	container := pullingContainers[imageNames[0]]
+
+	ui.updateProgressModal(container)
+}
+
+func (ui *UI) updateProgressModal(container domain.Container) {
+	ui.app.QueueUpdateDraw(func() {
+		modalName := "modal-" + string(modalGroupPullProgress)
+
+		var status string
+		// Avoid showing the long Docker pull status in the modal content.
+		if len(container.PullStatus) < 30 {
+			status = container.PullStatus
+		}
+
+		modalContent := fmt.Sprintf(
+			"Pulling %s:\n%s (%d%%)\n\n%s",
+			container.ImageName,
+			status,
+			container.PullPercent,
+			container.PullProgress,
+		)
+
+		if ui.pages.HasPage(modalName) {
+			ui.pullProgressModal.SetText(modalContent)
+		} else {
+			ui.pages.AddPage(modalName, ui.pullProgressModal, true, true)
+		}
+	})
+}
+
 // modalGroup represents a specific modal of which only one may be shown
 // simultaneously.
 type modalGroup string
@@ -375,6 +443,7 @@ const (
 	modalGroupQuit         modalGroup = "quit"
 	modalGroupStartupCheck modalGroup = "startup-check"
 	modalGroupClipboard    modalGroup = "clipboard"
+	modalGroupPullProgress modalGroup = "pull-progress"
 )
 
 func (ui *UI) showModal(group modalGroup, text string, buttons []string, doneFunc func(int, string)) {
@@ -404,6 +473,16 @@ func (ui *UI) showModal(group modalGroup, text string, buttons []string, doneFun
 	ui.pages.AddPage(modalName, modal, true, true)
 }
 
+func (ui *UI) hideModal(group modalGroup) {
+	modalName := "modal-" + string(group)
+	if !ui.pages.HasPage(modalName) {
+		return
+	}
+
+	ui.pages.RemovePage(modalName)
+	ui.app.SetFocus(ui.destView)
+}
+
 func (ui *UI) handleMediaServerClosed(exitReason string) {
 	done := make(chan struct{})
 
@@ -414,7 +493,6 @@ func (ui *UI) handleMediaServerClosed(exitReason string) {
 			SetBackgroundColor(tcell.ColorBlack).
 			SetTextColor(tcell.ColorWhite).
 			SetDoneFunc(func(int, string) {
-				ui.logger.Info("closing app")
 				// TODO: improve app cleanup
 				done <- struct{}{}
 
