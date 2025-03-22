@@ -518,6 +518,56 @@ func (_c *DockerClient_ContainerWait_Call) RunAndReturn(run func(context.Context
 	return _c
 }
 
+// CopyToContainer provides a mock function with given fields: _a0, _a1, _a2, _a3, _a4
+func (_m *DockerClient) CopyToContainer(_a0 context.Context, _a1 string, _a2 string, _a3 io.Reader, _a4 typescontainer.CopyToContainerOptions) error {
+	ret := _m.Called(_a0, _a1, _a2, _a3, _a4)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CopyToContainer")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, io.Reader, typescontainer.CopyToContainerOptions) error); ok {
+		r0 = rf(_a0, _a1, _a2, _a3, _a4)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// DockerClient_CopyToContainer_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CopyToContainer'
+type DockerClient_CopyToContainer_Call struct {
+	*mock.Call
+}
+
+// CopyToContainer is a helper method to define mock.On call
+//   - _a0 context.Context
+//   - _a1 string
+//   - _a2 string
+//   - _a3 io.Reader
+//   - _a4 typescontainer.CopyToContainerOptions
+func (_e *DockerClient_Expecter) CopyToContainer(_a0 interface{}, _a1 interface{}, _a2 interface{}, _a3 interface{}, _a4 interface{}) *DockerClient_CopyToContainer_Call {
+	return &DockerClient_CopyToContainer_Call{Call: _e.mock.On("CopyToContainer", _a0, _a1, _a2, _a3, _a4)}
+}
+
+func (_c *DockerClient_CopyToContainer_Call) Run(run func(_a0 context.Context, _a1 string, _a2 string, _a3 io.Reader, _a4 typescontainer.CopyToContainerOptions)) *DockerClient_CopyToContainer_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(io.Reader), args[4].(typescontainer.CopyToContainerOptions))
+	})
+	return _c
+}
+
+func (_c *DockerClient_CopyToContainer_Call) Return(_a0 error) *DockerClient_CopyToContainer_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *DockerClient_CopyToContainer_Call) RunAndReturn(run func(context.Context, string, string, io.Reader, typescontainer.CopyToContainerOptions) error) *DockerClient_CopyToContainer_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Events provides a mock function with given fields: _a0, _a1
 func (_m *DockerClient) Events(_a0 context.Context, _a1 events.ListOptions) (<-chan events.Message, <-chan error) {
 	ret := _m.Called(_a0, _a1)

@@ -32,7 +32,7 @@ type ingressStreamState struct {
 }
 
 // TODO: handle pagination
-func fetchIngressState(apiURL string, httpClient httpClient) (state ingressStreamState, _ error) {
+func fetchIngressState(apiURL string, streamKey StreamKey, httpClient httpClient) (state ingressStreamState, _ error) {
 	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		return state, fmt.Errorf("new request: %w", err)
@@ -58,7 +58,7 @@ func fetchIngressState(apiURL string, httpClient httpClient) (state ingressStrea
 	}
 
 	for _, conn := range resp.Items {
-		if conn.Path != rtmpPath {
+		if conn.Path != string(streamKey) {
 			continue
 		}
 
@@ -82,7 +82,7 @@ type path struct {
 }
 
 // TODO: handle pagination
-func fetchTracks(apiURL string, httpClient httpClient) ([]string, error) {
+func fetchTracks(apiURL string, streamKey StreamKey, httpClient httpClient) ([]string, error) {
 	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("new request: %w", err)
@@ -109,7 +109,7 @@ func fetchTracks(apiURL string, httpClient httpClient) ([]string, error) {
 
 	var tracks []string
 	for _, path := range resp.Items {
-		if path.Name == rtmpPath {
+		if path.Name == string(streamKey) {
 			tracks = path.Tracks
 		}
 	}

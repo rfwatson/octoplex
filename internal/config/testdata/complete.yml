@@ -2,6 +2,10 @@
 logfile:
   enabled: true
   path: test.log
+sources:
+  rtmp:
+    enabled: true
+    streamkey: s3cr3t
 destinations:
 - name: my stream
   url: rtmp://rtmp.example.com:1935/live

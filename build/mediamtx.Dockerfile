@@ -7,6 +7,5 @@ RUN apk add --no-cache \
     curl
 
 COPY --from=mediamtx /mediamtx /usr/bin/mediamtx
-COPY build/mediamtx.yml /mediamtx.yml
 
 CMD ["/usr/bin/mediamtx"]

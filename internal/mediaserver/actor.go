@@ -1,6 +1,7 @@
 package mediaserver
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"fmt"
@@ -11,20 +12,28 @@ import (
 
 	typescontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
+	"gopkg.in/yaml.v3"
 
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
 )
 
+// StreamKey is the stream key for the media server, which forms the RTMP path
+// component and can be used as a basic form of authentication.
+//
+// It defaults to "live", in which case the full RTMP URL would be:
+// `rtmp://localhost:1935/live`.
+type StreamKey string
+
 const (
-	defaultFetchIngressStateInterval = 5 * time.Second                    // default interval to fetch the state of the media server
-	defaultAPIPort                   = 9997                               // default API host port for the media server
-	defaultRTMPPort                  = 1935                               // default RTMP host port for the media server
-	defaultChanSize                  = 64                                 // default channel size for asynchronous non-error channels
-	imageNameMediaMTX                = "netfluxio/mediamtx-alpine:latest" // image name for mediamtx
-	rtmpPath                         = "live"                             // RTMP path for the media server
-	componentName                    = "mediaserver"                      // component name, mostly used for Docker labels
-	httpClientTimeout                = time.Second                        // timeout for outgoing HTTP client requests
+	defaultFetchIngressStateInterval           = 5 * time.Second                    // default interval to fetch the state of the media server
+	defaultAPIPort                             = 9997                               // default API host port for the media server
+	defaultRTMPPort                            = 1935                               // default RTMP host port for the media server
+	defaultChanSize                            = 64                                 // default channel size for asynchronous non-error channels
+	imageNameMediaMTX                          = "netfluxio/mediamtx-alpine:latest" // image name for mediamtx
+	defaultStreamKey                 StreamKey = "live"                             // Default stream key. See [StreamKey].
+	componentName                              = "mediaserver"                      // component name, mostly used for Docker labels
+	httpClientTimeout                          = time.Second                        // timeout for outgoing HTTP client requests
 )
 
 // action is an action to be performed by the actor.
@@ -39,6 +48,7 @@ type Actor struct {
 	containerClient           *container.Client
 	apiPort                   int
 	rtmpPort                  int
+	streamKey                 StreamKey
 	fetchIngressStateInterval time.Duration
 	logger                    *slog.Logger
 	httpClient                *http.Client
@@ -52,6 +62,7 @@ type Actor struct {
 type StartActorParams struct {
 	APIPort                   int           // defaults to 9997
 	RTMPPort                  int           // defaults to 1935
+	StreamKey                 StreamKey     // defaults to "live"
 	ChanSize                  int           // defaults to 64
 	FetchIngressStateInterval time.Duration // defaults to 5 seconds
 	ContainerClient           *container.Client
@@ -70,6 +81,7 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 		cancel:                    cancel,
 		apiPort:                   cmp.Or(params.APIPort, defaultAPIPort),
 		rtmpPort:                  cmp.Or(params.RTMPPort, defaultRTMPPort),
+		streamKey:                 cmp.Or(params.StreamKey, defaultStreamKey),
 		fetchIngressStateInterval: cmp.Or(params.FetchIngressStateInterval, defaultFetchIngressStateInterval),
 		actorC:                    make(chan action, chanSize),
 		state:                     new(domain.Source),
@@ -82,6 +94,39 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 	apiPortSpec := nat.Port(strconv.Itoa(actor.apiPort) + ":9997")
 	rtmpPortSpec := nat.Port(strconv.Itoa(actor.rtmpPort) + ":1935")
 	exposedPorts, portBindings, _ := nat.ParsePortSpecs([]string{string(apiPortSpec), string(rtmpPortSpec)})
+
+	cfg, err := yaml.Marshal(
+		Config{
+			LogLevel:        "debug",
+			LogDestinations: []string{"stdout"},
+			AuthMethod:      "internal",
+			AuthInternalUsers: []User{
+				// TODO: tighten permissions
+				{
+					User: "any",
+					IPs:  []string{}, // any IP
+					Permissions: []UserPermission{
+						{Action: "publish"},
+						{Action: "read"},
+					},
+				},
+				{
+					User:        "any",
+					IPs:         []string{"127.0.0.1", "::1", "172.17.0.0/16"},
+					Permissions: []UserPermission{{Action: "api"}},
+				},
+			},
+			API: true,
+			Paths: map[string]Path{
+				string(actor.streamKey): {
+					Source: "publisher",
+				},
+			},
+		},
+	)
+	if err != nil { // should never happen
+		panic(fmt.Sprintf("failed to marshal config: %v", err))
+	}
 
 	containerStateC, errC := params.ContainerClient.RunContainer(
 		ctx,
@@ -112,6 +157,13 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 				PortBindings: portBindings,
 			},
 			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth0", Tx: "eth1"},
+			CopyFileConfigs: []container.CopyFileConfig{
+				{
+					Path:    "/mediamtx.yml",
+					Payload: bytes.NewReader(cfg),
+					Mode:    0600,
+				},
+			},
 		},
 	)
 
@@ -197,7 +249,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 
 			sendState()
 		case <-fetchStateT.C:
-			ingressState, err := fetchIngressState(s.rtmpConnsURL(), s.httpClient)
+			ingressState, err := fetchIngressState(s.rtmpConnsURL(), s.streamKey, s.httpClient)
 			if err != nil {
 				s.logger.Error("Error fetching server state", "err", err)
 				continue
@@ -222,7 +274,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 				continue
 			}
 
-			if tracks, err := fetchTracks(s.pathsURL(), s.httpClient); err != nil {
+			if tracks, err := fetchTracks(s.pathsURL(), s.streamKey, s.httpClient); err != nil {
 				s.logger.Error("Error fetching tracks", "err", err)
 				resetFetchTracksT(3 * time.Second)
 			} else if len(tracks) == 0 {
@@ -258,14 +310,14 @@ func (s *Actor) handleContainerExit(err error) {
 
 // rtmpURL returns the RTMP URL for the media server, accessible from the host.
 func (s *Actor) rtmpURL() string {
-	return fmt.Sprintf("rtmp://localhost:%d/%s", s.rtmpPort, rtmpPath)
+	return fmt.Sprintf("rtmp://localhost:%d/%s", s.rtmpPort, s.streamKey)
 }
 
 // rtmpInternalURL returns the RTMP URL for the media server, accessible from
 // the app network.
 func (s *Actor) rtmpInternalURL() string {
 	// Container port, not host port:
-	return fmt.Sprintf("rtmp://mediaserver:1935/%s", rtmpPath)
+	return fmt.Sprintf("rtmp://mediaserver:1935/%s", s.streamKey)
 }
 
 // rtmpConnsURL returns the URL for fetching RTMP connections, accessible from

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -68,7 +69,13 @@ func Run(ctx context.Context, params RunParams) error {
 	}
 	ui.AllowQuit()
 
+	// While RTMP is the only source, it doesn't make sense to disable it.
+	if !params.Config.Sources.RTMP.Enabled {
+		return errors.New("config: sources.rtmp.enabled must be set to true")
+	}
+
 	srv := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
+		StreamKey:       mediaserver.StreamKey(params.Config.Sources.RTMP.StreamKey),
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "mediaserver"),
 	})
