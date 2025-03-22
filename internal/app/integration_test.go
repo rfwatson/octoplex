@@ -4,6 +4,7 @@ package app_test
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -121,22 +122,29 @@ func TestIntegration(t *testing.T) {
 	screen.PostEvent(tcell.NewEventKey(tcell.KeyDown, ' ', tcell.ModNone))
 	screen.PostEvent(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone))
 
-	time.Sleep(15 * time.Second)
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			contents := getContents()
+			fmt.Println("test")
+			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
 
-	contents := getContents()
-	require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
+			assert.Contains(t, contents[3], "Tracks   H264", "expected mediaserver tracks to be H264")
+			assert.Contains(t, contents[4], "Health   healthy", "expected mediaserver to be healthy")
 
-	require.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
-	require.Contains(t, contents[3], "Tracks   H264", "expected mediaserver tracks to be H264")
-	require.Contains(t, contents[4], "Health   healthy", "expected mediaserver to be healthy")
+			require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
+			assert.Contains(t, contents[2], "sending", "expected local server 1 to be sending")
+			assert.Contains(t, contents[2], "healthy", "expected local server 1 to be healthy")
 
-	require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
-	assert.Contains(t, contents[2], "sending", "expected local server 1 to be sending")
-	assert.Contains(t, contents[2], "healthy", "expected local server 1 to be healthy")
+			require.Contains(t, contents[3], "Local server 2", "expected local server 2 to be present")
+			assert.Contains(t, contents[3], "sending", "expected local server 2 to be sending")
+			assert.Contains(t, contents[3], "healthy", "expected local server 2 to be healthy")
 
-	require.Contains(t, contents[3], "Local server 2", "expected local server 2 to be present")
-	assert.Contains(t, contents[3], "sending", "expected local server 2 to be sending")
-	assert.Contains(t, contents[3], "healthy", "expected local server 2 to be healthy")
+		},
+		time.Minute,
+		time.Second,
+	)
 
 	// Stop destinations:
 	screen.PostEvent(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone))
@@ -145,14 +153,21 @@ func TestIntegration(t *testing.T) {
 
 	time.Sleep(10 * time.Second)
 
-	contents = getContents()
-	require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			contents := getContents()
+			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
 
-	require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
-	assert.Contains(t, contents[2], "exited", "expected local server 1 to have exited")
+			require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
+			assert.Contains(t, contents[2], "exited", "expected local server 1 to have exited")
 
-	require.Contains(t, contents[3], "Local server 2", "expected local server 2 to be present")
-	assert.Contains(t, contents[3], "exited", "expected local server 2 to have exited")
+			require.Contains(t, contents[3], "Local server 2", "expected local server 2 to be present")
+			assert.Contains(t, contents[3], "exited", "expected local server 2 to have exited")
+		},
+		time.Minute,
+		time.Second,
+	)
 
 	// TODO:
 	// - Source error
