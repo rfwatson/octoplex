@@ -79,7 +79,7 @@ func TestFetchIngressState(t *testing.T) {
 				})).
 				Return(tc.httpResponse, tc.httpError)
 
-			state, err := fetchIngressState(url, &httpClient)
+			state, err := fetchIngressState(url, StreamKey("live"), &httpClient)
 			if tc.wantErr != nil {
 				require.EqualError(t, err, tc.wantErr.Error())
 			} else {
@@ -141,7 +141,7 @@ func TestFetchTracks(t *testing.T) {
 				})).
 				Return(tc.httpResponse, tc.httpError)
 
-			tracks, err := fetchTracks(url, &httpClient)
+			tracks, err := fetchTracks(url, StreamKey("live"), &httpClient)
 			if tc.wantErr != nil {
 				require.EqualError(t, err, tc.wantErr.Error())
 			} else {

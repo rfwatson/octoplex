@@ -5,6 +5,7 @@ package app_test
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -18,11 +19,27 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 func TestIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
+
+	destServer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        "bluenviron/mediamtx:latest",
+			Env:          map[string]string{"MTX_RTMPADDRESS": ":1936"},
+			ExposedPorts: []string{"1936/tcp"},
+			WaitingFor:   wait.ForListeningPort("1936/tcp"),
+		},
+		Started: true,
+	})
+	testcontainers.CleanupContainer(t, destServer)
+	require.NoError(t, err)
+	destServerPort, err := destServer.MappedPort(ctx, "1936/tcp")
+	require.NoError(t, err)
 
 	logger := testhelpers.NewTestLogger().With("component", "integration")
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv)
@@ -79,18 +96,28 @@ func TestIntegration(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
+		// https://stackoverflow.com/a/60740997/62871
+		if runtime.GOOS != "linux" {
+			panic("TODO: try host.docker.internal or Mac equivalent here")
+		}
+		const destHost = "172.17.0.1"
+
 		err := app.Run(ctx, app.RunParams{
 			Config: config.Config{
-				// We use the mediaserver as the destination server, just because it is
-				// reachable from the docker network via mediaserver:1935.
+				Sources: config.Sources{
+					RTMP: config.RTMPSource{
+						Enabled:   true,
+						StreamKey: "live",
+					},
+				},
 				Destinations: []config.Destination{
 					{
 						Name: "Local server 1",
-						URL:  "rtmp://mediaserver:1935/live/dest1",
+						URL:  fmt.Sprintf("rtmp://%s:%d/live/dest1", destHost, destServerPort.Int()),
 					},
 					{
 						Name: "Local server 2",
-						URL:  "rtmp://mediaserver:1935/live/dest2",
+						URL:  fmt.Sprintf("rtmp://%s:%d/live/dest2", destHost, destServerPort.Int()),
 					},
 				},
 			},
@@ -126,7 +153,6 @@ func TestIntegration(t *testing.T) {
 		t,
 		func(t *assert.CollectT) {
 			contents := getContents()
-			fmt.Println("test")
 			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
 
 			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
@@ -142,7 +168,7 @@ func TestIntegration(t *testing.T) {
 			assert.Contains(t, contents[3], "healthy", "expected local server 2 to be healthy")
 
 		},
-		time.Minute,
+		2*time.Minute,
 		time.Second,
 	)
 
@@ -165,7 +191,7 @@ func TestIntegration(t *testing.T) {
 			require.Contains(t, contents[3], "Local server 2", "expected local server 2 to be present")
 			assert.Contains(t, contents[3], "exited", "expected local server 2 to have exited")
 		},
-		time.Minute,
+		2*time.Minute,
 		time.Second,
 	)
 

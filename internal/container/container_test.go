@@ -55,6 +55,10 @@ func TestClientRunContainer(t *testing.T) {
 		Return(nil)
 	dockerClient.
 		EXPECT().
+		CopyToContainer(mock.Anything, "123", "/", mock.Anything, dockercontainer.CopyToContainerOptions{}).
+		Return(nil)
+	dockerClient.
+		EXPECT().
 		ContainerStart(mock.Anything, "123", dockercontainer.StartOptions{}).
 		Return(nil)
 	dockerClient.
@@ -82,6 +86,18 @@ func TestClientRunContainer(t *testing.T) {
 		ChanSize:        1,
 		ContainerConfig: &dockercontainer.Config{Image: "alpine"},
 		HostConfig:      &dockercontainer.HostConfig{},
+		CopyFileConfigs: []container.CopyFileConfig{
+			{
+				Path:    "/hello",
+				Payload: bytes.NewReader([]byte("world")),
+				Mode:    0755,
+			},
+			{
+				Path:    "/foo/bar",
+				Payload: bytes.NewReader([]byte("baz")),
+				Mode:    0755,
+			},
+		},
 	})
 
 	done := make(chan struct{})

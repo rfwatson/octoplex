@@ -1,6 +1,8 @@
 package container
 
 import (
+	"archive/tar"
+	"bytes"
 	"cmp"
 	"context"
 	"fmt"
@@ -41,6 +43,7 @@ type DockerClient interface {
 	ContainerStart(context.Context, string, container.StartOptions) error
 	ContainerStats(context.Context, string, bool) (container.StatsResponseReader, error)
 	ContainerStop(context.Context, string, container.StopOptions) error
+	CopyToContainer(context.Context, string, string, io.Reader, container.CopyToContainerOptions) error
 	ContainerWait(context.Context, string, container.WaitCondition) (<-chan container.WaitResponse, <-chan error)
 	Events(context.Context, events.ListOptions) (<-chan events.Message, <-chan error)
 	ImagePull(context.Context, string, image.PullOptions) (io.ReadCloser, error)
@@ -137,6 +140,12 @@ type NetworkCountConfig struct {
 	Tx string // the network name to count the Tx bytes
 }
 
+type CopyFileConfig struct {
+	Path    string
+	Payload io.Reader
+	Mode    int64
+}
+
 // RunContainerParams are the parameters for running a container.
 type RunContainerParams struct {
 	Name               string
@@ -145,6 +154,7 @@ type RunContainerParams struct {
 	HostConfig         *container.HostConfig
 	NetworkingConfig   *network.NetworkingConfig
 	NetworkCountConfig NetworkCountConfig
+	CopyFileConfigs    []CopyFileConfig
 }
 
 // RunContainer runs a container with the given parameters.
@@ -202,6 +212,11 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 			return
 		}
 
+		if err = a.copyFilesToContainer(ctx, createResp.ID, params.CopyFileConfigs); err != nil {
+			sendError(fmt.Errorf("copy files to container: %w", err))
+			return
+		}
+
 		if err = a.apiClient.ContainerStart(ctx, createResp.ID, container.StartOptions{}); err != nil {
 			sendError(fmt.Errorf("container start: %w", err))
 			return
@@ -221,6 +236,44 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 	}()
 
 	return containerStateC, errC
+}
+
+func (a *Client) copyFilesToContainer(ctx context.Context, containerID string, fileConfigs []CopyFileConfig) error {
+	if len(fileConfigs) == 0 {
+		return nil
+	}
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+
+	for _, fileConfig := range fileConfigs {
+		payload, err := io.ReadAll(fileConfig.Payload)
+		if err != nil {
+			return fmt.Errorf("read payload: %w", err)
+		}
+
+		hdr := tar.Header{
+			Name: fileConfig.Path,
+			Mode: fileConfig.Mode,
+			Size: int64(len(payload)),
+		}
+		if err := tw.WriteHeader(&hdr); err != nil {
+			return fmt.Errorf("write tar header: %w", err)
+		}
+		if _, err := tw.Write(payload); err != nil {
+			return fmt.Errorf("write tar payload: %w", err)
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		return fmt.Errorf("close tar writer: %w", err)
+	}
+
+	if err := a.apiClient.CopyToContainer(ctx, containerID, "/", &buf, container.CopyToContainerOptions{}); err != nil {
+		return fmt.Errorf("copy to container: %w", err)
+	}
+
+	return nil
 }
 
 type pullProgressDetail struct {

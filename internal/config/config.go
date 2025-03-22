@@ -12,8 +12,20 @@ type LogFile struct {
 	Path    string `yaml:"path"`
 }
 
+// RTMPSource holds the configuration for the RTMP source.
+type RTMPSource struct {
+	Enabled   bool   `yaml:"enabled"`
+	StreamKey string `yaml:"streamkey"`
+}
+
+// Sources holds the configuration for the sources.
+type Sources struct {
+	RTMP RTMPSource `yaml:"rtmp"`
+}
+
 // Config holds the configuration for the application.
 type Config struct {
 	LogFile      LogFile       `yaml:"logfile"`
+	Sources      Sources       `yaml:"sources"`
 	Destinations []Destination `yaml:"destinations"`
 }

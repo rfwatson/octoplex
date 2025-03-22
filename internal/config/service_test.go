@@ -63,6 +63,12 @@ func TestConfigServiceReadConfig(t *testing.T) {
 							Enabled: true,
 							Path:    "test.log",
 						},
+						Sources: config.Sources{
+							RTMP: config.RTMPSource{
+								Enabled:   true,
+								StreamKey: "s3cr3t",
+							},
+						},
 						Destinations: []config.Destination{
 							{
 								Name: "my stream",
