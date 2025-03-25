@@ -737,12 +737,19 @@ func (ui *UI) confirmQuit() {
 }
 
 func (ui *UI) showAbout() {
+	commit := ui.buildInfo.Commit
+	if len(commit) > 8 {
+		commit = commit[:8]
+	}
+
 	ui.showModal(
 		modalGroupAbout,
 		fmt.Sprintf(
-			"%s: live stream multiplexer\n\nv0.0.0 %s (%s)",
+			"%s: live stream multiplexer\n(c) Rob Watson\nhttps://git.netflux.io/rob/octoplex\n\nReleased under AGPL3.\n\nv%s (%s)\nBuilt on %s (%s).",
 			domain.AppName,
-			ui.buildInfo.Version,
+			cmp.Or(ui.buildInfo.Version, "0.0.0-devel"),
+			cmp.Or(commit, "unknown SHA"),
+			cmp.Or(ui.buildInfo.Date, "unknown date"),
 			ui.buildInfo.GoVersion,
 		),
 		[]string{"Ok"},

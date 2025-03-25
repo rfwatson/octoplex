@@ -17,6 +17,15 @@ import (
 	"golang.design/x/clipboard"
 )
 
+var (
+	// version is the version of the application.
+	version string
+	// commit is the commit hash of the application.
+	commit string
+	// date is the date of the build.
+	date string
+)
+
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -86,7 +95,9 @@ func run(ctx context.Context) error {
 			ConfigFilePath:     configService.Path(),
 			BuildInfo: domain.BuildInfo{
 				GoVersion: buildInfo.GoVersion,
-				Version:   buildInfo.Main.Version,
+				Version:   version,
+				Commit:    commit,
+				Date:      date,
 			},
 			Logger: logger,
 		},

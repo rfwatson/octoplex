@@ -25,6 +25,8 @@ func (s *AppState) Clone() AppState {
 type BuildInfo struct {
 	GoVersion string
 	Version   string
+	Commit    string
+	Date      string
 }
 
 // Source represents the source, currently always the mediaserver.
