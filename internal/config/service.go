@@ -1,6 +1,7 @@
 package config
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,9 @@ import (
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"gopkg.in/yaml.v3"
 )
+
+//go:embed data/config.example.yml
+var exampleConfig []byte
 
 // Service provides configuration services.
 type Service struct {
@@ -85,23 +89,16 @@ func (s *Service) readConfig() (cfg Config, _ error) {
 	return cfg, nil
 }
 
-func (s *Service) createConfig() (cfg Config, _ error) {
+func (s *Service) createConfig() (Config, error) {
 	if err := os.MkdirAll(s.appConfigDir, 0744); err != nil {
-		return cfg, fmt.Errorf("mkdir: %w", err)
+		return Config{}, fmt.Errorf("mkdir: %w", err)
 	}
 
-	s.setDefaults(&cfg)
-
-	yamlBytes, err := yaml.Marshal(cfg)
-	if err != nil {
-		return cfg, fmt.Errorf("marshal: %w", err)
+	if err := os.WriteFile(s.Path(), exampleConfig, 0644); err != nil {
+		return Config{}, fmt.Errorf("write file: %w", err)
 	}
 
-	if err = os.WriteFile(s.Path(), yamlBytes, 0644); err != nil {
-		return cfg, fmt.Errorf("write file: %w", err)
-	}
-
-	return cfg, nil
+	return Config{}, nil
 }
 
 func (s *Service) Path() string {

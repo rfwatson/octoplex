@@ -33,16 +33,23 @@ var configMultipleInvalidDestinationURLs []byte
 
 func TestConfigServiceCreateConfig(t *testing.T) {
 	suffix := "read_or_create_" + shortid.New().String()
-	service, err := config.NewService(configDirFunc(suffix))
+	systemConfigDirFunc := buildSystemConfigDirFunc(suffix)
+	systemConfigDir, _ := systemConfigDirFunc()
+
+	service, err := config.NewService(systemConfigDirFunc)
 	require.NoError(t, err)
+
+	t.Cleanup(func() { require.NoError(t, os.RemoveAll(systemConfigDir)) })
 
 	cfg, err := service.ReadOrCreateConfig()
 	require.NoError(t, err)
 	require.Empty(t, cfg.LogFile, "expected no log file")
 
-	p := filepath.Join(configDir(suffix), "config.yaml")
-	_, err = os.Stat(p)
+	p := filepath.Join(systemConfigDir, "octoplex", "config.yaml")
+	cfgBytes, err := os.ReadFile(p)
 	require.NoError(t, err, "config file was not created")
+	// Ensure the example config file is written:
+	assert.Contains(t, string(cfgBytes), "# Octoplex is a live stream multiplexer.")
 }
 
 func TestConfigServiceReadConfig(t *testing.T) {
@@ -114,12 +121,17 @@ func TestConfigServiceReadConfig(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			suffix := "read_or_create_" + shortid.New().String()
-			dir := configDir(suffix)
-			require.NoError(t, os.MkdirAll(dir, 0744))
-			configPath := filepath.Join(dir, "config.yaml")
+			systemConfigDirFunc := buildSystemConfigDirFunc(suffix)
+			systemConfigDir, _ := systemConfigDirFunc()
+			appConfigDir := buildAppConfigDir(suffix)
+
+			require.NoError(t, os.MkdirAll(appConfigDir, 0744))
+			t.Cleanup(func() { require.NoError(t, os.RemoveAll(systemConfigDir)) })
+
+			configPath := filepath.Join(appConfigDir, "config.yaml")
 			require.NoError(t, os.WriteFile(configPath, tc.configBytes, 0644))
 
-			service, err := config.NewService(configDirFunc(suffix))
+			service, err := config.NewService(buildSystemConfigDirFunc(suffix))
 			require.NoError(t, err)
 
 			cfg, err := service.ReadOrCreateConfig()
@@ -134,11 +146,15 @@ func TestConfigServiceReadConfig(t *testing.T) {
 	}
 }
 
-func configDir(suffix string) string {
+// buildAppConfigDir returns a temporary directory which mimics
+// $XDG_CONFIG_HOME/octoplex.
+func buildAppConfigDir(suffix string) string {
 	return filepath.Join(os.TempDir(), "config_test_"+suffix, "octoplex")
 }
 
-func configDirFunc(suffix string) func() (string, error) {
+// buildSystemConfigDirFunc returns a function that creates a temporary
+// directory which mimics $XDG_CONFIG_HOME.
+func buildSystemConfigDirFunc(suffix string) func() (string, error) {
 	return func() (string, error) {
 		return filepath.Join(os.TempDir(), "config_test_"+suffix), nil
 	}
