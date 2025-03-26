@@ -343,7 +343,7 @@ func (a *Client) runContainerLoop(
 				// Check if the container is restarting. If it is not then we don't
 				// want to wait for it again and can return early.
 				ctr, err := a.apiClient.ContainerInspect(ctx, containerID)
-				// Race conidition: the container may already have been removed.
+				// Race condition: the container may already have been removed.
 				if errdefs.IsNotFound(err) {
 					// ignore error but do not restart
 				} else if err != nil {
