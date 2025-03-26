@@ -101,7 +101,7 @@ func Run(ctx context.Context, params RunParams) error {
 				return nil
 			}
 
-			logger.Info("Command received", "cmd", cmd.Name())
+			logger.Debug("Command received", "cmd", cmd.Name())
 			switch c := cmd.(type) {
 			case terminal.CommandStartDestination:
 				mp.StartDestination(c.URL)
@@ -113,9 +113,11 @@ func Run(ctx context.Context, params RunParams) error {
 		case <-uiUpdateT.C:
 			updateUI()
 		case serverState := <-srv.C():
+			logger.Debug("Server state received", "state", serverState)
 			applyServerState(serverState, state)
 			updateUI()
 		case mpState := <-mp.C():
+			logger.Debug("Multiplexer state received", "state", mpState)
 			destErrors := applyMultiplexerState(mpState, state)
 
 			for _, destError := range destErrors {

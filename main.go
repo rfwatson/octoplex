@@ -148,5 +148,9 @@ func buildLogger(cfg config.LogFile) (*slog.Logger, error) {
 		return nil, fmt.Errorf("error opening log file: %w", err)
 	}
 
-	return slog.New(slog.NewTextHandler(fptr, nil)), nil
+	var handlerOpts slog.HandlerOptions
+	if os.Getenv("OCTO_DEBUG") != "" {
+		handlerOpts.Level = slog.LevelDebug
+	}
+	return slog.New(slog.NewTextHandler(fptr, &handlerOpts)), nil
 }
