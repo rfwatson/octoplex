@@ -36,6 +36,7 @@ type UserPermission struct {
 // User represents a user configuration in MediaMTX.
 type User struct {
 	User        string           `yaml:"user,omitempty"`
+	Pass        string           `yaml:"pass,omitempty"`
 	IPs         []string         `yaml:"ips,omitempty"`
 	Permissions []UserPermission `yaml:"permissions,omitempty"`
 }

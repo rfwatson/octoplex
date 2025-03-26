@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -50,6 +51,7 @@ type Actor struct {
 	rtmpPort                  int
 	streamKey                 StreamKey
 	fetchIngressStateInterval time.Duration
+	pass                      string // password for the media server
 	logger                    *slog.Logger
 	httpClient                *http.Client
 
@@ -83,6 +85,7 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 		rtmpPort:                  cmp.Or(params.RTMPPort, defaultRTMPPort),
 		streamKey:                 cmp.Or(params.StreamKey, defaultStreamKey),
 		fetchIngressStateInterval: cmp.Or(params.FetchIngressStateInterval, defaultFetchIngressStateInterval),
+		pass:                      generatePassword(),
 		actorC:                    make(chan action, chanSize),
 		state:                     new(domain.Source),
 		stateC:                    make(chan domain.Source, chanSize),
@@ -101,18 +104,26 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 			LogDestinations: []string{"stdout"},
 			AuthMethod:      "internal",
 			AuthInternalUsers: []User{
-				// TODO: tighten permissions
+				// TODO: TLS
 				{
 					User: "any",
 					IPs:  []string{}, // any IP
 					Permissions: []UserPermission{
 						{Action: "publish"},
+					},
+				},
+				{
+					User: "api",
+					Pass: actor.pass,
+					IPs:  []string{}, // any IP
+					Permissions: []UserPermission{
 						{Action: "read"},
 					},
 				},
 				{
-					User:        "any",
-					IPs:         []string{"127.0.0.1", "::1", "172.17.0.0/16"},
+					User:        "api",
+					Pass:        actor.pass,
+					IPs:         []string{}, // any IP
 					Permissions: []UserPermission{{Action: "api"}},
 				},
 			},
@@ -144,7 +155,7 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 					container.LabelComponent: componentName,
 				},
 				Healthcheck: &typescontainer.HealthConfig{
-					Test:          []string{"CMD", "curl", "-f", "http://localhost:9997/v3/paths/list"},
+					Test:          []string{"CMD", "curl", "-f", actor.pathsURL()},
 					Interval:      time.Second * 10,
 					StartPeriod:   time.Second * 2,
 					StartInterval: time.Second * 2,
@@ -317,18 +328,18 @@ func (s *Actor) rtmpURL() string {
 // the app network.
 func (s *Actor) rtmpInternalURL() string {
 	// Container port, not host port:
-	return fmt.Sprintf("rtmp://mediaserver:1935/%s", s.streamKey)
+	return fmt.Sprintf("rtmp://mediaserver:1935/%s?user=api&pass=%s", s.streamKey, s.pass)
 }
 
 // rtmpConnsURL returns the URL for fetching RTMP connections, accessible from
 // the host.
 func (s *Actor) rtmpConnsURL() string {
-	return fmt.Sprintf("http://localhost:%d/v3/rtmpconns/list", s.apiPort)
+	return fmt.Sprintf("http://api:%s@localhost:%d/v3/rtmpconns/list", s.pass, s.apiPort)
 }
 
 // pathsURL returns the URL for fetching paths, accessible from the host.
 func (s *Actor) pathsURL() string {
-	return fmt.Sprintf("http://localhost:%d/v3/paths/list", s.apiPort)
+	return fmt.Sprintf("http://api:%s@localhost:%d/v3/paths/list", s.pass, s.apiPort)
 }
 
 // shortID returns the first 12 characters of the given container ID.
@@ -337,4 +348,13 @@ func shortID(id string) string {
 		return id
 	}
 	return id[:12]
+}
+
+// generatePassword securely generates a random password suitable for
+// authenticating media server endpoints.
+func generatePassword() string {
+	const lenBytes = 32
+	p := make([]byte, lenBytes)
+	_, _ = rand.Read(p)
+	return fmt.Sprintf("%x", []byte(p))
 }
