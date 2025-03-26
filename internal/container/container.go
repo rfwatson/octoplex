@@ -21,6 +21,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/errdefs"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -338,17 +339,21 @@ func (a *Client) runContainerLoop(
 			respC, errC := a.apiClient.ContainerWait(ctx, containerID, container.WaitConditionNextExit)
 			select {
 			case resp := <-respC:
+				var restarting bool
 				// Check if the container is restarting. If it is not then we don't
 				// want to wait for it again and can return early.
 				ctr, err := a.apiClient.ContainerInspect(ctx, containerID)
-				if err != nil {
+				// Race conidition: the container may already have been removed.
+				if errdefs.IsNotFound(err) {
+					// ignore error but do not restart
+				} else if err != nil {
 					a.logger.Error("Error inspecting container", "err", err, "id", shortID(containerID))
 					containerErrC <- err
 					return
+					// Race condition: the container may have already restarted.
+				} else if ctr.State.Status == domain.ContainerStatusRestarting || ctr.State.Status == domain.ContainerStatusRunning {
+					restarting = true
 				}
-
-				// Race condition: the container may have already restarted.
-				restarting := ctr.State.Status == domain.ContainerStatusRestarting || ctr.State.Status == domain.ContainerStatusRunning
 
 				containerRespC <- containerWaitResponse{WaitResponse: resp, restarting: restarting}
 				if !restarting {
