@@ -27,8 +27,11 @@ archives:
         formats: [zip]
 
 changelog:
+  use: github
   sort: asc
   filters:
     exclude:
       - "^doc:"
       - "^test:"
+      - "^ci:"
+      - typo
