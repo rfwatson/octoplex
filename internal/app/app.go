@@ -53,7 +53,8 @@ func Run(ctx context.Context, params RunParams) error {
 	updateUI()
 
 	// TODO: check for unused networks.
-	if exists, err := containerClient.ContainerRunning(ctx, container.AllContainers()); err != nil {
+	var exists bool
+	if exists, err = containerClient.ContainerRunning(ctx, container.AllContainers()); err != nil {
 		return fmt.Errorf("check existing containers: %w", err)
 	} else if exists {
 		if ui.ShowStartupCheckModal() {
@@ -74,11 +75,14 @@ func Run(ctx context.Context, params RunParams) error {
 		return errors.New("config: sources.rtmp.enabled must be set to true")
 	}
 
-	srv := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
+	srv, err := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
 		StreamKey:       mediaserver.StreamKey(params.Config.Sources.RTMP.StreamKey),
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "mediaserver"),
 	})
+	if err != nil {
+		return fmt.Errorf("start mediaserver: %w", err)
+	}
 	defer srv.Close()
 
 	mp := multiplexer.NewActor(ctx, multiplexer.NewActorParams{

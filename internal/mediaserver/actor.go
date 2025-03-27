@@ -53,7 +53,7 @@ type Actor struct {
 	fetchIngressStateInterval time.Duration
 	pass                      string // password for the media server
 	logger                    *slog.Logger
-	httpClient                *http.Client
+	apiClient                 *http.Client
 
 	// mutable state
 	state *domain.Source
@@ -74,10 +74,26 @@ type StartActorParams struct {
 // StartActor starts a new media server actor.
 //
 // Callers must consume the state channel exposed via [C].
-func StartActor(ctx context.Context, params StartActorParams) *Actor {
-	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
+func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err error) {
 	ctx, cancel := context.WithCancel(ctx)
+	defer func() {
+		// if err is nil, the context should not be cancelled.
+		if err != nil {
+			cancel()
+		}
+	}()
 
+	tlsCert, tlsKey, err := generateTLSCert()
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("generate TLS cert: %w", err)
+	}
+	apiClient, err := buildAPIClient(tlsCert)
+	if err != nil {
+		return nil, fmt.Errorf("build API client: %w", err)
+	}
+
+	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
 	actor := &Actor{
 		ctx:                       ctx,
 		cancel:                    cancel,
@@ -91,7 +107,7 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 		stateC:                    make(chan domain.Source, chanSize),
 		containerClient:           params.ContainerClient,
 		logger:                    params.Logger,
-		httpClient:                &http.Client{Timeout: httpClientTimeout},
+		apiClient:                 apiClient,
 	}
 
 	apiPortSpec := nat.Port(strconv.Itoa(actor.apiPort) + ":9997")
@@ -104,7 +120,6 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 			LogDestinations: []string{"stdout"},
 			AuthMethod:      "internal",
 			AuthInternalUsers: []User{
-				// TODO: TLS
 				{
 					User: "any",
 					IPs:  []string{}, // any IP
@@ -127,16 +142,17 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 					Permissions: []UserPermission{{Action: "api"}},
 				},
 			},
-			API: true,
+			API:           true,
+			APIEncryption: true,
+			APIServerCert: "/etc/tls.crt",
+			APIServerKey:  "/etc/tls.key",
 			Paths: map[string]Path{
-				string(actor.streamKey): {
-					Source: "publisher",
-				},
+				string(actor.streamKey): {Source: "publisher"},
 			},
 		},
 	)
 	if err != nil { // should never happen
-		panic(fmt.Sprintf("failed to marshal config: %v", err))
+		return nil, fmt.Errorf("marshal config: %w", err)
 	}
 
 	containerStateC, errC := params.ContainerClient.RunContainer(
@@ -147,15 +163,13 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 			ContainerConfig: &typescontainer.Config{
 				Image:    imageNameMediaMTX,
 				Hostname: "mediaserver",
-				Env: []string{
-					"MTX_LOGLEVEL=info",
-					"MTX_API=yes",
-				},
-				Labels: map[string]string{
-					container.LabelComponent: componentName,
-				},
+				Labels:   map[string]string{container.LabelComponent: componentName},
+				Env:      []string{"TLS_CERT=" + string(tlsCert)},
 				Healthcheck: &typescontainer.HealthConfig{
-					Test:          []string{"CMD", "curl", "-f", actor.pathsURL()},
+					Test: []string{
+						"CMD-SHELL",
+						`echo "$TLS_CERT" | curl --fail --silent --cacert /dev/stdin ` + actor.pathsURL() + ` || exit 1`,
+					},
 					Interval:      time.Second * 10,
 					StartPeriod:   time.Second * 2,
 					StartInterval: time.Second * 2,
@@ -174,6 +188,16 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 					Payload: bytes.NewReader(cfg),
 					Mode:    0600,
 				},
+				{
+					Path:    "/etc/tls.crt",
+					Payload: bytes.NewReader(tlsCert),
+					Mode:    0600,
+				},
+				{
+					Path:    "/etc/tls.key",
+					Payload: bytes.NewReader(tlsKey),
+					Mode:    0600,
+				},
 			},
 		},
 	)
@@ -183,7 +207,7 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 
 	go actor.actorLoop(containerStateC, errC)
 
-	return actor
+	return actor, nil
 }
 
 // C returns a channel that will receive the current state of the media server.
@@ -260,7 +284,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 
 			sendState()
 		case <-fetchStateT.C:
-			ingressState, err := fetchIngressState(s.rtmpConnsURL(), s.streamKey, s.httpClient)
+			ingressState, err := fetchIngressState(s.rtmpConnsURL(), s.streamKey, s.apiClient)
 			if err != nil {
 				s.logger.Error("Error fetching server state", "err", err)
 				continue
@@ -285,7 +309,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 				continue
 			}
 
-			if tracks, err := fetchTracks(s.pathsURL(), s.streamKey, s.httpClient); err != nil {
+			if tracks, err := fetchTracks(s.pathsURL(), s.streamKey, s.apiClient); err != nil {
 				s.logger.Error("Error fetching tracks", "err", err)
 				resetFetchTracksT(3 * time.Second)
 			} else if len(tracks) == 0 {
@@ -334,12 +358,12 @@ func (s *Actor) rtmpInternalURL() string {
 // rtmpConnsURL returns the URL for fetching RTMP connections, accessible from
 // the host.
 func (s *Actor) rtmpConnsURL() string {
-	return fmt.Sprintf("http://api:%s@localhost:%d/v3/rtmpconns/list", s.pass, s.apiPort)
+	return fmt.Sprintf("https://api:%s@localhost:%d/v3/rtmpconns/list", s.pass, s.apiPort)
 }
 
 // pathsURL returns the URL for fetching paths, accessible from the host.
 func (s *Actor) pathsURL() string {
-	return fmt.Sprintf("http://api:%s@localhost:%d/v3/paths/list", s.pass, s.apiPort)
+	return fmt.Sprintf("https://api:%s@localhost:%d/v3/paths/list", s.pass, s.apiPort)
 }
 
 // shortID returns the first 12 characters of the given container ID.

@@ -1,7 +1,10 @@
 package mediaserver
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +14,35 @@ import (
 type httpClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
+
+func buildAPIClient(certPEM []byte) (*http.Client, error) {
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(certPEM) {
+		return nil, errors.New("failed to add certificate to pool")
+	}
+
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+				VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+					cert, err := x509.ParseCertificate(rawCerts[0])
+					if err != nil {
+						return fmt.Errorf("parse certificate: %w", err)
+					}
+
+					if _, err := cert.Verify(x509.VerifyOptions{Roots: certPool}); err != nil {
+						return fmt.Errorf("TLS verification: %w", err)
+					}
+
+					return nil
+				},
+			},
+		},
+	}, nil
+}
+
+const userAgent = "octoplex-client"
 
 type apiResponse[T any] struct {
 	Items []T `json:"items"`
@@ -37,6 +69,7 @@ func fetchIngressState(apiURL string, streamKey StreamKey, httpClient httpClient
 	if err != nil {
 		return state, fmt.Errorf("new request: %w", err)
 	}
+	req.Header.Set("User-Agent", userAgent)
 
 	httpResp, err := httpClient.Do(req)
 	if err != nil {
@@ -87,6 +120,7 @@ func fetchTracks(apiURL string, streamKey StreamKey, httpClient httpClient) ([]s
 	if err != nil {
 		return nil, fmt.Errorf("new request: %w", err)
 	}
+	req.Header.Set("User-Agent", userAgent)
 
 	httpResp, err := httpClient.Do(req)
 	if err != nil {
