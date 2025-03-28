@@ -1,5 +1,26 @@
 package terminal
 
+// CommandAddDestination adds a destination.
+type CommandAddDestination struct {
+	DestinationName string
+	URL             string
+}
+
+// Name implements the Command interface.
+func (c CommandAddDestination) Name() string {
+	return "add_destination"
+}
+
+// CommandRemoveDestination removes a destination.
+type CommandRemoveDestination struct {
+	URL string
+}
+
+// Name implements the Command interface.
+func (c CommandRemoveDestination) Name() string {
+	return "remove_destination"
+}
+
 // CommandStartDestination starts a destination.
 type CommandStartDestination struct {
 	URL string

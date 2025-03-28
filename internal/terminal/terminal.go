@@ -163,6 +163,8 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	aboutView.SetDirection(tview.FlexRow)
 	aboutView.SetBorder(true)
 	aboutView.SetTitle("Actions")
+	aboutView.AddItem(tview.NewTextView().SetText("[a] Add new destination"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetText("[r] Remove destination"), 1, 0, false)
 	aboutView.AddItem(tview.NewTextView().SetText("[Space] Toggle destination"), 1, 0, false)
 	aboutView.AddItem(tview.NewTextView().SetText("[u] Copy ingress RTMP URL"), 1, 0, false)
 	aboutView.AddItem(tview.NewTextView().SetText("[c] Copy config file path"), 1, 0, false)
@@ -189,7 +191,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 		AddItem(destView, 0, 6, false)
 
 	pages := tview.NewPages()
-	pages.AddPage("main", flex, true, true)
+	pages.AddPage(pageNameMain, flex, true, true)
 
 	app.SetRoot(pages, true)
 	app.SetFocus(destView)
@@ -218,9 +220,26 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	}
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// Special case: allow all keys except Escape to be passed to the add
+		// destination modal.
+		if pageName, _ := pages.GetFrontPage(); pageName == pageNameAddDestination {
+			if event.Key() == tcell.KeyEscape {
+				ui.closeDestinationForm()
+				return nil
+			}
+
+			return event
+		}
+
 		switch event.Key() {
 		case tcell.KeyRune:
 			switch event.Rune() {
+			case 'a', 'A':
+				ui.addDestination()
+				return nil
+			case 'r', 'R':
+				ui.removeDestination()
+				return nil
 			case ' ':
 				ui.toggleDestination()
 			case 'u', 'U':
@@ -287,7 +306,7 @@ func (ui *UI) ShowStartupCheckModal() bool {
 
 	ui.app.QueueUpdateDraw(func() {
 		ui.showModal(
-			modalGroupStartupCheck,
+			pageNameModalStartupCheck,
 			"Another instance of Octoplex may already be running. Pressing continue will close that instance. Continue?",
 			[]string{"Continue", "Exit"},
 			func(buttonIndex int, _ string) {
@@ -309,7 +328,7 @@ func (ui *UI) ShowDestinationErrorModal(name string, err error) {
 
 	ui.app.QueueUpdateDraw(func() {
 		ui.showModal(
-			modalGroupStartupCheck,
+			pageNameModalStartupCheck,
 			fmt.Sprintf(
 				"Streaming to %s failed:\n\n%s",
 				cmp.Or(name, "this destination"),
@@ -395,7 +414,9 @@ func (ui *UI) updatePullProgress(state domain.AppState) {
 	}
 
 	if len(pullingContainers) == 0 {
-		ui.hideModal(modalGroupPullProgress)
+		ui.app.QueueUpdateDraw(func() {
+			ui.hideModal(pageNameModalPullProgress)
+		})
 		return
 	}
 
@@ -410,7 +431,7 @@ func (ui *UI) updatePullProgress(state domain.AppState) {
 
 func (ui *UI) updateProgressModal(container domain.Container) {
 	ui.app.QueueUpdateDraw(func() {
-		modalName := "modal-" + string(modalGroupPullProgress)
+		modalName := string(pageNameModalPullProgress)
 
 		var status string
 		// Avoid showing the long Docker pull status in the modal content.
@@ -434,21 +455,23 @@ func (ui *UI) updateProgressModal(container domain.Container) {
 	})
 }
 
-// modalGroup represents a specific modal of which only one may be shown
-// simultaneously.
-type modalGroup string
-
+// page names represent a specific page in the terminal user interface.
+//
+// Modals should generally have a unique name, which allows them to be stacked
+// on top of other modals.
 const (
-	modalGroupAbout        modalGroup = "about"
-	modalGroupQuit         modalGroup = "quit"
-	modalGroupStartupCheck modalGroup = "startup-check"
-	modalGroupClipboard    modalGroup = "clipboard"
-	modalGroupPullProgress modalGroup = "pull-progress"
+	pageNameMain                   = "main"
+	pageNameAddDestination         = "add-destination"
+	pageNameModalAbout             = "modal-about"
+	pageNameModalQuit              = "modal-quit"
+	pageNameModalStartupCheck      = "modal-startup-check"
+	pageNameModalClipboard         = "modal-clipboard"
+	pageNameModalPullProgress      = "modal-pull-progress"
+	pageNameModalRemoveDestination = "modal-remove-destination"
 )
 
-func (ui *UI) showModal(group modalGroup, text string, buttons []string, doneFunc func(int, string)) {
-	modalName := "modal-" + string(group)
-	if ui.pages.HasPage(modalName) {
+func (ui *UI) showModal(pageName string, text string, buttons []string, doneFunc func(int, string)) {
+	if ui.pages.HasPage(pageName) {
 		return
 	}
 
@@ -458,9 +481,9 @@ func (ui *UI) showModal(group modalGroup, text string, buttons []string, doneFun
 		SetBackgroundColor(tcell.ColorBlack).
 		SetTextColor(tcell.ColorWhite).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			ui.pages.RemovePage(modalName)
+			ui.pages.RemovePage(pageName)
 
-			if ui.pages.GetPageCount() == 1 {
+			if name, _ := ui.pages.GetFrontPage(); name == pageNameMain {
 				ui.app.SetFocus(ui.destView)
 			}
 
@@ -470,16 +493,15 @@ func (ui *UI) showModal(group modalGroup, text string, buttons []string, doneFun
 		}).
 		SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
-	ui.pages.AddPage(modalName, modal, true, true)
+	ui.pages.AddPage(pageName, modal, true, true)
 }
 
-func (ui *UI) hideModal(group modalGroup) {
-	modalName := "modal-" + string(group)
-	if !ui.pages.HasPage(modalName) {
+func (ui *UI) hideModal(pageName string) {
+	if !ui.pages.HasPage(pageName) {
 		return
 	}
 
-	ui.pages.RemovePage(modalName)
+	ui.pages.RemovePage(pageName)
 	ui.app.SetFocus(ui.destView)
 }
 
@@ -637,6 +659,83 @@ func (ui *UI) Close() {
 	ui.app.Stop()
 }
 
+func (ui *UI) addDestination() {
+	// TODO: check for existing
+	const (
+		inputLen        = 60
+		inputLabelName  = "Name"
+		inputLabelURL   = "RTMP URL"
+		formInnerWidth  = inputLen + 8 + 1 // inputLen + length of longest label + one space
+		formInnerHeight = 7                // line count from first input field to last button
+		formWidth       = formInnerWidth + 4
+		formHeight      = formInnerHeight + 2
+	)
+
+	var currWidth, currHeight int
+	if name, frontPage := ui.pages.GetFrontPage(); name == pageNameMain {
+		_, _, currWidth, currHeight = frontPage.GetRect()
+	} else {
+		return
+	}
+
+	form := tview.NewForm()
+	form.
+		AddInputField(inputLabelName, "My stream", inputLen, nil, nil).
+		AddInputField(inputLabelURL, "rtmp://", inputLen, nil, nil).
+		AddButton("Add", func() {
+			ui.commandCh <- CommandAddDestination{
+				DestinationName: form.GetFormItemByLabel(inputLabelName).(*tview.InputField).GetText(),
+				URL:             form.GetFormItemByLabel(inputLabelURL).(*tview.InputField).GetText(),
+			}
+			ui.closeDestinationForm()
+		}).
+		AddButton("Cancel", func() {
+			ui.closeDestinationForm()
+		}).
+		SetFieldBackgroundColor(tcell.ColorDarkSlateGrey).
+		SetBorder(true).
+		SetTitle("Add a new destination").
+		SetTitleAlign(tview.AlignLeft).
+		SetRect((currWidth-formWidth)/2, (currHeight-formHeight)/2, formWidth, formHeight)
+
+	ui.pages.AddPage(pageNameAddDestination, form, false, true)
+}
+
+func (ui *UI) removeDestination() {
+	const urlCol = 1
+	row, _ := ui.destView.GetSelection()
+	url, ok := ui.destView.GetCell(row, urlCol).GetReference().(string)
+	if !ok {
+		return
+	}
+
+	var started bool
+	ui.mu.Lock()
+	started = ui.urlsToStartState[url] != startStateNotStarted
+	ui.mu.Unlock()
+
+	text := "Are you sure you want to remove the destination?"
+	if started {
+		text += "\n\nThis will stop the current live stream for this destination."
+	}
+
+	ui.showModal(
+		pageNameModalRemoveDestination,
+		text,
+		[]string{"Remove", "Cancel"},
+		func(buttonIndex int, _ string) {
+			if buttonIndex == 0 {
+				ui.commandCh <- CommandRemoveDestination{URL: url}
+			}
+		},
+	)
+}
+
+func (ui *UI) closeDestinationForm() {
+	ui.pages.RemovePage(pageNameAddDestination)
+	ui.app.SetFocus(ui.destView)
+}
+
 func (ui *UI) toggleDestination() {
 	const urlCol = 1
 	row, _ := ui.destView.GetSelection()
@@ -685,7 +784,7 @@ func (ui *UI) copySourceURLToClipboard(clipboardAvailable bool) {
 	}
 
 	ui.showModal(
-		modalGroupClipboard,
+		pageNameModalClipboard,
 		text,
 		[]string{"Ok"},
 		nil,
@@ -706,7 +805,7 @@ func (ui *UI) copyConfigFilePathToClipboard(clipboardAvailable bool, configFileP
 	}
 
 	ui.showModal(
-		modalGroupClipboard,
+		pageNameModalClipboard,
 		text,
 		[]string{"Ok"},
 		nil,
@@ -724,7 +823,7 @@ func (ui *UI) confirmQuit() {
 	}
 
 	ui.showModal(
-		modalGroupQuit,
+		pageNameModalQuit,
 		"Are you sure you want to quit?",
 		[]string{"Quit", "Cancel"},
 		func(buttonIndex int, _ string) {
@@ -743,7 +842,7 @@ func (ui *UI) showAbout() {
 	}
 
 	ui.showModal(
-		modalGroupAbout,
+		pageNameModalAbout,
 		fmt.Sprintf(
 			"%s: live stream multiplexer\n(c) Rob Watson\nhttps://git.netflux.io/rob/octoplex\n\nReleased under AGPL3.\n\nv%s (%s)\nBuilt on %s (%s).",
 			domain.AppName,
