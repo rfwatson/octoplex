@@ -85,7 +85,6 @@ func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err err
 
 	tlsCert, tlsKey, err := generateTLSCert()
 	if err != nil {
-		cancel()
 		return nil, fmt.Errorf("generate TLS cert: %w", err)
 	}
 	apiClient, err := buildAPIClient(tlsCert)
@@ -116,7 +115,7 @@ func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err err
 
 	cfg, err := yaml.Marshal(
 		Config{
-			LogLevel:        "debug",
+			LogLevel:        "info",
 			LogDestinations: []string{"stdout"},
 			AuthMethod:      "internal",
 			AuthInternalUsers: []User{
