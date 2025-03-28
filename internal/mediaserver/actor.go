@@ -164,11 +164,14 @@ func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err err
 				Image:    imageNameMediaMTX,
 				Hostname: "mediaserver",
 				Labels:   map[string]string{container.LabelComponent: componentName},
-				Env:      []string{"TLS_CERT=" + string(tlsCert)},
 				Healthcheck: &typescontainer.HealthConfig{
 					Test: []string{
-						"CMD-SHELL",
-						`echo "$TLS_CERT" | curl --fail --silent --cacert /dev/stdin ` + actor.pathsURL() + ` || exit 1`,
+						"CMD",
+						"curl",
+						"--fail",
+						"--silent",
+						"--cacert", "/etc/tls.crt",
+						actor.pathsURL(),
 					},
 					Interval:      time.Second * 10,
 					StartPeriod:   time.Second * 2,
