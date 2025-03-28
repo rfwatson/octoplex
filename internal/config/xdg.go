@@ -28,7 +28,7 @@ func createAppStateDir() (string, error) {
 	var dir string
 	switch runtime.GOOS {
 	case "darwin":
-		dir = filepath.Join(userHomeDir, "/Library", "Caches", domain.AppName)
+		dir = filepath.Join(userHomeDir, "Library", "Caches", domain.AppName)
 	case "windows":
 		// TODO: Windows support
 		return "", errors.New("not implemented")

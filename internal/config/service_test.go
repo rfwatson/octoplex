@@ -31,14 +31,26 @@ var configInvalidDestinationURL []byte
 //go:embed testdata/multiple-invalid-destination-urls.yml
 var configMultipleInvalidDestinationURLs []byte
 
+func TestConfigServiceCurrent(t *testing.T) {
+	suffix := "current_" + shortid.New().String()
+	systemConfigDirFunc := buildSystemConfigDirFunc(suffix)
+	systemConfigDir, _ := systemConfigDirFunc()
+
+	service, err := config.NewService(systemConfigDirFunc, 1)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, os.RemoveAll(systemConfigDir)) })
+
+	// Ensure defaults are set:
+	assert.True(t, service.Current().Sources.RTMP.Enabled)
+}
+
 func TestConfigServiceCreateConfig(t *testing.T) {
 	suffix := "read_or_create_" + shortid.New().String()
 	systemConfigDirFunc := buildSystemConfigDirFunc(suffix)
 	systemConfigDir, _ := systemConfigDirFunc()
 
-	service, err := config.NewService(systemConfigDirFunc)
+	service, err := config.NewService(systemConfigDirFunc, 1)
 	require.NoError(t, err)
-
 	t.Cleanup(func() { require.NoError(t, os.RemoveAll(systemConfigDir)) })
 
 	cfg, err := service.ReadOrCreateConfig()
@@ -131,7 +143,7 @@ func TestConfigServiceReadConfig(t *testing.T) {
 			configPath := filepath.Join(appConfigDir, "config.yaml")
 			require.NoError(t, os.WriteFile(configPath, tc.configBytes, 0644))
 
-			service, err := config.NewService(buildSystemConfigDirFunc(suffix))
+			service, err := config.NewService(buildSystemConfigDirFunc(suffix), 1)
 			require.NoError(t, err)
 
 			cfg, err := service.ReadOrCreateConfig()
@@ -144,6 +156,25 @@ func TestConfigServiceReadConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfigServiceSetConfig(t *testing.T) {
+	suffix := "set_config_" + shortid.New().String()
+	systemConfigDirFunc := buildSystemConfigDirFunc(suffix)
+	systemConfigDir, _ := systemConfigDirFunc()
+
+	service, err := config.NewService(systemConfigDirFunc, 1)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, os.RemoveAll(systemConfigDir)) })
+
+	cfg := config.Config{LogFile: config.LogFile{Enabled: true, Path: "test.log"}}
+	require.NoError(t, service.SetConfig(cfg))
+
+	cfg, err = service.ReadOrCreateConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, "test.log", cfg.LogFile.Path)
+	assert.True(t, cfg.LogFile.Enabled)
 }
 
 // buildAppConfigDir returns a temporary directory which mimics

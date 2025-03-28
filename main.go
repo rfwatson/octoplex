@@ -89,7 +89,7 @@ func run(ctx context.Context) error {
 	return app.Run(
 		ctx,
 		app.RunParams{
-			Config:             cfg,
+			ConfigService:      configService,
 			DockerClient:       dockerClient,
 			ClipboardAvailable: clipboardAvailable,
 			ConfigFilePath:     configService.Path(),

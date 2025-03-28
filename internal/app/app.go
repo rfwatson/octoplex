@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/config"
@@ -17,7 +18,7 @@ import (
 
 // RunParams holds the parameters for running the application.
 type RunParams struct {
-	Config             config.Config
+	ConfigService      *config.Service
 	DockerClient       container.DockerClient
 	Screen             *terminal.Screen // Screen may be nil.
 	ClipboardAvailable bool
@@ -28,9 +29,15 @@ type RunParams struct {
 
 // Run starts the application, and blocks until it exits.
 func Run(ctx context.Context, params RunParams) error {
-	state := newStateFromRunParams(params)
-	logger := params.Logger
+	// cfg is the current configuration of the application, as reflected in the
+	// config file.
+	cfg := params.ConfigService.Current()
 
+	// state is the current state of the application, as reflected in the UI.
+	state := new(domain.AppState)
+	applyConfig(cfg, state)
+
+	logger := params.Logger
 	ui, err := terminal.StartUI(ctx, terminal.StartParams{
 		Screen:             params.Screen,
 		ClipboardAvailable: params.ClipboardAvailable,
@@ -52,7 +59,6 @@ func Run(ctx context.Context, params RunParams) error {
 	updateUI := func() { ui.SetState(*state) }
 	updateUI()
 
-	// TODO: check for unused networks.
 	var exists bool
 	if exists, err = containerClient.ContainerRunning(ctx, container.AllContainers()); err != nil {
 		return fmt.Errorf("check existing containers: %w", err)
@@ -71,12 +77,12 @@ func Run(ctx context.Context, params RunParams) error {
 	ui.AllowQuit()
 
 	// While RTMP is the only source, it doesn't make sense to disable it.
-	if !params.Config.Sources.RTMP.Enabled {
+	if !cfg.Sources.RTMP.Enabled {
 		return errors.New("config: sources.rtmp.enabled must be set to true")
 	}
 
 	srv, err := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
-		StreamKey:       mediaserver.StreamKey(params.Config.Sources.RTMP.StreamKey),
+		StreamKey:       mediaserver.StreamKey(cfg.Sources.RTMP.StreamKey),
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "mediaserver"),
 	})
@@ -98,6 +104,9 @@ func Run(ctx context.Context, params RunParams) error {
 
 	for {
 		select {
+		case cfg = <-params.ConfigService.C():
+			applyConfig(cfg, state)
+			updateUI()
 		case cmd, ok := <-ui.C():
 			if !ok {
 				// TODO: keep UI open until all containers have closed
@@ -107,6 +116,24 @@ func Run(ctx context.Context, params RunParams) error {
 
 			logger.Debug("Command received", "cmd", cmd.Name())
 			switch c := cmd.(type) {
+			case terminal.CommandAddDestination:
+				cfg.Destinations = append(cfg.Destinations, config.Destination{
+					Name: c.DestinationName,
+					URL:  c.URL,
+				})
+				if err := params.ConfigService.SetConfig(cfg); err != nil {
+					// TODO: error handling
+					logger.Error("Failed to set config", "err", err)
+				}
+			case terminal.CommandRemoveDestination:
+				mp.StopDestination(c.URL) // no-op if not live
+				cfg.Destinations = slices.DeleteFunc(cfg.Destinations, func(dest config.Destination) bool {
+					return dest.URL == c.URL
+				})
+				if err := params.ConfigService.SetConfig(cfg); err != nil {
+					// TODO: error handling
+					logger.Error("Failed to set config", "err", err)
+				}
 			case terminal.CommandStartDestination:
 				mp.StartDestination(c.URL)
 			case terminal.CommandStopDestination:
@@ -183,17 +210,31 @@ func handleDestError(destError destinationError, mp *multiplexer.Actor, ui *term
 	mp.StopDestination(destError.url)
 }
 
-// newStateFromRunParams creates a new app state from the run parameters.
-func newStateFromRunParams(params RunParams) *domain.AppState {
-	var state domain.AppState
+// applyConfig applies the config to the app state. For now we only set the
+// destinations.
+func applyConfig(cfg config.Config, appState *domain.AppState) {
+	appState.Destinations = resolveDestinations(appState.Destinations, cfg.Destinations)
+}
 
-	state.Destinations = make([]domain.Destination, 0, len(params.Config.Destinations))
-	for _, dest := range params.Config.Destinations {
-		state.Destinations = append(state.Destinations, domain.Destination{
-			Name: dest.Name,
-			URL:  dest.URL,
+// resolveDestinations merges the current destinations with newly configured
+// destinations.
+func resolveDestinations(destinations []domain.Destination, inDestinations []config.Destination) []domain.Destination {
+	destinations = slices.DeleteFunc(destinations, func(dest domain.Destination) bool {
+		return !slices.ContainsFunc(inDestinations, func(inDest config.Destination) bool {
+			return inDest.URL == dest.URL
+		})
+	})
+
+	for i, inDest := range inDestinations {
+		if i < len(destinations) && destinations[i].URL == inDest.URL {
+			continue
+		}
+
+		destinations = slices.Insert(destinations, i, domain.Destination{
+			Name: inDest.Name,
+			URL:  inDest.URL,
 		})
 	}
 
-	return &state
+	return destinations[:len(inDestinations)]
 }
