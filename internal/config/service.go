@@ -96,6 +96,10 @@ func (s *Service) ReadOrCreateConfig() (cfg Config, _ error) {
 // SetConfig sets the configuration to the given value and writes it to the
 // file.
 func (s *Service) SetConfig(cfg Config) error {
+	if err := validate(cfg); err != nil {
+		return fmt.Errorf("validate: %w", err)
+	}
+
 	cfgBytes, err := yaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
@@ -176,12 +180,23 @@ func (s *Service) setDefaults(cfg *Config) {
 	}
 }
 
+// TODO: validate URL format
 func validate(cfg Config) error {
 	var err error
+
+	urlCounts := make(map[string]int)
 
 	for _, dest := range cfg.Destinations {
 		if !strings.HasPrefix(dest.URL, "rtmp://") {
 			err = errors.Join(err, fmt.Errorf("destination URL must start with rtmp://"))
+		}
+
+		urlCounts[dest.URL]++
+	}
+
+	for url, count := range urlCounts {
+		if count > 1 {
+			err = errors.Join(err, fmt.Errorf("duplicate destination URL: %s", url))
 		}
 	}
 

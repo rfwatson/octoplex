@@ -117,22 +117,27 @@ func Run(ctx context.Context, params RunParams) error {
 			logger.Debug("Command received", "cmd", cmd.Name())
 			switch c := cmd.(type) {
 			case terminal.CommandAddDestination:
-				cfg.Destinations = append(cfg.Destinations, config.Destination{
+				newCfg := cfg
+				newCfg.Destinations = append(newCfg.Destinations, config.Destination{
 					Name: c.DestinationName,
 					URL:  c.URL,
 				})
-				if err := params.ConfigService.SetConfig(cfg); err != nil {
-					// TODO: error handling
-					logger.Error("Failed to set config", "err", err)
+				if err := params.ConfigService.SetConfig(newCfg); err != nil {
+					logger.Error("Config update failed", "err", err)
+					ui.ConfigUpdateFailed(err)
+					continue
 				}
+				ui.DestinationAdded()
 			case terminal.CommandRemoveDestination:
 				mp.StopDestination(c.URL) // no-op if not live
-				cfg.Destinations = slices.DeleteFunc(cfg.Destinations, func(dest config.Destination) bool {
+				newCfg := cfg
+				newCfg.Destinations = slices.DeleteFunc(newCfg.Destinations, func(dest config.Destination) bool {
 					return dest.URL == c.URL
 				})
-				if err := params.ConfigService.SetConfig(cfg); err != nil {
-					// TODO: error handling
-					logger.Error("Failed to set config", "err", err)
+				if err := params.ConfigService.SetConfig(newCfg); err != nil {
+					logger.Error("Config update failed", "err", err)
+					ui.ConfigUpdateFailed(err)
+					continue
 				}
 			case terminal.CommandStartDestination:
 				mp.StartDestination(c.URL)

@@ -222,9 +222,11 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// Special case: allow all keys except Escape to be passed to the add
 		// destination modal.
+		//
+		// TODO: catch Ctrl-c
 		if pageName, _ := pages.GetFrontPage(); pageName == pageNameAddDestination {
 			if event.Key() == tcell.KeyEscape {
-				ui.closeDestinationForm()
+				ui.closeAddDestinationForm()
 				return nil
 			}
 
@@ -468,6 +470,7 @@ const (
 	pageNameModalClipboard         = "modal-clipboard"
 	pageNameModalPullProgress      = "modal-pull-progress"
 	pageNameModalRemoveDestination = "modal-remove-destination"
+	pageNameConfigUpdateFailed     = "modal-config-update-failed"
 )
 
 func (ui *UI) showModal(pageName string, text string, buttons []string, doneFunc func(int, string)) {
@@ -659,8 +662,24 @@ func (ui *UI) Close() {
 	ui.app.Stop()
 }
 
+func (ui *UI) ConfigUpdateFailed(err error) {
+	ui.app.QueueUpdateDraw(func() {
+		ui.showModal(
+			pageNameConfigUpdateFailed,
+			"Configuration update failed:\n\n"+err.Error(),
+			[]string{"Ok"},
+			func(int, string) {
+				pageName, frontPage := ui.pages.GetFrontPage()
+				if pageName != pageNameAddDestination {
+					ui.logger.Warn("Unexpected page when configuration form closed", "page", pageName)
+				}
+				ui.app.SetFocus(frontPage)
+			},
+		)
+	})
+}
+
 func (ui *UI) addDestination() {
-	// TODO: check for existing
 	const (
 		inputLen        = 60
 		inputLabelName  = "Name"
@@ -687,11 +706,8 @@ func (ui *UI) addDestination() {
 				DestinationName: form.GetFormItemByLabel(inputLabelName).(*tview.InputField).GetText(),
 				URL:             form.GetFormItemByLabel(inputLabelURL).(*tview.InputField).GetText(),
 			}
-			ui.closeDestinationForm()
 		}).
-		AddButton("Cancel", func() {
-			ui.closeDestinationForm()
-		}).
+		AddButton("Cancel", func() { ui.closeAddDestinationForm() }).
 		SetFieldBackgroundColor(tcell.ColorDarkSlateGrey).
 		SetBorder(true).
 		SetTitle("Add a new destination").
@@ -731,7 +747,13 @@ func (ui *UI) removeDestination() {
 	)
 }
 
-func (ui *UI) closeDestinationForm() {
+func (ui *UI) DestinationAdded() {
+	ui.app.QueueUpdateDraw(func() {
+		ui.closeAddDestinationForm()
+	})
+}
+
+func (ui *UI) closeAddDestinationForm() {
 	ui.pages.RemovePage(pageNameAddDestination)
 	ui.app.SetFocus(ui.destView)
 }

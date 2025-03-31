@@ -33,7 +33,7 @@ func TestHandleStats(t *testing.T) {
 		Return(dockercontainer.StatsResponseReader{Body: pr}, nil)
 
 	networkCountConfig := NetworkCountConfig{Rx: "eth0", Tx: "eth1"}
-	logger := testhelpers.NewTestLogger()
+	logger := testhelpers.NewTestLogger(t)
 	ch := make(chan stats)
 
 	go func() {
@@ -79,7 +79,7 @@ func TestHandleStatsWithContainerRestart(t *testing.T) {
 		Return(dockercontainer.StatsResponseReader{Body: pr}, nil)
 
 	networkCountConfig := NetworkCountConfig{Rx: "eth1", Tx: "eth0"}
-	logger := testhelpers.NewTestLogger()
+	logger := testhelpers.NewTestLogger(t)
 	ch := make(chan stats)
 
 	go func() {

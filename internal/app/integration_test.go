@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -43,7 +44,7 @@ func TestIntegration(t *testing.T) {
 	destServerPort, err := destServer.MappedPort(ctx, "1936/tcp")
 	require.NoError(t, err)
 
-	logger := testhelpers.NewTestLogger().With("component", "integration")
+	logger := testhelpers.NewTestLogger(t).With("component", "integration")
 	logger.Info("Initialised logger", "debug_level", logger.Enabled(ctx, slog.LevelDebug), "runner_debug", os.Getenv("RUNNER_DEBUG"))
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv)
 	require.NoError(t, err)
@@ -240,6 +241,144 @@ func TestIntegration(t *testing.T) {
 	<-done
 }
 
+func TestIntegrationDestinationValidations(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
+
+	logger := testhelpers.NewTestLogger(t).With("component", "integration")
+	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv)
+	require.NoError(t, err)
+
+	screen, screenCaptureC, getContents := setupSimulationScreen(t)
+
+	configService := setupConfigService(t, config.Config{
+		Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true, StreamKey: "live"}},
+	})
+
+	done := make(chan struct{})
+	go func() {
+		err := app.Run(ctx, app.RunParams{
+			ConfigService: configService,
+			DockerClient:  dockerClient,
+			Screen: &terminal.Screen{
+				Screen:   screen,
+				Width:    160,
+				Height:   25,
+				CaptureC: screenCaptureC,
+			},
+			ClipboardAvailable: false,
+			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
+			Logger:             logger,
+		})
+		require.NoError(t, err)
+
+		done <- struct{}{}
+	}()
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			contents := getContents()
+			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+
+			assert.Contains(t, contents[2], "Status   ready", "expected mediaserver status to be ready")
+		},
+		2*time.Minute,
+		time.Second,
+		"expected the mediaserver to start",
+	)
+	printScreen(getContents, "After starting the mediaserver")
+
+	sendKey(screen, tcell.KeyRune, 'a')
+	sendKey(screen, tcell.KeyTab, ' ')
+	sendBackspaces(screen, 10)
+	sendKey(screen, tcell.KeyTab, ' ')
+	sendKey(screen, tcell.KeyEnter, ' ')
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			contents := getContents()
+
+			assert.True(t, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
+			assert.True(t, contentsIncludes(contents, "validate: destination URL must start with"), "expected to see config update error")
+		},
+		10*time.Second,
+		time.Second,
+		"expected a validation error for an empty URL",
+	)
+	printScreen(getContents, "After entering an empty destination URL")
+
+	sendKey(screen, tcell.KeyEnter, ' ')
+	sendKey(screen, tcell.KeyBacktab, ' ')
+	sendKeys(screen, "nope")
+	sendKey(screen, tcell.KeyTab, ' ')
+	sendKey(screen, tcell.KeyEnter, ' ')
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			contents := getContents()
+
+			assert.True(t, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
+			assert.True(t, contentsIncludes(contents, "validate: destination URL must start with"), "expected to see config update error")
+		},
+		10*time.Second,
+		time.Second,
+		"expected a validation error for an invalid URL",
+	)
+	printScreen(getContents, "After entering an invalid destination URL")
+
+	sendKey(screen, tcell.KeyEnter, ' ')
+	sendKey(screen, tcell.KeyBacktab, ' ')
+	sendBackspaces(screen, len("nope"))
+	sendKeys(screen, "rtmp://rtmp.youtube.com:1935/live")
+	sendKey(screen, tcell.KeyTab, ' ')
+	sendKey(screen, tcell.KeyEnter, ' ')
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			contents := getContents()
+			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+
+			require.Contains(t, contents[2], "My stream", "expected new destination to be present")
+			assert.Contains(t, contents[2], "off-air", "expected new destination to be off-air")
+		},
+		10*time.Second,
+		time.Second,
+		"expected to add the destination",
+	)
+	printScreen(getContents, "After adding the destination")
+
+	sendKey(screen, tcell.KeyRune, 'a')
+	sendKey(screen, tcell.KeyTab, ' ')
+	sendBackspaces(screen, 10)
+	sendKeys(screen, "rtmp://rtmp.youtube.com:1935/live")
+	sendKey(screen, tcell.KeyTab, ' ')
+	sendKey(screen, tcell.KeyEnter, ' ')
+
+	// Start streaming a test video to the app:
+	testhelpers.StreamFLV(t, "rtmp://localhost:1935/live")
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			contents := getContents()
+
+			assert.True(t, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
+			assert.True(t, contentsIncludes(contents, "validate: duplicate destination URL: rtmp://"), "expected to see config update error")
+		},
+		10*time.Second,
+		time.Second,
+		"expected a validation error for a duplicate URL",
+	)
+	printScreen(getContents, "After entering a duplicate destination URL")
+	cancel()
+
+	<-done
+}
+
 func setupSimulationScreen(t *testing.T) (tcell.SimulationScreen, chan<- terminal.ScreenCapture, func() []string) {
 	// Fetching the screen contents is tricky at this level of the test pyramid,
 	// because we need to:
@@ -299,6 +438,16 @@ func setupSimulationScreen(t *testing.T) (tcell.SimulationScreen, chan<- termina
 	return screen, screenCaptureC, getContents
 }
 
+func contentsIncludes(contents []string, search string) bool {
+	for _, line := range contents {
+		if strings.Contains(line, search) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func setupConfigService(t *testing.T, cfg config.Config) *config.Service {
 	tmpDir, err := os.MkdirTemp("", "octoplex_"+t.Name())
 	require.NoError(t, err)
@@ -321,6 +470,12 @@ func sendKey(screen tcell.SimulationScreen, key tcell.Key, ch rune) {
 	screen.InjectKey(key, ch, tcell.ModNone)
 	time.Sleep(50 * time.Millisecond)
 }
+
+func sendKeyShift(screen tcell.SimulationScreen, key tcell.Key, ch rune) {
+	screen.InjectKey(key, ch, tcell.ModShift)
+	time.Sleep(50 * time.Millisecond)
+}
+
 func sendKeys(screen tcell.SimulationScreen, keys string) {
 	screen.InjectKeyBytes([]byte(keys))
 	time.Sleep(500 * time.Millisecond)

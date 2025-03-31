@@ -22,7 +22,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	logger := testhelpers.NewTestLogger()
+	logger := testhelpers.NewTestLogger(t)
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	require.NoError(t, err)
 	containerName := "octoplex-test-" + shortid.New().String()
@@ -72,7 +72,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	logger := testhelpers.NewTestLogger()
+	logger := testhelpers.NewTestLogger(t)
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	require.NoError(t, err)
 	component := "test-remove-containers"
@@ -171,7 +171,7 @@ func TestContainerRestart(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	logger := testhelpers.NewTestLogger()
+	logger := testhelpers.NewTestLogger(t)
 	apiClient, err := client.NewClientWithOpts(client.FromEnv)
 	require.NoError(t, err)
 	containerName := "octoplex-test-" + shortid.New().String()

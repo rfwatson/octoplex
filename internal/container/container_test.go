@@ -22,7 +22,7 @@ import (
 )
 
 func TestClientRunContainer(t *testing.T) {
-	logger := testhelpers.NewTestLogger()
+	logger := testhelpers.NewTestLogger(t)
 
 	// channels returned by Docker's ContainerWait:
 	containerWaitC := make(chan dockercontainer.WaitResponse)
@@ -128,7 +128,7 @@ func TestClientRunContainer(t *testing.T) {
 }
 
 func TestClientRunContainerErrorStartingContainer(t *testing.T) {
-	logger := testhelpers.NewTestLogger()
+	logger := testhelpers.NewTestLogger(t)
 
 	var dockerClient mocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
@@ -174,7 +174,7 @@ func TestClientRunContainerErrorStartingContainer(t *testing.T) {
 }
 
 func TestClientClose(t *testing.T) {
-	logger := testhelpers.NewTestLogger()
+	logger := testhelpers.NewTestLogger(t)
 
 	var dockerClient mocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
@@ -213,7 +213,7 @@ func TestClientClose(t *testing.T) {
 }
 
 func TestRemoveUnusedNetworks(t *testing.T) {
-	logger := testhelpers.NewTestLogger()
+	logger := testhelpers.NewTestLogger(t)
 
 	var dockerClient mocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
