@@ -28,7 +28,6 @@ archives:
 
 changelog:
   use: github
-  sort: asc
   filters:
     exclude:
       - "^doc:"
