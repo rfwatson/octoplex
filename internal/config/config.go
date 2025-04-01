@@ -9,13 +9,13 @@ type Destination struct {
 // LogFile holds the configuration for the log file.
 type LogFile struct {
 	Enabled bool   `yaml:"enabled"`
-	Path    string `yaml:"path"`
+	Path    string `yaml:"path,omitempty"`
 }
 
 // RTMPSource holds the configuration for the RTMP source.
 type RTMPSource struct {
 	Enabled   bool   `yaml:"enabled"`
-	StreamKey string `yaml:"streamkey"`
+	StreamKey string `yaml:"streamkey,omitempty"`
 }
 
 // Sources holds the configuration for the sources.

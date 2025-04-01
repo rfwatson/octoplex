@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -8,12 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"git.netflux.io/rob/octoplex/internal/domain"
 	"gopkg.in/yaml.v3"
 )
-
-//go:embed data/config.example.yml
-var exampleConfig []byte
 
 // Service provides configuration services.
 type Service struct {
@@ -100,7 +97,7 @@ func (s *Service) SetConfig(cfg Config) error {
 		return fmt.Errorf("validate: %w", err)
 	}
 
-	cfgBytes, err := yaml.Marshal(cfg)
+	cfgBytes, err := marshalConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
@@ -130,8 +127,6 @@ func (s *Service) readConfig() (cfg Config, _ error) {
 		return cfg, fmt.Errorf("unmarshal: %w", err)
 	}
 
-	s.setDefaults(&cfg)
-
 	if err = validate(cfg); err != nil {
 		return cfg, err
 	}
@@ -143,15 +138,29 @@ func (s *Service) readConfig() (cfg Config, _ error) {
 
 func (s *Service) writeDefaultConfig() (Config, error) {
 	var cfg Config
-	if err := yaml.Unmarshal(exampleConfig, &cfg); err != nil {
-		return cfg, fmt.Errorf("unmarshal: %w", err)
+	s.setDefaults(&cfg)
+
+	cfgBytes, err := marshalConfig(cfg)
+	if err != nil {
+		return cfg, fmt.Errorf("marshal: %w", err)
 	}
 
-	if err := s.writeConfig(exampleConfig); err != nil {
+	if err := s.writeConfig(cfgBytes); err != nil {
 		return Config{}, fmt.Errorf("write config: %w", err)
 	}
 
 	return cfg, nil
+}
+
+func marshalConfig(cfg Config) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(cfg); err != nil {
+		return nil, fmt.Errorf("encode: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 func (s *Service) writeConfig(cfgBytes []byte) error {
@@ -166,18 +175,10 @@ func (s *Service) writeConfig(cfgBytes []byte) error {
 	return nil
 }
 
+// setDefaults is called to set default values for a new, empty configuration.
 func (s *Service) setDefaults(cfg *Config) {
-	if cfg.LogFile.Enabled && cfg.LogFile.Path == "" {
-		cfg.LogFile.Path = filepath.Join(s.appStateDir, domain.AppName+".log")
-	}
-
 	cfg.Sources.RTMP.Enabled = true
-
-	for i := range cfg.Destinations {
-		if strings.TrimSpace(cfg.Destinations[i].Name) == "" {
-			cfg.Destinations[i].Name = fmt.Sprintf("Stream %d", i+1)
-		}
-	}
+	cfg.Sources.RTMP.StreamKey = "live"
 }
 
 // TODO: validate URL format

@@ -4,26 +4,20 @@ import (
 	_ "embed"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/shortid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed testdata/complete.yml
 var configComplete []byte
 
-//go:embed testdata/no-logfile.yml
-var configNoLogfile []byte
-
 //go:embed testdata/logfile.yml
 var configLogfile []byte
-
-//go:embed testdata/no-name.yml
-var configNoName []byte
 
 //go:embed testdata/invalid-destination-url.yml
 var configInvalidDestinationURL []byte
@@ -60,8 +54,10 @@ func TestConfigServiceCreateConfig(t *testing.T) {
 	p := filepath.Join(systemConfigDir, "octoplex", "config.yaml")
 	cfgBytes, err := os.ReadFile(p)
 	require.NoError(t, err, "config file was not created")
-	// Ensure the example config file is written:
-	assert.Contains(t, string(cfgBytes), "# Octoplex is a live stream multiplexer.")
+
+	var readCfg config.Config
+	require.NoError(t, yaml.Unmarshal(cfgBytes, &readCfg))
+	assert.True(t, readCfg.Sources.RTMP.Enabled, "default values not set")
 }
 
 func TestConfigServiceReadConfig(t *testing.T) {
@@ -98,24 +94,10 @@ func TestConfigServiceReadConfig(t *testing.T) {
 			},
 		},
 		{
-			name:        "logging enabled, no logfile",
-			configBytes: configNoLogfile,
-			want: func(t *testing.T, cfg config.Config) {
-				assert.True(t, strings.HasSuffix(cfg.LogFile.Path, "/octoplex/octoplex.log"))
-			},
-		},
-		{
 			name:        "logging enabled, logfile",
 			configBytes: configLogfile,
 			want: func(t *testing.T, cfg config.Config) {
 				assert.Equal(t, "/tmp/octoplex.log", cfg.LogFile.Path)
-			},
-		},
-		{
-			name:        "no name",
-			configBytes: configNoName,
-			want: func(t *testing.T, cfg config.Config) {
-				assert.Equal(t, "Stream 1", cfg.Destinations[0].Name)
 			},
 		},
 		{

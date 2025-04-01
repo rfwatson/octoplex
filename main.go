@@ -49,7 +49,7 @@ func run(ctx context.Context) error {
 	} else if narg == 1 {
 		switch flag.Arg(0) {
 		case "edit-config":
-			return editConfigFile(configService.Path())
+			return editConfigFile(configService)
 		case "print-config":
 			return printConfigPath(configService.Path())
 		case "version":
@@ -108,7 +108,11 @@ func run(ctx context.Context) error {
 }
 
 // editConfigFile opens the config file in the user's editor.
-func editConfigFile(configPath string) error {
+func editConfigFile(configService *config.Service) error {
+	if _, err := configService.ReadOrCreateConfig(); err != nil {
+		return fmt.Errorf("read or create config: %w", err)
+	}
+
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		editor = "vi"
@@ -118,10 +122,10 @@ func editConfigFile(configPath string) error {
 		return fmt.Errorf("look path: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Editing config file: %s\n", configPath)
+	fmt.Fprintf(os.Stderr, "Editing config file: %s\n", configService.Path())
 	fmt.Println(binary)
 
-	if err := syscall.Exec(binary, []string{"--", configPath}, os.Environ()); err != nil {
+	if err := syscall.Exec(binary, []string{"--", configService.Path()}, os.Environ()); err != nil {
 		return fmt.Errorf("exec: %w", err)
 	}
 
