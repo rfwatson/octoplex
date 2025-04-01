@@ -170,7 +170,8 @@ func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err err
 						"--fail",
 						"--silent",
 						"--cacert", "/etc/tls.crt",
-						actor.pathsURL(),
+						"--config", "/etc/healthcheckopts.txt",
+						actor.healthCheckURL(),
 					},
 					Interval:      time.Second * 10,
 					StartPeriod:   time.Second * 2,
@@ -198,6 +199,11 @@ func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err err
 				{
 					Path:    "/etc/tls.key",
 					Payload: bytes.NewReader(tlsKey),
+					Mode:    0600,
+				},
+				{
+					Path:    "/etc/healthcheckopts.txt",
+					Payload: bytes.NewReader([]byte(fmt.Sprintf("--user api:%s", actor.pass))),
 					Mode:    0600,
 				},
 			},
@@ -366,6 +372,13 @@ func (s *Actor) rtmpConnsURL() string {
 // pathsURL returns the URL for fetching paths, accessible from the host.
 func (s *Actor) pathsURL() string {
 	return fmt.Sprintf("https://api:%s@localhost:%d/v3/paths/list", s.pass, s.apiPort)
+}
+
+// healthCheckURL returns the URL for the health check, accessible from the
+// container. It is logged to Docker's events log so must not include
+// credentials.
+func (s *Actor) healthCheckURL() string {
+	return fmt.Sprintf("https://localhost:%d/v3/paths/list", s.apiPort)
 }
 
 // shortID returns the first 12 characters of the given container ID.
