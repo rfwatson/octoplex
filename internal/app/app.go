@@ -140,6 +140,11 @@ func Run(ctx context.Context, params RunParams) error {
 					continue
 				}
 			case terminal.CommandStartDestination:
+				if !state.Source.Live {
+					ui.ShowSourceNotLiveModal()
+					continue
+				}
+
 				mp.StartDestination(c.URL)
 			case terminal.CommandStopDestination:
 				mp.StopDestination(c.URL)

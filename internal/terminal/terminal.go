@@ -297,6 +297,17 @@ func (ui *UI) run(ctx context.Context) {
 	}
 }
 
+func (ui *UI) ShowSourceNotLiveModal() {
+	ui.app.QueueUpdateDraw(func() {
+		ui.showModal(
+			pageNameModalStartupCheck,
+			fmt.Sprintf("Source is not live.\nStart streaming to the source URL then try again:\n\n%s", ui.sourceViews.url.GetText(true)),
+			[]string{"Ok"},
+			nil,
+		)
+	})
+}
+
 // ShowStartupCheckModal shows a modal dialog to the user, asking if they want
 // to kill a running instance of Octoplex.
 //
@@ -571,7 +582,7 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 
 		ui.sourceViews.status.SetText("[black:green]receiving" + durStr)
 	} else if state.Source.Container.Status == domain.ContainerStatusRunning && state.Source.Container.HealthState == "healthy" {
-		ui.sourceViews.status.SetText("[black:yellow]ready")
+		ui.sourceViews.status.SetText("[black:yellow]waiting")
 	} else {
 		ui.sourceViews.status.SetText("[white:red]not ready")
 	}
