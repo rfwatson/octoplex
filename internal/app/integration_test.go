@@ -29,9 +29,6 @@ func TestIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
 
-	configService, err := config.NewDefaultService()
-	require.NoError(t, err)
-
 	destServer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:        "bluenviron/mediamtx:latest",
@@ -51,60 +48,7 @@ func TestIntegration(t *testing.T) {
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv)
 	require.NoError(t, err)
 
-	// Fetching the screen contents is tricky at this level of the test pyramid,
-	// because we need to:
-	//
-	// 1. Somehow capture the screen contents, which is only available via the
-	//    tcell.SimulationScreen, and...
-	// 2. Do so without triggering data races.
-	//
-	// We can achieve this by passing a channel into the terminal actor, which
-	// will send screen captures after each render. This can be stored locally
-	// and asserted against when needed.
-	var (
-		screenCells []tcell.SimCell
-		screenWidth int
-		screenMu    sync.Mutex
-	)
-
-	getContents := func() []string {
-		screenMu.Lock()
-		defer screenMu.Unlock()
-
-		var lines []string
-		for n, _ := range screenCells {
-			y := n / screenWidth
-
-			if y > len(lines)-1 {
-				lines = append(lines, "")
-			}
-			lines[y] += string(screenCells[n].Runes[0])
-		}
-
-		return lines
-	}
-
-	t.Cleanup(func() {
-		if t.Failed() {
-			printScreen(getContents, "After failing")
-		}
-	})
-
-	screen := tcell.NewSimulationScreen("")
-	screenCaptureC := make(chan terminal.ScreenCapture, 1)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case capture := <-screenCaptureC:
-				screenMu.Lock()
-				screenCells = capture.Cells
-				screenWidth = capture.Width
-				screenMu.Unlock()
-			}
-		}
-	}()
+	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	// https://stackoverflow.com/a/60740997/62871
 	if runtime.GOOS != "linux" {
@@ -114,18 +58,11 @@ func TestIntegration(t *testing.T) {
 
 	destURL1 := fmt.Sprintf("rtmp://%s:%d/live/dest1", destHost, destServerPort.Int())
 	destURL2 := fmt.Sprintf("rtmp://%s:%d/live/dest2", destHost, destServerPort.Int())
-	cfg := config.Config{
+	configService := setupConfigService(t, config.Config{
 		Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true, StreamKey: "live"}},
 		// Load one destination from config, add the other in-app.
 		Destinations: []config.Destination{{Name: "Local server 1", URL: destURL1}},
-	}
-
-	tmpDir, err := os.MkdirTemp("", "octoplex-app-test-integration")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-	configService, err = config.NewService(func() (string, error) { return tmpDir, nil }, 1)
-	require.NoError(t, err)
-	require.NoError(t, configService.SetConfig(cfg))
+	})
 
 	done := make(chan struct{})
 	go func() {
@@ -147,7 +84,6 @@ func TestIntegration(t *testing.T) {
 		done <- struct{}{}
 	}()
 
-	time.Sleep(5 * time.Second)
 	require.EventuallyWithT(
 		t,
 		func(t *assert.CollectT) {
@@ -302,6 +238,76 @@ func TestIntegration(t *testing.T) {
 	cancel()
 
 	<-done
+}
+
+func setupSimulationScreen(t *testing.T) (tcell.SimulationScreen, chan<- terminal.ScreenCapture, func() []string) {
+	// Fetching the screen contents is tricky at this level of the test pyramid,
+	// because we need to:
+	//
+	// 1. Somehow capture the screen contents, which is only available via the
+	//    tcell.SimulationScreen, and...
+	// 2. Do so without triggering data races.
+	//
+	// We can achieve this by passing a channel into the terminal actor, which
+	// will send screen captures after each render. This can be stored locally
+	// and asserted against when needed.
+	var (
+		screenCells []tcell.SimCell
+		screenWidth int
+		screenMu    sync.Mutex
+	)
+
+	getContents := func() []string {
+		screenMu.Lock()
+		defer screenMu.Unlock()
+
+		var lines []string
+		for n, _ := range screenCells {
+			y := n / screenWidth
+
+			if y > len(lines)-1 {
+				lines = append(lines, "")
+			}
+			lines[y] += string(screenCells[n].Runes[0])
+		}
+
+		return lines
+	}
+
+	t.Cleanup(func() {
+		if t.Failed() {
+			printScreen(getContents, "After failing")
+		}
+	})
+
+	screen := tcell.NewSimulationScreen("")
+	screenCaptureC := make(chan terminal.ScreenCapture, 1)
+	go func() {
+		for {
+			select {
+			case <-t.Context().Done():
+				return
+			case capture := <-screenCaptureC:
+				screenMu.Lock()
+				screenCells = capture.Cells
+				screenWidth = capture.Width
+				screenMu.Unlock()
+			}
+		}
+	}()
+
+	return screen, screenCaptureC, getContents
+}
+
+func setupConfigService(t *testing.T, cfg config.Config) *config.Service {
+	tmpDir, err := os.MkdirTemp("", "octoplex_"+t.Name())
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	configService, err := config.NewService(func() (string, error) { return tmpDir, nil }, 1)
+	require.NoError(t, err)
+	require.NoError(t, configService.SetConfig(cfg))
+
+	return configService
 }
 
 func printScreen(getContents func() []string, label string) {
