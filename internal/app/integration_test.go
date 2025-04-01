@@ -46,7 +46,7 @@ func TestIntegration(t *testing.T) {
 
 	logger := testhelpers.NewTestLogger(t).With("component", "integration")
 	logger.Info("Initialised logger", "debug_level", logger.Enabled(ctx, slog.LevelDebug), "runner_debug", os.Getenv("RUNNER_DEBUG"))
-	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv)
+	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 	require.NoError(t, err)
 
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
@@ -246,7 +246,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 	defer cancel()
 
 	logger := testhelpers.NewTestLogger(t).With("component", "integration")
-	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv)
+	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 	require.NoError(t, err)
 
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)

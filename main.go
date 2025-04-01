@@ -76,7 +76,10 @@ func run(ctx context.Context) error {
 		clipboardAvailable = true
 	}
 
-	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv)
+	dockerClient, err := dockerclient.NewClientWithOpts(
+		dockerclient.FromEnv,
+		dockerclient.WithAPIVersionNegotiation(),
+	)
 	if err != nil {
 		return fmt.Errorf("new docker client: %w", err)
 	}
