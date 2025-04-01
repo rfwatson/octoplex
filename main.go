@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"flag"
 	"fmt"
@@ -54,8 +55,7 @@ func run(ctx context.Context) error {
 		case "version":
 			return printVersion()
 		case "help", "-h", "--help":
-			// TODO: improve help message
-			flag.Usage()
+			printUsage()
 			return nil
 		}
 	}
@@ -133,8 +133,20 @@ func printConfigPath(configPath string) error {
 
 // printVersion prints the version of the application to stderr.
 func printVersion() error {
-	fmt.Fprintf(os.Stderr, "%s version %s\n", domain.AppName, "0.0.0")
+	fmt.Fprintf(os.Stderr, "%s version %s\n", domain.AppName, cmp.Or(version, "0.0.0-dev"))
 	return nil
+}
+
+func printUsage() {
+	os.Stderr.WriteString("Usage: octoplex [command]\n\n")
+	os.Stderr.WriteString("Commands:\n\n")
+	os.Stderr.WriteString("  edit-config   Edit the config file\n")
+	os.Stderr.WriteString("  print-config  Print the path to the config file\n")
+	os.Stderr.WriteString("  version       Print the version of the application\n")
+	os.Stderr.WriteString("  help          Print this help message\n")
+	os.Stderr.WriteString("\n")
+	os.Stderr.WriteString("Additionally, Octoplex can be configured with the following environment variables:\n\n")
+	os.Stderr.WriteString("  OCTO_DEBUG    Enables debug logging if set\n")
 }
 
 // buildLogger builds the logger, which may be a no-op logger.
