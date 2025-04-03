@@ -779,7 +779,7 @@ func (ui *UI) toggleDestination() {
 		return
 	}
 
-	// Communicating with the multiplexer/container client is asynchronous. To
+	// Communicating with the replicator/container client is asynchronous. To
 	// ensure we can limit each destination to a single container we need some
 	// kind of local mutable state which synchronously tracks the "start state"
 	// of each destination.
@@ -879,7 +879,7 @@ func (ui *UI) showAbout() {
 	ui.showModal(
 		pageNameModalAbout,
 		fmt.Sprintf(
-			"%s: live stream multiplexer\n(c) Rob Watson\nhttps://git.netflux.io/rob/octoplex\n\nReleased under AGPL3.\n\nv%s (%s)\nBuilt on %s (%s).",
+			"%s: live stream replicator\n(c) Rob Watson\nhttps://git.netflux.io/rob/octoplex\n\nReleased under AGPL3.\n\nv%s (%s)\nBuilt on %s (%s).",
 			domain.AppName,
 			cmp.Or(ui.buildInfo.Version, "0.0.0-devel"),
 			cmp.Or(commit, "unknown SHA"),

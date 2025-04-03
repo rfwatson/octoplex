@@ -1,4 +1,4 @@
-package multiplexer
+package replicator
 
 import (
 	"cmp"
@@ -19,19 +19,19 @@ type action func()
 
 const (
 	defaultChanSize = 64                                       // default channel size for asynchronous non-error channels
-	componentName   = "multiplexer"                            // component name, mostly used for Docker labels
+	componentName   = "replicator"                             // component name, mostly used for Docker labels
 	imageNameFFMPEG = "ghcr.io/jrottenberg/ffmpeg:7.1-scratch" // image name for ffmpeg
 )
 
 // State is the state of a single destination from the point of view of the
-// multiplexer.
+// replicator.
 type State struct {
 	URL       string
 	Container domain.Container
 	Status    domain.DestinationStatus
 }
 
-// Actor is responsible for managing the multiplexer.
+// Actor is responsible for managing the replicator.
 type Actor struct {
 	wg              sync.WaitGroup
 	ctx             context.Context
@@ -47,7 +47,7 @@ type Actor struct {
 	nextIndex int
 }
 
-// NewActorParams contains the parameters for starting a new multiplexer actor.
+// NewActorParams contains the parameters for starting a new replicator actor.
 type NewActorParams struct {
 	SourceURL       string
 	ChanSize        int
@@ -55,7 +55,7 @@ type NewActorParams struct {
 	Logger          *slog.Logger
 }
 
-// NewActor starts a new multiplexer actor.
+// NewActor starts a new replicator actor.
 //
 // The channel exposed by [C] must be consumed by the caller.
 func NewActor(ctx context.Context, params NewActorParams) *Actor {
@@ -175,7 +175,7 @@ func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, er
 	}
 }
 
-// C returns a channel that will receive the current state of the multiplexer.
+// C returns a channel that will receive the current state of the replicator.
 // The channel is never closed.
 func (a *Actor) C() <-chan State {
 	return a.stateC

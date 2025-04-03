@@ -12,7 +12,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/mediaserver"
-	"git.netflux.io/rob/octoplex/internal/multiplexer"
+	"git.netflux.io/rob/octoplex/internal/replicator"
 	"git.netflux.io/rob/octoplex/internal/terminal"
 )
 
@@ -91,12 +91,12 @@ func Run(ctx context.Context, params RunParams) error {
 	}
 	defer srv.Close()
 
-	mp := multiplexer.NewActor(ctx, multiplexer.NewActorParams{
+	repl := replicator.NewActor(ctx, replicator.NewActorParams{
 		SourceURL:       srv.State().RTMPInternalURL,
 		ContainerClient: containerClient,
-		Logger:          logger.With("component", "multiplexer"),
+		Logger:          logger.With("component", "replicator"),
 	})
-	defer mp.Close()
+	defer repl.Close()
 
 	const uiUpdateInterval = time.Second
 	uiUpdateT := time.NewTicker(uiUpdateInterval)
@@ -129,7 +129,7 @@ func Run(ctx context.Context, params RunParams) error {
 				}
 				ui.DestinationAdded()
 			case terminal.CommandRemoveDestination:
-				mp.StopDestination(c.URL) // no-op if not live
+				repl.StopDestination(c.URL) // no-op if not live
 				newCfg := cfg
 				newCfg.Destinations = slices.DeleteFunc(newCfg.Destinations, func(dest config.Destination) bool {
 					return dest.URL == c.URL
@@ -145,9 +145,9 @@ func Run(ctx context.Context, params RunParams) error {
 					continue
 				}
 
-				mp.StartDestination(c.URL)
+				repl.StartDestination(c.URL)
 			case terminal.CommandStopDestination:
-				mp.StopDestination(c.URL)
+				repl.StopDestination(c.URL)
 			case terminal.CommandQuit:
 				return nil
 			}
@@ -157,12 +157,12 @@ func Run(ctx context.Context, params RunParams) error {
 			logger.Debug("Server state received", "state", serverState)
 			applyServerState(serverState, state)
 			updateUI()
-		case mpState := <-mp.C():
-			logger.Debug("Multiplexer state received", "state", mpState)
-			destErrors := applyMultiplexerState(mpState, state)
+		case replState := <-repl.C():
+			logger.Debug("Replicator state received", "state", replState)
+			destErrors := applyReplicatorState(replState, state)
 
 			for _, destError := range destErrors {
-				handleDestError(destError, mp, ui)
+				handleDestError(destError, repl, ui)
 			}
 
 			updateUI()
@@ -183,29 +183,29 @@ type destinationError struct {
 	err  error
 }
 
-// applyMultiplexerState applies the current multiplexer state to the app state.
+// applyReplicatorState applies the current replicator state to the app state.
 //
 // It returns a list of destination errors that should be displayed to the user.
-func applyMultiplexerState(mpState multiplexer.State, appState *domain.AppState) []destinationError {
+func applyReplicatorState(replState replicator.State, appState *domain.AppState) []destinationError {
 	var errorsToDisplay []destinationError
 
 	for i := range appState.Destinations {
 		dest := &appState.Destinations[i]
 
-		if dest.URL != mpState.URL {
+		if dest.URL != replState.URL {
 			continue
 		}
 
-		if dest.Container.Err == nil && mpState.Container.Err != nil {
+		if dest.Container.Err == nil && replState.Container.Err != nil {
 			errorsToDisplay = append(errorsToDisplay, destinationError{
 				name: dest.Name,
 				url:  dest.URL,
-				err:  mpState.Container.Err,
+				err:  replState.Container.Err,
 			})
 		}
 
-		dest.Container = mpState.Container
-		dest.Status = mpState.Status
+		dest.Container = replState.Container
+		dest.Status = replState.Status
 
 		break
 	}
@@ -214,10 +214,10 @@ func applyMultiplexerState(mpState multiplexer.State, appState *domain.AppState)
 }
 
 // handleDestError displays a modal to the user, and stops the destination.
-func handleDestError(destError destinationError, mp *multiplexer.Actor, ui *terminal.UI) {
+func handleDestError(destError destinationError, repl *replicator.Actor, ui *terminal.UI) {
 	ui.ShowDestinationErrorModal(destError.name, destError.err)
 
-	mp.StopDestination(destError.url)
+	repl.StopDestination(destError.url)
 }
 
 // applyConfig applies the config to the app state. For now we only set the
