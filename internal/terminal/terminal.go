@@ -582,7 +582,7 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 
 		ui.sourceViews.status.SetText("[black:green]receiving" + durStr)
 	} else if state.Source.Container.Status == domain.ContainerStatusRunning && state.Source.Container.HealthState == "healthy" {
-		ui.sourceViews.status.SetText("[black:yellow]waiting")
+		ui.sourceViews.status.SetText("[black:yellow]waiting for stream")
 	} else {
 		ui.sourceViews.status.SetText("[white:red]not ready")
 	}

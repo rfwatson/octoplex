@@ -91,7 +91,7 @@ func TestIntegration(t *testing.T) {
 			contents := getContents()
 			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
 
-			assert.Contains(t, contents[2], "Status   waiting", "expected mediaserver status to be waiting")
+			assert.Contains(t, contents[2], "Status   waiting for stream", "expected mediaserver status to be waiting")
 		},
 		2*time.Minute,
 		time.Second,
@@ -281,7 +281,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			contents := getContents()
 			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
 
-			assert.Contains(t, contents[2], "Status   waiting", "expected mediaserver status to be waiting")
+			assert.Contains(t, contents[2], "Status   waiting for stream", "expected mediaserver status to be waiting")
 		},
 		2*time.Minute,
 		time.Second,
