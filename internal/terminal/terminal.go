@@ -721,9 +721,7 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 
 // Close closes the terminal user interface.
 func (ui *UI) Close() {
-	ui.app.QueueUpdate(func() {
-		ui.app.Stop()
-	})
+	ui.app.Stop()
 }
 
 func (ui *UI) ConfigUpdateFailed(err error) {
