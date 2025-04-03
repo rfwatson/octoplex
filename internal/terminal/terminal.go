@@ -50,15 +50,25 @@ type UI struct {
 	screen            tcell.Screen
 	screenCaptureC    chan<- ScreenCapture
 	pages             *tview.Pages
+	container         *tview.Flex
 	sourceViews       sourceViews
 	destView          *tview.Table
+	noDestView        *tview.TextView
 	pullProgressModal *tview.Modal
 
 	// other mutable state
 
 	mu               sync.Mutex
 	urlsToStartState map[string]startState
-	allowQuit        bool
+
+	// allowQuit is true if the user is allowed to quit the app (after the
+	// startup check has completed).
+	allowQuit bool
+	/// addingDestination is true if add destination modal is currently visible.
+	addingDestination bool
+	// hasDestinations is true if the UI thinks there are destinations
+	// configured.
+	hasDestinations bool
 }
 
 // Screen represents a terminal screen. This includes its desired dimensions,
@@ -173,7 +183,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	sidebar.AddItem(aboutView, 0, 1, false)
 
 	destView := tview.NewTable()
-	destView.SetTitle("Egress streams")
+	destView.SetTitle("Destinations")
 	destView.SetBorder(true)
 	destView.SetSelectable(true, false)
 	destView.SetWrapSelection(true, false)
@@ -185,13 +195,22 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 		SetTextColor(tcell.ColorWhite).
 		SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
-	flex := tview.NewFlex().
+	container := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
 		AddItem(sidebar, 40, 0, false).
 		AddItem(destView, 0, 6, false)
 
+	// noDestView is overlaid on top of the main view when there are no
+	// destinations configured.
+	noDestView := tview.NewTextView().
+		SetText(`No destinations added yet. Press [a] to add a new destination.`).
+		SetTextAlign(tview.AlignCenter).
+		SetTextColor(tcell.ColorGrey)
+	noDestView.SetBorder(false)
+
 	pages := tview.NewPages()
-	pages.AddPage(pageNameMain, flex, true, true)
+	pages.AddPage(pageNameMain, container, true, true)
+	pages.AddPage(pageNameNoDestinations, noDestView, false, false)
 
 	app.SetRoot(pages, true)
 	app.SetFocus(destView)
@@ -205,6 +224,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 		screen:         screen,
 		screenCaptureC: screenCaptureC,
 		pages:          pages,
+		container:      container,
 		sourceViews: sourceViews{
 			url:    urlTextView,
 			status: statusTextView,
@@ -215,6 +235,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 			rx:     rxTextView,
 		},
 		destView:          destView,
+		noDestView:        noDestView,
 		pullProgressModal: pullProgressModal,
 		urlsToStartState:  make(map[string]startState),
 	}
@@ -301,7 +322,7 @@ func (ui *UI) ShowSourceNotLiveModal() {
 	ui.app.QueueUpdateDraw(func() {
 		ui.showModal(
 			pageNameModalStartupCheck,
-			fmt.Sprintf("Source is not live.\nStart streaming to the source URL then try again:\n\n%s", ui.sourceViews.url.GetText(true)),
+			fmt.Sprintf("Waiting for stream.\nStart streaming to the source URL then try again:\n\n%s", ui.sourceViews.url.GetText(true)),
 			[]string{"Ok"},
 			nil,
 		)
@@ -324,7 +345,6 @@ func (ui *UI) ShowStartupCheckModal() bool {
 			[]string{"Continue", "Exit"},
 			func(buttonIndex int, _ string) {
 				if buttonIndex == 0 {
-					ui.app.SetFocus(ui.destView)
 					done <- true
 				} else {
 					done <- false
@@ -401,6 +421,8 @@ func (ui *UI) SetState(state domain.AppState) {
 	for _, dest := range state.Destinations {
 		ui.urlsToStartState[dest.URL] = containerStateToStartState(dest.Container.Status)
 	}
+
+	ui.hasDestinations = len(state.Destinations) > 0
 	ui.mu.Unlock()
 
 	// The state is mutable so can't be passed into QueueUpdateDraw, which
@@ -474,6 +496,7 @@ func (ui *UI) updateProgressModal(container domain.Container) {
 // on top of other modals.
 const (
 	pageNameMain                   = "main"
+	pageNameNoDestinations         = "no-destinations"
 	pageNameAddDestination         = "add-destination"
 	pageNameModalAbout             = "modal-about"
 	pageNameModalQuit              = "modal-quit"
@@ -483,6 +506,21 @@ const (
 	pageNameModalRemoveDestination = "modal-remove-destination"
 	pageNameConfigUpdateFailed     = "modal-config-update-failed"
 )
+
+func (ui *UI) resetFocus() {
+	if name, el := ui.pages.GetFrontPage(); name == pageNameMain || name == pageNameNoDestinations {
+		ui.app.SetFocus(ui.destView)
+		// If we don't explicitly set the focus to some row, then sometimes no row
+		// is selected and the user must press up or down to select a row before
+		// continuing. This isn't completely a blocker but it is sometime a bit
+		// confusing and also makes integration tests less predictable. It would be
+		// nice to improve this behaviour so that e.g. if a new destination is
+		// added then that destination is selected, not the first in the row.
+		ui.destView.Select(1, 0)
+	} else {
+		ui.app.SetFocus(el)
+	}
+}
 
 func (ui *UI) showModal(pageName string, text string, buttons []string, doneFunc func(int, string)) {
 	if ui.pages.HasPage(pageName) {
@@ -496,10 +534,7 @@ func (ui *UI) showModal(pageName string, text string, buttons []string, doneFunc
 		SetTextColor(tcell.ColorWhite).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			ui.pages.RemovePage(pageName)
-
-			if name, _ := ui.pages.GetFrontPage(); name == pageNameMain {
-				ui.app.SetFocus(ui.destView)
-			}
+			ui.resetFocus()
 
 			if doneFunc != nil {
 				doneFunc(buttonIndex, buttonLabel)
@@ -558,6 +593,22 @@ const (
 )
 
 func (ui *UI) redrawFromState(state domain.AppState) {
+	var addingDestination bool
+	ui.mu.Lock()
+	addingDestination = ui.addingDestination
+	ui.mu.Unlock()
+
+	var showNoDestinationsPage bool
+	if len(state.Destinations) == 0 && !addingDestination {
+		showNoDestinationsPage = true
+	}
+
+	if showNoDestinationsPage {
+		x, y, w, _ := ui.destView.GetRect()
+		ui.noDestView.SetRect(x+5, y+4, w-10, 3)
+		ui.pages.ShowPage(pageNameNoDestinations)
+	}
+
 	headerCell := func(content string, expansion int) *tview.TableCell {
 		return tview.
 			NewTableCell(content).
@@ -704,11 +755,7 @@ func (ui *UI) addDestination() {
 	)
 
 	var currWidth, currHeight int
-	if name, frontPage := ui.pages.GetFrontPage(); name == pageNameMain {
-		_, _, currWidth, currHeight = frontPage.GetRect()
-	} else {
-		return
-	}
+	_, _, currWidth, currHeight = ui.container.GetRect()
 
 	form := tview.NewForm()
 	form.
@@ -727,6 +774,11 @@ func (ui *UI) addDestination() {
 		SetTitleAlign(tview.AlignLeft).
 		SetRect((currWidth-formWidth)/2, (currHeight-formHeight)/2, formWidth, formHeight)
 
+	ui.mu.Lock()
+	ui.addingDestination = true
+	ui.mu.Unlock()
+
+	ui.pages.HidePage(pageNameNoDestinations)
 	ui.pages.AddPage(pageNameAddDestination, form, false, true)
 }
 
@@ -761,14 +813,28 @@ func (ui *UI) removeDestination() {
 }
 
 func (ui *UI) DestinationAdded() {
+	ui.mu.Lock()
+	ui.hasDestinations = true
+	ui.mu.Unlock()
+
 	ui.app.QueueUpdateDraw(func() {
+		ui.pages.HidePage(pageNameNoDestinations)
 		ui.closeAddDestinationForm()
 	})
 }
 
 func (ui *UI) closeAddDestinationForm() {
+	var hasDestinations bool
+	ui.mu.Lock()
+	ui.addingDestination = false
+	hasDestinations = ui.hasDestinations
+	ui.mu.Unlock()
+
 	ui.pages.RemovePage(pageNameAddDestination)
-	ui.app.SetFocus(ui.destView)
+	if !hasDestinations {
+		ui.pages.ShowPage(pageNameNoDestinations)
+	}
+	ui.resetFocus()
 }
 
 func (ui *UI) toggleDestination() {

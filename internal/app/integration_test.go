@@ -282,6 +282,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
 
 			assert.Contains(t, contents[2], "Status   waiting for stream", "expected mediaserver status to be waiting")
+			assert.True(t, contentsIncludes(contents, "No destinations added yet. Press [a] to add a new destination."), "expected to see no destinations message")
 		},
 		2*time.Minute,
 		time.Second,
@@ -344,6 +345,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 
 			require.Contains(t, contents[2], "My stream", "expected new destination to be present")
 			assert.Contains(t, contents[2], "off-air", "expected new destination to be off-air")
+			assert.False(t, contentsIncludes(contents, "No destinations added yet. Press [a] to add a new destination."), "expected to not see no destinations message")
 		},
 		10*time.Second,
 		time.Second,
