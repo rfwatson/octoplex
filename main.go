@@ -162,7 +162,7 @@ func buildLogger(cfg config.LogFile) (*slog.Logger, error) {
 		return slog.New(slog.DiscardHandler), nil
 	}
 
-	fptr, err := os.OpenFile(cfg.Path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	fptr, err := os.OpenFile(cfg.GetPath(), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return nil, fmt.Errorf("error opening log file: %w", err)
 	}

@@ -4,10 +4,13 @@ import (
 	_ "embed"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/shortid"
+	gocmp "github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -18,6 +21,9 @@ var configComplete []byte
 
 //go:embed testdata/logfile.yml
 var configLogfile []byte
+
+//go:embed testdata/no-logfile.yml
+var configNoLogfile []byte
 
 //go:embed testdata/invalid-destination-url.yml
 var configInvalidDestinationURL []byte
@@ -49,7 +55,8 @@ func TestConfigServiceCreateConfig(t *testing.T) {
 
 	cfg, err := service.ReadOrCreateConfig()
 	require.NoError(t, err)
-	require.Empty(t, cfg.LogFile, "expected no log file")
+	require.False(t, cfg.LogFile.Enabled, "expected logging to be disabled")
+	require.Empty(t, cfg.LogFile.Path, "expected no log file")
 
 	p := filepath.Join(systemConfigDir, "octoplex", "config.yaml")
 	cfgBytes, err := os.ReadFile(p)
@@ -71,26 +78,31 @@ func TestConfigServiceReadConfig(t *testing.T) {
 			name:        "complete",
 			configBytes: configComplete,
 			want: func(t *testing.T, cfg config.Config) {
-				require.Equal(
+				require.Empty(
 					t,
-					config.Config{
-						LogFile: config.LogFile{
-							Enabled: true,
-							Path:    "test.log",
-						},
-						Sources: config.Sources{
-							RTMP: config.RTMPSource{
-								Enabled:   true,
-								StreamKey: "s3cr3t",
+					gocmp.Diff(
+						config.Config{
+							LogFile: config.LogFile{
+								Enabled: true,
+								Path:    "test.log",
+							},
+							Sources: config.Sources{
+								RTMP: config.RTMPSource{
+									Enabled:   true,
+									StreamKey: "s3cr3t",
+								},
+							},
+							Destinations: []config.Destination{
+								{
+									Name: "my stream",
+									URL:  "rtmp://rtmp.example.com:1935/live",
+								},
 							},
 						},
-						Destinations: []config.Destination{
-							{
-								Name: "my stream",
-								URL:  "rtmp://rtmp.example.com:1935/live",
-							},
-						},
-					}, cfg)
+						cfg,
+						cmpopts.IgnoreUnexported(config.LogFile{}),
+					),
+				)
 			},
 		},
 		{
@@ -98,6 +110,13 @@ func TestConfigServiceReadConfig(t *testing.T) {
 			configBytes: configLogfile,
 			want: func(t *testing.T, cfg config.Config) {
 				assert.Equal(t, "/tmp/octoplex.log", cfg.LogFile.Path)
+			},
+		},
+		{
+			name:        "logging enabled, no logfile",
+			configBytes: configNoLogfile,
+			want: func(t *testing.T, cfg config.Config) {
+				assert.True(t, strings.HasSuffix(cfg.LogFile.GetPath(), "/octoplex/octoplex.log"), "expected %q to end with /tmp/octoplex.log", cfg.LogFile.GetPath())
 			},
 		},
 		{

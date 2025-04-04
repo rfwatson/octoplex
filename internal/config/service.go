@@ -47,6 +47,7 @@ func NewService(configDirFunc ConfigDirFunc, chanSize int) (*Service, error) {
 		return nil, fmt.Errorf("app config dir: %w", err)
 	}
 
+	// TODO: inject StateDirFunc
 	appStateDir, err := createAppStateDir()
 	if err != nil {
 		return nil, fmt.Errorf("app state dir: %w", err)
@@ -58,7 +59,7 @@ func NewService(configDirFunc ConfigDirFunc, chanSize int) (*Service, error) {
 		configC:      make(chan Config, chanSize),
 	}
 
-	svc.setDefaults(&svc.current)
+	svc.populateConfigOnBuild(&svc.current)
 
 	return svc, nil
 }
@@ -127,6 +128,7 @@ func (s *Service) readConfig() (cfg Config, _ error) {
 		return cfg, fmt.Errorf("unmarshal: %w", err)
 	}
 
+	s.populateConfigOnRead(&cfg)
 	if err = validate(cfg); err != nil {
 		return cfg, err
 	}
@@ -138,7 +140,7 @@ func (s *Service) readConfig() (cfg Config, _ error) {
 
 func (s *Service) writeDefaultConfig() (Config, error) {
 	var cfg Config
-	s.setDefaults(&cfg)
+	s.populateConfigOnBuild(&cfg)
 
 	cfgBytes, err := marshalConfig(cfg)
 	if err != nil {
@@ -175,10 +177,24 @@ func (s *Service) writeConfig(cfgBytes []byte) error {
 	return nil
 }
 
-// setDefaults is called to set default values for a new, empty configuration.
-func (s *Service) setDefaults(cfg *Config) {
+// populateConfigOnBuild is called to set default values for a new, empty
+// configuration.
+//
+// This function may set exported fields to arbitrary values.
+func (s *Service) populateConfigOnBuild(cfg *Config) {
 	cfg.Sources.RTMP.Enabled = true
 	cfg.Sources.RTMP.StreamKey = "live"
+
+	s.populateConfigOnRead(cfg)
+}
+
+// populateConfigOnRead is called to set default values for a configuration
+// read from an existing file.
+//
+// This function should not update any exported values, which would be a
+// confusing experience for the user.
+func (s *Service) populateConfigOnRead(cfg *Config) {
+	cfg.LogFile.defaultPath = filepath.Join(s.appStateDir, "octoplex.log")
 }
 
 // TODO: validate URL format

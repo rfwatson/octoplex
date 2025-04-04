@@ -1,5 +1,7 @@
 package config
 
+import "cmp"
+
 // Destination holds the configuration for a destination.
 type Destination struct {
 	Name string `yaml:"name"`
@@ -10,6 +12,14 @@ type Destination struct {
 type LogFile struct {
 	Enabled bool   `yaml:"enabled"`
 	Path    string `yaml:"path,omitempty"`
+
+	defaultPath string
+}
+
+// GetPath returns the path to the log file. If the path is not set, it
+// returns the default log path.
+func (l LogFile) GetPath() string {
+	return cmp.Or(l.Path, l.defaultPath)
 }
 
 // RTMPSource holds the configuration for the RTMP source.

@@ -1,0 +1,5 @@
+---
+logfile:
+  enabled: true
+destinations:
+- url: rtmp://rtmp.example.com:1935/live

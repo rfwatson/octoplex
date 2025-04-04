@@ -6,6 +6,7 @@ require (
 	github.com/docker/docker v28.0.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/gdamore/tcell/v2 v2.8.1
+	github.com/google/go-cmp v0.7.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/rivo/tview v0.0.0-20241227133733-17b7edb88c57
 	github.com/stretchr/testify v1.10.0
