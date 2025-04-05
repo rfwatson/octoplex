@@ -55,10 +55,10 @@ type NewActorParams struct {
 	Logger          *slog.Logger
 }
 
-// NewActor starts a new replicator actor.
+// StartActor starts a new replicator actor.
 //
 // The channel exposed by [C] must be consumed by the caller.
-func NewActor(ctx context.Context, params NewActorParams) *Actor {
+func StartActor(ctx context.Context, params NewActorParams) *Actor {
 	ctx, cancel := context.WithCancel(ctx)
 
 	actor := &Actor{

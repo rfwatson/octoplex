@@ -42,16 +42,16 @@ type action func()
 
 // Actor is responsible for managing the media server.
 type Actor struct {
-	ctx                       context.Context
-	cancel                    context.CancelFunc
 	actorC                    chan action
 	stateC                    chan domain.Source
+	chanSize                  int
 	containerClient           *container.Client
 	apiPort                   int
 	rtmpPort                  int
 	streamKey                 StreamKey
 	fetchIngressStateInterval time.Duration
 	pass                      string // password for the media server
+	tlsCert, tlsKey           []byte // TLS cert and key for the media server
 	logger                    *slog.Logger
 	apiClient                 *http.Client
 
@@ -71,18 +71,10 @@ type StartActorParams struct {
 	Logger                    *slog.Logger
 }
 
-// StartActor starts a new media server actor.
+// NewActor creates a new media server actor.
 //
 // Callers must consume the state channel exposed via [C].
-func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err error) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer func() {
-		// if err is nil, the context should not be cancelled.
-		if err != nil {
-			cancel()
-		}
-	}()
-
+func NewActor(ctx context.Context, params StartActorParams) (_ *Actor, err error) {
 	tlsCert, tlsKey, err := generateTLSCert()
 	if err != nil {
 		return nil, fmt.Errorf("generate TLS cert: %w", err)
@@ -93,25 +85,32 @@ func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err err
 	}
 
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
-	actor := &Actor{
-		ctx:                       ctx,
-		cancel:                    cancel,
+	return &Actor{
 		apiPort:                   cmp.Or(params.APIPort, defaultAPIPort),
 		rtmpPort:                  cmp.Or(params.RTMPPort, defaultRTMPPort),
 		streamKey:                 cmp.Or(params.StreamKey, defaultStreamKey),
 		fetchIngressStateInterval: cmp.Or(params.FetchIngressStateInterval, defaultFetchIngressStateInterval),
+		tlsCert:                   tlsCert,
+		tlsKey:                    tlsKey,
 		pass:                      generatePassword(),
 		actorC:                    make(chan action, chanSize),
 		state:                     new(domain.Source),
 		stateC:                    make(chan domain.Source, chanSize),
+		chanSize:                  chanSize,
 		containerClient:           params.ContainerClient,
 		logger:                    params.Logger,
 		apiClient:                 apiClient,
-	}
+	}, nil
+}
 
-	apiPortSpec := nat.Port(strconv.Itoa(actor.apiPort) + ":9997")
-	rtmpPortSpec := nat.Port(strconv.Itoa(actor.rtmpPort) + ":1935")
+func (a *Actor) Start(ctx context.Context) error {
+	apiPortSpec := nat.Port(strconv.Itoa(a.apiPort) + ":9997")
+	rtmpPortSpec := nat.Port(strconv.Itoa(+a.rtmpPort) + ":1935")
 	exposedPorts, portBindings, _ := nat.ParsePortSpecs([]string{string(apiPortSpec), string(rtmpPortSpec)})
+
+	// The RTMP URL is passed to the UI via the state.
+	// This could be refactored, it's not really stateful data.
+	a.state.RTMPURL = a.RTMPURL()
 
 	cfg, err := yaml.Marshal(
 		Config{
@@ -128,7 +127,7 @@ func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err err
 				},
 				{
 					User: "api",
-					Pass: actor.pass,
+					Pass: a.pass,
 					IPs:  []string{}, // any IP
 					Permissions: []UserPermission{
 						{Action: "read"},
@@ -136,7 +135,7 @@ func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err err
 				},
 				{
 					User:        "api",
-					Pass:        actor.pass,
+					Pass:        a.pass,
 					IPs:         []string{}, // any IP
 					Permissions: []UserPermission{{Action: "api"}},
 				},
@@ -146,19 +145,19 @@ func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err err
 			APIServerCert: "/etc/tls.crt",
 			APIServerKey:  "/etc/tls.key",
 			Paths: map[string]Path{
-				string(actor.streamKey): {Source: "publisher"},
+				string(a.streamKey): {Source: "publisher"},
 			},
 		},
 	)
 	if err != nil { // should never happen
-		return nil, fmt.Errorf("marshal config: %w", err)
+		return fmt.Errorf("marshal config: %w", err)
 	}
 
-	containerStateC, errC := params.ContainerClient.RunContainer(
+	containerStateC, errC := a.containerClient.RunContainer(
 		ctx,
 		container.RunContainerParams{
 			Name:     componentName,
-			ChanSize: chanSize,
+			ChanSize: a.chanSize,
 			ContainerConfig: &typescontainer.Config{
 				Image:    imageNameMediaMTX,
 				Hostname: "mediaserver",
@@ -171,7 +170,7 @@ func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err err
 						"--silent",
 						"--cacert", "/etc/tls.crt",
 						"--config", "/etc/healthcheckopts.txt",
-						actor.healthCheckURL(),
+						a.healthCheckURL(),
 					},
 					Interval:      time.Second * 10,
 					StartPeriod:   time.Second * 2,
@@ -193,29 +192,26 @@ func StartActor(ctx context.Context, params StartActorParams) (_ *Actor, err err
 				},
 				{
 					Path:    "/etc/tls.crt",
-					Payload: bytes.NewReader(tlsCert),
+					Payload: bytes.NewReader(a.tlsCert),
 					Mode:    0600,
 				},
 				{
 					Path:    "/etc/tls.key",
-					Payload: bytes.NewReader(tlsKey),
+					Payload: bytes.NewReader(a.tlsKey),
 					Mode:    0600,
 				},
 				{
 					Path:    "/etc/healthcheckopts.txt",
-					Payload: bytes.NewReader([]byte(fmt.Sprintf("--user api:%s", actor.pass))),
+					Payload: bytes.NewReader([]byte(fmt.Sprintf("--user api:%s", a.pass))),
 					Mode:    0600,
 				},
 			},
 		},
 	)
 
-	actor.state.RTMPURL = actor.rtmpURL()
-	actor.state.RTMPInternalURL = actor.rtmpInternalURL()
+	go a.actorLoop(ctx, containerStateC, errC)
 
-	go actor.actorLoop(containerStateC, errC)
-
-	return actor, nil
+	return nil
 }
 
 // C returns a channel that will receive the current state of the media server.
@@ -224,6 +220,8 @@ func (s *Actor) C() <-chan domain.Source {
 }
 
 // State returns the current state of the media server.
+//
+// Blocks if the actor is not started yet.
 func (s *Actor) State() domain.Source {
 	resultChan := make(chan domain.Source)
 	s.actorC <- func() {
@@ -241,14 +239,12 @@ func (s *Actor) Close() error {
 		return fmt.Errorf("remove containers: %w", err)
 	}
 
-	s.cancel()
-
 	return nil
 }
 
 // actorLoop is the main loop of the media server actor. It exits when the
 // actor is closed, or the parent context is cancelled.
-func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan error) {
+func (s *Actor) actorLoop(ctx context.Context, containerStateC <-chan domain.Container, errC <-chan error) {
 	fetchStateT := time.NewTicker(s.fetchIngressStateInterval)
 	defer fetchStateT.Stop()
 
@@ -331,7 +327,7 @@ func (s *Actor) actorLoop(containerStateC <-chan domain.Container, errC <-chan e
 				continue
 			}
 			action()
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -351,14 +347,14 @@ func (s *Actor) handleContainerExit(err error) {
 	s.state.Live = false
 }
 
-// rtmpURL returns the RTMP URL for the media server, accessible from the host.
-func (s *Actor) rtmpURL() string {
+// RTMPURL returns the RTMP URL for the media server, accessible from the host.
+func (s *Actor) RTMPURL() string {
 	return fmt.Sprintf("rtmp://localhost:%d/%s", s.rtmpPort, s.streamKey)
 }
 
-// rtmpInternalURL returns the RTMP URL for the media server, accessible from
+// RTMPInternalURL returns the RTMP URL for the media server, accessible from
 // the app network.
-func (s *Actor) rtmpInternalURL() string {
+func (s *Actor) RTMPInternalURL() string {
 	// Container port, not host port:
 	return fmt.Sprintf("rtmp://mediaserver:1935/%s?user=api&pass=%s", s.streamKey, s.pass)
 }

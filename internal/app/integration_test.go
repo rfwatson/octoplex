@@ -15,10 +15,12 @@ import (
 
 	"git.netflux.io/rob/octoplex/internal/app"
 	"git.netflux.io/rob/octoplex/internal/config"
+	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/terminal"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	dockerclient "github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 	"github.com/gdamore/tcell/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -376,6 +378,99 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 		"expected a validation error for a duplicate URL",
 	)
 	printScreen(getContents, "After entering a duplicate destination URL")
+	cancel()
+
+	<-done
+}
+
+func TestIntegrationStartupCheck(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
+
+	// Start a container that looks like a stale Octoplex container:
+	staleContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        "bluenviron/mediamtx:latest",
+			Env:          map[string]string{"MTX_RTMPADDRESS": ":1937"},
+			ExposedPorts: []string{"1937/tcp"},
+			WaitingFor:   wait.ForListeningPort("1937/tcp"),
+			// It doesn't matter what image this container uses, as long as it has
+			// labels that look like an Octoplex container:
+			Labels: map[string]string{container.LabelApp: domain.AppName},
+		},
+		Started: true,
+	})
+	testcontainers.CleanupContainer(t, staleContainer)
+	require.NoError(t, err)
+
+	require.NoError(t, err)
+	logger := testhelpers.NewTestLogger(t).With("component", "integration")
+	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	require.NoError(t, err)
+
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true}}})
+	screen, screenCaptureC, getContents := setupSimulationScreen(t)
+
+	done := make(chan struct{})
+	go func() {
+		err := app.Run(ctx, app.RunParams{
+			ConfigService: configService,
+			DockerClient:  dockerClient,
+			Screen: &terminal.Screen{
+				Screen:   screen,
+				Width:    200,
+				Height:   25,
+				CaptureC: screenCaptureC,
+			},
+			ClipboardAvailable: false,
+			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
+			Logger:             logger,
+		})
+		require.NoError(t, err)
+
+		done <- struct{}{}
+	}()
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			assert.True(t, contentsIncludes(getContents(), "Another instance of Octoplex may already be running."), "expected to see startup check modal")
+		},
+		30*time.Second,
+		time.Second,
+		"expected to see startup check modal",
+	)
+	printScreen(getContents, "Ater displaying the startup check modal")
+
+	sendKey(screen, tcell.KeyEnter, ' ') // quit other containers
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			_, err := staleContainer.State(context.Background())
+			// IsRunning() does not work, probably because we're undercutting the
+			// testcontainers API.
+			require.True(t, errdefs.IsNotFound(err), "expected to not find the container")
+		},
+		time.Minute,
+		2*time.Second,
+		"expected to quit the other containers",
+	)
+	printScreen(getContents, "After quitting the other containers")
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			contents := getContents()
+			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+
+			assert.Contains(t, contents[2], "Status   waiting for stream", "expected mediaserver status to be waiting")
+		},
+		10*time.Second,
+		time.Second,
+		"expected the mediaserver to start",
+	)
+	printScreen(getContents, "After starting the mediaserver")
 	cancel()
 
 	<-done

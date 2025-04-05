@@ -31,14 +31,13 @@ type BuildInfo struct {
 
 // Source represents the source, currently always the mediaserver.
 type Source struct {
-	Container       Container
-	Live            bool
-	LiveChangedAt   time.Time
-	Listeners       int
-	Tracks          []string
-	RTMPURL         string
-	RTMPInternalURL string
-	ExitReason      string
+	Container     Container
+	Live          bool
+	LiveChangedAt time.Time
+	Listeners     int
+	Tracks        []string
+	RTMPURL       string
+	ExitReason    string
 }
 
 // DestinationStatus reflects the high-level status of a single destination.

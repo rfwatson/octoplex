@@ -61,9 +61,6 @@ type UI struct {
 	mu               sync.Mutex
 	urlsToStartState map[string]startState
 
-	// allowQuit is true if the user is allowed to quit the app (after the
-	// startup check has completed).
-	allowQuit bool
 	/// addingDestination is true if add destination modal is currently visible.
 	addingDestination bool
 	// hasDestinations is true if the UI thinks there are destinations
@@ -341,7 +338,7 @@ func (ui *UI) ShowStartupCheckModal() bool {
 	ui.app.QueueUpdateDraw(func() {
 		ui.showModal(
 			pageNameModalStartupCheck,
-			"Another instance of Octoplex may already be running. Pressing continue will close that instance. Continue?",
+			"Another instance of Octoplex may already be running.\n\nPressing continue will close that instance. Continue?",
 			[]string{"Continue", "Exit"},
 			func(buttonIndex int, _ string) {
 				if buttonIndex == 0 {
@@ -361,7 +358,7 @@ func (ui *UI) ShowDestinationErrorModal(name string, err error) {
 
 	ui.app.QueueUpdateDraw(func() {
 		ui.showModal(
-			pageNameModalStartupCheck,
+			pageNameModalDestinationError,
 			fmt.Sprintf(
 				"Streaming to %s failed:\n\n%s",
 				cmp.Or(name, "this destination"),
@@ -375,19 +372,6 @@ func (ui *UI) ShowDestinationErrorModal(name string, err error) {
 	})
 
 	<-done
-}
-
-// AllowQuit enables the quit action.
-func (ui *UI) AllowQuit() {
-	ui.mu.Lock()
-	defer ui.mu.Unlock()
-
-	// This is required to prevent the user from quitting during the startup
-	// check modal, when the main event loop is not yet running, and avoid an
-	// unexpected user experience. It might be nice to find a way to remove this
-	// but it probably means refactoring the mediaserver actor to separate
-	// starting the server from starting the event loop.
-	ui.allowQuit = true
 }
 
 // captureScreen captures the screen and sends it to the screenCaptureC
@@ -498,6 +482,7 @@ const (
 	pageNameMain                   = "main"
 	pageNameNoDestinations         = "no-destinations"
 	pageNameAddDestination         = "add-destination"
+	pageNameModalDestinationError  = "modal-destination-error"
 	pageNameModalAbout             = "modal-about"
 	pageNameModalQuit              = "modal-quit"
 	pageNameModalStartupCheck      = "modal-startup-check"
@@ -912,15 +897,6 @@ func (ui *UI) copyConfigFilePathToClipboard(clipboardAvailable bool, configFileP
 }
 
 func (ui *UI) confirmQuit() {
-	var allowQuit bool
-	ui.mu.Lock()
-	allowQuit = ui.allowQuit
-	ui.mu.Unlock()
-
-	if !allowQuit {
-		return
-	}
-
 	ui.showModal(
 		pageNameModalQuit,
 		"Are you sure you want to quit?",

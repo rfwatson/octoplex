@@ -37,6 +37,11 @@ func Run(ctx context.Context, params RunParams) error {
 	state := new(domain.AppState)
 	applyConfig(cfg, state)
 
+	// While RTMP is the only source, it doesn't make sense to disable it.
+	if !cfg.Sources.RTMP.Enabled {
+		return errors.New("config: sources.rtmp.enabled must be set to true")
+	}
+
 	logger := params.Logger
 	ui, err := terminal.StartUI(ctx, terminal.StartParams{
 		Screen:             params.Screen,
@@ -59,40 +64,18 @@ func Run(ctx context.Context, params RunParams) error {
 	updateUI := func() { ui.SetState(*state) }
 	updateUI()
 
-	var exists bool
-	if exists, err = containerClient.ContainerRunning(ctx, container.AllContainers()); err != nil {
-		return fmt.Errorf("check existing containers: %w", err)
-	} else if exists {
-		if ui.ShowStartupCheckModal() {
-			if err = containerClient.RemoveContainers(ctx, container.AllContainers()); err != nil {
-				return fmt.Errorf("remove existing containers: %w", err)
-			}
-			if err = containerClient.RemoveUnusedNetworks(ctx); err != nil {
-				return fmt.Errorf("remove unused networks: %w", err)
-			}
-		} else {
-			return nil
-		}
-	}
-	ui.AllowQuit()
-
-	// While RTMP is the only source, it doesn't make sense to disable it.
-	if !cfg.Sources.RTMP.Enabled {
-		return errors.New("config: sources.rtmp.enabled must be set to true")
-	}
-
-	srv, err := mediaserver.StartActor(ctx, mediaserver.StartActorParams{
+	srv, err := mediaserver.NewActor(ctx, mediaserver.StartActorParams{
 		StreamKey:       mediaserver.StreamKey(cfg.Sources.RTMP.StreamKey),
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "mediaserver"),
 	})
 	if err != nil {
-		return fmt.Errorf("start mediaserver: %w", err)
+		return fmt.Errorf("create mediaserver: %w", err)
 	}
 	defer srv.Close()
 
-	repl := replicator.NewActor(ctx, replicator.NewActorParams{
-		SourceURL:       srv.State().RTMPInternalURL,
+	repl := replicator.StartActor(ctx, replicator.NewActorParams{
+		SourceURL:       srv.RTMPInternalURL(),
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "replicator"),
 	})
@@ -102,8 +85,22 @@ func Run(ctx context.Context, params RunParams) error {
 	uiUpdateT := time.NewTicker(uiUpdateInterval)
 	defer uiUpdateT.Stop()
 
+	startupCheckC := doStartupCheck(ctx, containerClient, ui.ShowStartupCheckModal)
+
 	for {
 		select {
+		case err := <-startupCheckC:
+			if errors.Is(err, errStartupCheckUserQuit) {
+				return nil
+			} else if err != nil {
+				return fmt.Errorf("startup check: %w", err)
+			} else {
+				startupCheckC = nil
+
+				if err = srv.Start(ctx); err != nil {
+					return fmt.Errorf("start mediaserver: %w", err)
+				}
+			}
 		case cfg = <-params.ConfigService.C():
 			applyConfig(cfg, state)
 			updateUI()
@@ -247,4 +244,40 @@ func resolveDestinations(destinations []domain.Destination, inDestinations []con
 	}
 
 	return destinations[:len(inDestinations)]
+}
+
+var errStartupCheckUserQuit = errors.New("user quit startup check modal")
+
+// doStartupCheck performs a startup check to see if there are any existing app
+// containers.
+//
+// It returns a channel that will be closed, possibly after receiving an error.
+// If the error is non-nil the app must not be started. If the error is
+// [errStartupCheckUserQuit], the user voluntarily quit the startup check
+// modal.
+func doStartupCheck(ctx context.Context, containerClient *container.Client, showModal func() bool) <-chan error {
+	ch := make(chan error, 1)
+
+	go func() {
+		defer close(ch)
+
+		if exists, err := containerClient.ContainerRunning(ctx, container.AllContainers()); err != nil {
+			ch <- fmt.Errorf("check existing containers: %w", err)
+		} else if exists {
+			if showModal() {
+				if err = containerClient.RemoveContainers(ctx, container.AllContainers()); err != nil {
+					ch <- fmt.Errorf("remove existing containers: %w", err)
+					return
+				}
+				if err = containerClient.RemoveUnusedNetworks(ctx); err != nil {
+					ch <- fmt.Errorf("remove unused networks: %w", err)
+					return
+				}
+			} else {
+				ch <- errStartupCheckUserQuit
+			}
+		}
+	}()
+
+	return ch
 }
