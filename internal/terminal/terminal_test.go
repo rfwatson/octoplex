@@ -70,7 +70,7 @@ func TestRightPad(t *testing.T) {
 			want:  "foo   ",
 		},
 		{
-			name:  "string with equal lenth to required width",
+			name:  "string with length equal to required width",
 			input: "foobar",
 			want:  "foobar",
 		},
