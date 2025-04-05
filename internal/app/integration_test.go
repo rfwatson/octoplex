@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"runtime"
 	"strings"
@@ -472,6 +473,59 @@ func TestIntegrationStartupCheck(t *testing.T) {
 	)
 	printScreen(getContents, "After starting the mediaserver")
 	cancel()
+
+	<-done
+}
+
+func TestIntegrationMediaServerError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
+
+	lis, err := net.Listen("tcp", ":1935")
+	require.NoError(t, err)
+	t.Cleanup(func() { lis.Close() })
+
+	logger := testhelpers.NewTestLogger(t).With("component", "integration")
+	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	require.NoError(t, err)
+
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true}}})
+	screen, screenCaptureC, getContents := setupSimulationScreen(t)
+
+	done := make(chan struct{})
+	go func() {
+		err := app.Run(ctx, app.RunParams{
+			ConfigService: configService,
+			DockerClient:  dockerClient,
+			Screen: &terminal.Screen{
+				Screen:   screen,
+				Width:    200,
+				Height:   25,
+				CaptureC: screenCaptureC,
+			},
+			ClipboardAvailable: false,
+			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
+			Logger:             logger,
+		})
+		require.NoError(t, err)
+
+		done <- struct{}{}
+	}()
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			assert.True(t, contentsIncludes(getContents(), "Mediaserver error: Server process exited unexpectedly."), "expected to see title")
+			assert.True(t, contentsIncludes(getContents(), "address already in use"), "expected to see message")
+		},
+		time.Minute,
+		time.Second,
+		"expected to see media server error modal",
+	)
+	printScreen(getContents, "Ater displaying the media server error modal")
+
+	// Quit the app, this should cause the done channel to receive.
+	sendKey(screen, tcell.KeyEnter, ' ')
 
 	<-done
 }

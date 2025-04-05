@@ -480,16 +480,17 @@ func (ui *UI) updateProgressModal(container domain.Container) {
 // on top of other modals.
 const (
 	pageNameMain                   = "main"
-	pageNameNoDestinations         = "no-destinations"
 	pageNameAddDestination         = "add-destination"
-	pageNameModalDestinationError  = "modal-destination-error"
-	pageNameModalAbout             = "modal-about"
-	pageNameModalQuit              = "modal-quit"
-	pageNameModalStartupCheck      = "modal-startup-check"
-	pageNameModalClipboard         = "modal-clipboard"
-	pageNameModalPullProgress      = "modal-pull-progress"
-	pageNameModalRemoveDestination = "modal-remove-destination"
 	pageNameConfigUpdateFailed     = "modal-config-update-failed"
+	pageNameNoDestinations         = "no-destinations"
+	pageNameModalAbout             = "modal-about"
+	pageNameModalClipboard         = "modal-clipboard"
+	pageNameModalDestinationError  = "modal-destination-error"
+	pageNameModalPullProgress      = "modal-pull-progress"
+	pageNameModalQuit              = "modal-quit"
+	pageNameModalRemoveDestination = "modal-remove-destination"
+	pageNameModalSourceError       = "modal-source-error"
+	pageNameModalStartupCheck      = "modal-startup-check"
 )
 
 func (ui *UI) resetFocus() {
@@ -540,26 +541,23 @@ func (ui *UI) hideModal(pageName string) {
 }
 
 func (ui *UI) handleMediaServerClosed(exitReason string) {
-	done := make(chan struct{})
-
 	ui.app.QueueUpdateDraw(func() {
+		if ui.pages.HasPage(pageNameModalSourceError) {
+			return
+		}
+
 		modal := tview.NewModal()
 		modal.SetText("Mediaserver error: " + exitReason).
 			AddButtons([]string{"Quit"}).
 			SetBackgroundColor(tcell.ColorBlack).
 			SetTextColor(tcell.ColorWhite).
 			SetDoneFunc(func(int, string) {
-				// TODO: improve app cleanup
-				done <- struct{}{}
-
-				ui.app.Stop()
+				ui.commandCh <- CommandQuit{}
 			})
 		modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
-		ui.pages.AddPage("modal", modal, true, true)
+		ui.pages.AddPage(pageNameModalSourceError, modal, true, true)
 	})
-
-	<-done
 }
 
 const dash = "—"
@@ -904,7 +902,6 @@ func (ui *UI) confirmQuit() {
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
 				ui.commandCh <- CommandQuit{}
-				return
 			}
 		},
 	)
