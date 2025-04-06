@@ -43,12 +43,13 @@ type Actor struct {
 	stateC          chan State
 
 	// mutable state
+
 	currURLs  map[string]struct{}
 	nextIndex int
 }
 
-// NewActorParams contains the parameters for starting a new replicator actor.
-type NewActorParams struct {
+// StartActorParams contains the parameters for starting a new replicator actor.
+type StartActorParams struct {
 	SourceURL       string
 	ChanSize        int
 	ContainerClient *container.Client
@@ -58,7 +59,7 @@ type NewActorParams struct {
 // StartActor starts a new replicator actor.
 //
 // The channel exposed by [C] must be consumed by the caller.
-func StartActor(ctx context.Context, params NewActorParams) *Actor {
+func StartActor(ctx context.Context, params StartActorParams) *Actor {
 	ctx, cancel := context.WithCancel(ctx)
 
 	actor := &Actor{

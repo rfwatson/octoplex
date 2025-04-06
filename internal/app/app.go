@@ -64,7 +64,7 @@ func Run(ctx context.Context, params RunParams) error {
 	updateUI := func() { ui.SetState(*state) }
 	updateUI()
 
-	srv, err := mediaserver.NewActor(ctx, mediaserver.StartActorParams{
+	srv, err := mediaserver.NewActor(ctx, mediaserver.NewActorParams{
 		StreamKey:       mediaserver.StreamKey(cfg.Sources.RTMP.StreamKey),
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "mediaserver"),
@@ -74,7 +74,7 @@ func Run(ctx context.Context, params RunParams) error {
 	}
 	defer srv.Close()
 
-	repl := replicator.StartActor(ctx, replicator.NewActorParams{
+	repl := replicator.StartActor(ctx, replicator.StartActorParams{
 		SourceURL:       srv.RTMPInternalURL(),
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "replicator"),

@@ -59,9 +59,9 @@ type Actor struct {
 	state *domain.Source
 }
 
-// StartActorParams contains the parameters for starting a new media server
+// NewActorParams contains the parameters for building a new media server
 // actor.
-type StartActorParams struct {
+type NewActorParams struct {
 	APIPort                   int           // defaults to 9997
 	RTMPPort                  int           // defaults to 1935
 	StreamKey                 StreamKey     // defaults to "live"
@@ -74,7 +74,7 @@ type StartActorParams struct {
 // NewActor creates a new media server actor.
 //
 // Callers must consume the state channel exposed via [C].
-func NewActor(ctx context.Context, params StartActorParams) (_ *Actor, err error) {
+func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) {
 	tlsCert, tlsKey, err := generateTLSCert()
 	if err != nil {
 		return nil, fmt.Errorf("generate TLS cert: %w", err)
