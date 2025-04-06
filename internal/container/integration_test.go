@@ -39,7 +39,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 		Name:     containerName,
 		ChanSize: 1,
 		ContainerConfig: &typescontainer.Config{
-			Image:  "netfluxio/mediamtx-alpine:latest",
+			Image:  "ghcr.io/rfwatson/mediamtx-alpine:latest",
 			Labels: map[string]string{container.LabelComponent: component},
 		},
 		HostConfig: &typescontainer.HostConfig{
@@ -84,7 +84,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 	stateC, err1C := client.RunContainer(ctx, container.RunContainerParams{
 		ChanSize: 1,
 		ContainerConfig: &typescontainer.Config{
-			Image:  "netfluxio/mediamtx-alpine:latest",
+			Image:  "ghcr.io/rfwatson/mediamtx-alpine:latest",
 			Labels: map[string]string{container.LabelComponent: component, "group": "test1"},
 		},
 		HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
@@ -95,7 +95,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 	stateC, err2C := client.RunContainer(ctx, container.RunContainerParams{
 		ChanSize: 1,
 		ContainerConfig: &typescontainer.Config{
-			Image:  "netfluxio/mediamtx-alpine:latest",
+			Image:  "ghcr.io/rfwatson/mediamtx-alpine:latest",
 			Labels: map[string]string{container.LabelComponent: component, "group": "test1"},
 		},
 		HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
@@ -106,7 +106,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 	stateC, err3C := client.RunContainer(ctx, container.RunContainerParams{
 		ChanSize: 1,
 		ContainerConfig: &typescontainer.Config{
-			Image:  "netfluxio/mediamtx-alpine:latest",
+			Image:  "ghcr.io/rfwatson/mediamtx-alpine:latest",
 			Labels: map[string]string{container.LabelComponent: component, "group": "test2"},
 		},
 		HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},

@@ -27,14 +27,14 @@ import (
 type StreamKey string
 
 const (
-	defaultFetchIngressStateInterval           = 5 * time.Second                    // default interval to fetch the state of the media server
-	defaultAPIPort                             = 9997                               // default API host port for the media server
-	defaultRTMPPort                            = 1935                               // default RTMP host port for the media server
-	defaultChanSize                            = 64                                 // default channel size for asynchronous non-error channels
-	imageNameMediaMTX                          = "netfluxio/mediamtx-alpine:latest" // image name for mediamtx
-	defaultStreamKey                 StreamKey = "live"                             // Default stream key. See [StreamKey].
-	componentName                              = "mediaserver"                      // component name, mostly used for Docker labels
-	httpClientTimeout                          = time.Second                        // timeout for outgoing HTTP client requests
+	defaultFetchIngressStateInterval           = 5 * time.Second                           // default interval to fetch the state of the media server
+	defaultAPIPort                             = 9997                                      // default API host port for the media server
+	defaultRTMPPort                            = 1935                                      // default RTMP host port for the media server
+	defaultChanSize                            = 64                                        // default channel size for asynchronous non-error channels
+	imageNameMediaMTX                          = "ghcr.io/rfwatson/mediamtx-alpine:latest" // image name for mediamtx
+	defaultStreamKey                 StreamKey = "live"                                    // Default stream key. See [StreamKey].
+	componentName                              = "mediaserver"                             // component name, mostly used for Docker labels
+	httpClientTimeout                          = time.Second                               // timeout for outgoing HTTP client requests
 )
 
 // action is an action to be performed by the actor.
