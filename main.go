@@ -42,9 +42,17 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("build config service: %w", err)
 	}
 
+	help := flag.Bool("h", false, "Show help")
+
 	flag.Parse()
+
+	if *help {
+		printUsage()
+		return nil
+	}
+
 	if narg := flag.NArg(); narg > 1 {
-		flag.Usage()
+		printUsage()
 		return fmt.Errorf("too many arguments")
 	} else if narg == 1 {
 		switch flag.Arg(0) {
@@ -54,7 +62,7 @@ func run(ctx context.Context) error {
 			return printConfigPath(configService.Path())
 		case "version":
 			return printVersion()
-		case "help", "-h", "--help":
+		case "help":
 			printUsage()
 			return nil
 		}
