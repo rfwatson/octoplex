@@ -178,9 +178,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 		defer close(errC)
 
 		if err := a.pullImageIfNeeded(ctx, params.ContainerConfig.Image, containerStateC); err != nil {
-			a.logger.Error("Error pulling image", "err", err)
-			sendError(fmt.Errorf("image pull: %w", err))
-			return
+			a.logger.Warn("Error pulling image", "err", err)
 		}
 
 		containerConfig := *params.ContainerConfig

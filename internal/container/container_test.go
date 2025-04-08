@@ -44,7 +44,7 @@ func TestClientRunContainer(t *testing.T) {
 	dockerClient.
 		EXPECT().
 		ImagePull(mock.Anything, "alpine", image.PullOptions{}).
-		Return(io.NopCloser(bytes.NewReader(nil)), nil)
+		Return(io.NopCloser(bytes.NewReader(nil)), errors.New("error pulling image should not be fatal"))
 	dockerClient.
 		EXPECT().
 		ContainerCreate(mock.Anything, mock.Anything, mock.Anything, mock.Anything, (*ocispec.Platform)(nil), mock.Anything).
