@@ -40,9 +40,11 @@ const (
 
 // UI is responsible for managing the terminal user interface.
 type UI struct {
-	commandCh chan Command
-	buildInfo domain.BuildInfo
-	logger    *slog.Logger
+	commandCh          chan Command
+	clipboardAvailable bool
+	configFilePath     string
+	buildInfo          domain.BuildInfo
+	logger             *slog.Logger
 
 	// tview state
 
@@ -214,14 +216,16 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	app.EnableMouse(false)
 
 	ui := &UI{
-		commandCh:      commandCh,
-		buildInfo:      params.BuildInfo,
-		logger:         params.Logger,
-		app:            app,
-		screen:         screen,
-		screenCaptureC: screenCaptureC,
-		pages:          pages,
-		container:      container,
+		commandCh:          commandCh,
+		clipboardAvailable: params.ClipboardAvailable,
+		configFilePath:     params.ConfigFilePath,
+		buildInfo:          params.BuildInfo,
+		logger:             params.Logger,
+		app:                app,
+		screen:             screen,
+		screenCaptureC:     screenCaptureC,
+		pages:              pages,
+		container:          container,
 		sourceViews: sourceViews{
 			url:    urlTextView,
 			status: statusTextView,
@@ -237,45 +241,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 		urlsToStartState:  make(map[string]startState),
 	}
 
-	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// Special case: allow all keys except Escape to be passed to the add
-		// destination modal.
-		//
-		// TODO: catch Ctrl-c
-		if pageName, _ := pages.GetFrontPage(); pageName == pageNameAddDestination {
-			if event.Key() == tcell.KeyEscape {
-				ui.closeAddDestinationForm()
-				return nil
-			}
-
-			return event
-		}
-
-		switch event.Key() {
-		case tcell.KeyRune:
-			switch event.Rune() {
-			case 'a', 'A':
-				ui.addDestination()
-				return nil
-			case 'r', 'R':
-				ui.removeDestination()
-				return nil
-			case ' ':
-				ui.toggleDestination()
-			case 'u', 'U':
-				ui.copySourceURLToClipboard(params.ClipboardAvailable)
-			case 'c', 'C':
-				ui.copyConfigFilePathToClipboard(params.ClipboardAvailable, params.ConfigFilePath)
-			case '?':
-				ui.showAbout()
-			}
-		case tcell.KeyCtrlC:
-			ui.confirmQuit()
-			return nil
-		}
-
-		return event
-	})
+	app.SetInputCapture(ui.handleInputCapture)
 
 	if ui.screenCaptureC != nil {
 		app.SetAfterDrawFunc(ui.captureScreen)
@@ -313,6 +279,45 @@ func (ui *UI) run(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (ui *UI) handleInputCapture(event *tcell.EventKey) *tcell.EventKey {
+	// Special case: handle CTRL-C even when a modal is visible.
+	if event.Key() == tcell.KeyCtrlC {
+		ui.confirmQuit()
+		return nil
+	}
+
+	if ui.modalVisible() {
+		return event
+	}
+
+	switch event.Key() {
+	case tcell.KeyRune:
+		switch event.Rune() {
+		case 'a', 'A':
+			ui.addDestination()
+			return nil
+		case 'r', 'R':
+			ui.removeDestination()
+			return nil
+		case ' ':
+			ui.toggleDestination()
+		case 'u', 'U':
+			ui.copySourceURLToClipboard(ui.clipboardAvailable)
+		case 'c', 'C':
+			ui.copyConfigFilePathToClipboard(ui.clipboardAvailable, ui.configFilePath)
+		case '?':
+			ui.showAbout()
+		}
+	case tcell.KeyUp:
+		row, _ := ui.destView.GetSelection()
+		if row == 1 {
+			ui.destView.Select(ui.destView.GetRowCount(), 0)
+		}
+	}
+
+	return event
 }
 
 func (ui *UI) ShowSourceNotLiveModal() {
@@ -508,6 +513,11 @@ func (ui *UI) resetFocus() {
 	}
 }
 
+func (ui *UI) modalVisible() bool {
+	pageName, _ := ui.pages.GetFrontPage()
+	return pageName != pageNameMain && pageName != pageNameNoDestinations
+}
+
 func (ui *UI) showModal(pageName string, text string, buttons []string, doneFunc func(int, string)) {
 	if ui.pages.HasPage(pageName) {
 		return
@@ -520,6 +530,11 @@ func (ui *UI) showModal(pageName string, text string, buttons []string, doneFunc
 		SetTextColor(tcell.ColorWhite).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			ui.pages.RemovePage(pageName)
+
+			if !ui.modalVisible() {
+				ui.app.SetInputCapture(ui.handleInputCapture)
+			}
+
 			ui.resetFocus()
 
 			if doneFunc != nil {
@@ -753,6 +768,13 @@ func (ui *UI) addDestination() {
 		SetBorder(true).
 		SetTitle("Add a new destination").
 		SetTitleAlign(tview.AlignLeft).
+		SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+			if event.Key() == tcell.KeyEscape {
+				ui.closeAddDestinationForm()
+				return nil
+			}
+			return event
+		}).
 		SetRect((currWidth-formWidth)/2, (currHeight-formHeight)/2, formWidth, formHeight)
 
 	ui.mu.Lock()
