@@ -121,7 +121,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	sourceView := tview.NewFlex()
 	sourceView.SetDirection(tview.FlexColumn)
 	sourceView.SetBorder(true)
-	sourceView.SetTitle("Ingress RTMP server")
+	sourceView.SetTitle("Source RTMP server")
 	sidebar.AddItem(sourceView, 9, 0, false)
 
 	leftCol := tview.NewFlex()
@@ -173,7 +173,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	aboutView.AddItem(tview.NewTextView().SetText("[a] Add new destination"), 1, 0, false)
 	aboutView.AddItem(tview.NewTextView().SetText("[r] Remove destination"), 1, 0, false)
 	aboutView.AddItem(tview.NewTextView().SetText("[Space] Toggle destination"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetText("[u] Copy ingress RTMP URL"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetText("[u] Copy source RTMP URL"), 1, 0, false)
 	aboutView.AddItem(tview.NewTextView().SetText("[c] Copy config file path"), 1, 0, false)
 	aboutView.AddItem(tview.NewTextView().SetText("[?] About"), 1, 0, false)
 
@@ -860,7 +860,7 @@ func (ui *UI) copySourceURLToClipboard(clipboardAvailable bool) {
 	url := ui.sourceViews.url.GetText(true)
 	if clipboardAvailable {
 		clipboard.Write(clipboard.FmtText, []byte(url))
-		text = "Ingress URL copied to clipboard:\n\n" + url
+		text = "Source URL copied to clipboard:\n\n" + url
 	} else {
 		text = "Copy to clipboard not available:\n\n" + url
 	}
