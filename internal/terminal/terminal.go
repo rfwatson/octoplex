@@ -40,7 +40,7 @@ const (
 
 // UI is responsible for managing the terminal user interface.
 type UI struct {
-	commandCh          chan Command
+	commandC           chan Command
 	clipboardAvailable bool
 	configFilePath     string
 	buildInfo          domain.BuildInfo
@@ -216,7 +216,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	app.EnableMouse(false)
 
 	ui := &UI{
-		commandCh:          commandCh,
+		commandC:           commandCh,
 		clipboardAvailable: params.ClipboardAvailable,
 		configFilePath:     params.ConfigFilePath,
 		buildInfo:          params.BuildInfo,
@@ -254,11 +254,11 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 
 // C returns a channel that receives commands from the user interface.
 func (ui *UI) C() <-chan Command {
-	return ui.commandCh
+	return ui.commandC
 }
 
 func (ui *UI) run(ctx context.Context) {
-	defer close(ui.commandCh)
+	defer close(ui.commandC)
 
 	uiDone := make(chan struct{})
 	go func() {
@@ -379,6 +379,24 @@ func (ui *UI) ShowDestinationErrorModal(name string, err error) {
 	<-done
 }
 
+// ShowFatalErrorModal displays the provided error. It sends a CommandQuit to the
+// command channel when the user selects the Quit button.
+func (ui *UI) ShowFatalErrorModal(err error) {
+	ui.app.QueueUpdateDraw(func() {
+		ui.showModal(
+			pageNameModalFatalError,
+			fmt.Sprintf(
+				"An error occurred:\n\n%s",
+				err,
+			),
+			[]string{"Quit"},
+			func(int, string) {
+				ui.commandC <- CommandQuit{}
+			},
+		)
+	})
+}
+
 // captureScreen captures the screen and sends it to the screenCaptureC
 // channel, which must have been set in StartParams.
 //
@@ -387,7 +405,8 @@ func (ui *UI) ShowDestinationErrorModal(name string, err error) {
 func (ui *UI) captureScreen(screen tcell.Screen) {
 	simScreen, ok := screen.(tcell.SimulationScreen)
 	if !ok {
-		ui.logger.Error("simulation screen not available")
+		ui.logger.Warn("captureScreen: simulation screen not available")
+		return
 	}
 
 	cells, w, h := simScreen.GetContents()
@@ -491,6 +510,7 @@ const (
 	pageNameModalAbout             = "modal-about"
 	pageNameModalClipboard         = "modal-clipboard"
 	pageNameModalDestinationError  = "modal-destination-error"
+	pageNameModalFatalError        = "modal-fatal-error"
 	pageNameModalPullProgress      = "modal-pull-progress"
 	pageNameModalQuit              = "modal-quit"
 	pageNameModalRemoveDestination = "modal-remove-destination"
@@ -567,7 +587,7 @@ func (ui *UI) handleMediaServerClosed(exitReason string) {
 			SetBackgroundColor(tcell.ColorBlack).
 			SetTextColor(tcell.ColorWhite).
 			SetDoneFunc(func(int, string) {
-				ui.commandCh <- CommandQuit{}
+				ui.commandC <- CommandQuit{}
 			})
 		modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
@@ -758,7 +778,7 @@ func (ui *UI) addDestination() {
 		AddInputField(inputLabelName, "My stream", inputLen, nil, nil).
 		AddInputField(inputLabelURL, "rtmp://", inputLen, nil, nil).
 		AddButton("Add", func() {
-			ui.commandCh <- CommandAddDestination{
+			ui.commandC <- CommandAddDestination{
 				DestinationName: form.GetFormItemByLabel(inputLabelName).(*tview.InputField).GetText(),
 				URL:             form.GetFormItemByLabel(inputLabelURL).(*tview.InputField).GetText(),
 			}
@@ -809,7 +829,7 @@ func (ui *UI) removeDestination() {
 		[]string{"Remove", "Cancel"},
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.commandCh <- CommandRemoveDestination{URL: url}
+				ui.commandC <- CommandRemoveDestination{URL: url}
 			}
 		},
 	)
@@ -867,12 +887,12 @@ func (ui *UI) toggleDestination() {
 	switch ss {
 	case startStateNotStarted:
 		ui.urlsToStartState[url] = startStateStarting
-		ui.commandCh <- CommandStartDestination{URL: url}
+		ui.commandC <- CommandStartDestination{URL: url}
 	case startStateStarting:
 		// do nothing
 		return
 	case startStateStarted:
-		ui.commandCh <- CommandStopDestination{URL: url}
+		ui.commandC <- CommandStopDestination{URL: url}
 	}
 }
 
@@ -923,7 +943,7 @@ func (ui *UI) confirmQuit() {
 		[]string{"Quit", "Cancel"},
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.commandCh <- CommandQuit{}
+				ui.commandC <- CommandQuit{}
 			}
 		},
 	)

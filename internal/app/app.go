@@ -55,8 +55,23 @@ func Run(ctx context.Context, params RunParams) error {
 	}
 	defer ui.Close()
 
+	// emptyUI is a dummy function that sets the UI state to an empty state, and
+	// re-renders the screen.
+	//
+	// This is a workaround for a weird interaction between tview and
+	// tcell.SimulationScreen which leads to newly-added pages not rendering if
+	// the UI is not re-rendered for a second time.
+	// It is only needed for integration tests when rendering modals before the
+	// main loop starts. It would be nice to remove this but the risk/impact on
+	// non-test code is pretty low.
+	emptyUI := func() { ui.SetState(domain.AppState{}) }
+
 	containerClient, err := container.NewClient(ctx, params.DockerClient, logger.With("component", "container_client"))
 	if err != nil {
+		err = fmt.Errorf("create container client: %w", err)
+		ui.ShowFatalErrorModal(err)
+		emptyUI()
+		<-ui.C()
 		return err
 	}
 	defer containerClient.Close()
@@ -70,7 +85,11 @@ func Run(ctx context.Context, params RunParams) error {
 		Logger:          logger.With("component", "mediaserver"),
 	})
 	if err != nil {
-		return fmt.Errorf("create mediaserver: %w", err)
+		err = fmt.Errorf("create mediaserver: %w", err)
+		ui.ShowFatalErrorModal(err)
+		emptyUI()
+		<-ui.C()
+		return err
 	}
 	defer srv.Close()
 

@@ -4,6 +4,7 @@ package app_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -15,13 +16,16 @@ import (
 	"git.netflux.io/rob/octoplex/internal/app"
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/container"
+	"git.netflux.io/rob/octoplex/internal/container/mocks"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/terminal"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
+	"github.com/docker/docker/api/types/network"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	"github.com/gdamore/tcell/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -68,6 +72,10 @@ func TestIntegration(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
+		defer func() {
+			done <- struct{}{}
+		}()
+
 		err := app.Run(ctx, app.RunParams{
 			ConfigService: configService,
 			DockerClient:  dockerClient,
@@ -82,8 +90,6 @@ func TestIntegration(t *testing.T) {
 			Logger:             logger,
 		})
 		require.NoError(t, err)
-
-		done <- struct{}{}
 	}()
 
 	require.EventuallyWithT(
@@ -258,6 +264,10 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
+		defer func() {
+			done <- struct{}{}
+		}()
+
 		err := app.Run(ctx, app.RunParams{
 			ConfigService: configService,
 			DockerClient:  dockerClient,
@@ -272,8 +282,6 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			Logger:             logger,
 		})
 		require.NoError(t, err)
-
-		done <- struct{}{}
 	}()
 
 	require.EventuallyWithT(
@@ -412,6 +420,10 @@ func TestIntegrationStartupCheck(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
+		defer func() {
+			done <- struct{}{}
+		}()
+
 		err := app.Run(ctx, app.RunParams{
 			ConfigService: configService,
 			DockerClient:  dockerClient,
@@ -426,8 +438,6 @@ func TestIntegrationStartupCheck(t *testing.T) {
 			Logger:             logger,
 		})
 		require.NoError(t, err)
-
-		done <- struct{}{}
 	}()
 
 	require.EventuallyWithT(
@@ -492,6 +502,10 @@ func TestIntegrationMediaServerError(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
+		defer func() {
+			done <- struct{}{}
+		}()
+
 		err := app.Run(ctx, app.RunParams{
 			ConfigService: configService,
 			DockerClient:  dockerClient,
@@ -506,8 +520,6 @@ func TestIntegrationMediaServerError(t *testing.T) {
 			Logger:             logger,
 		})
 		require.NoError(t, err)
-
-		done <- struct{}{}
 	}()
 
 	require.EventuallyWithT(
@@ -521,6 +533,58 @@ func TestIntegrationMediaServerError(t *testing.T) {
 		"expected to see media server error modal",
 	)
 	printScreen(getContents, "Ater displaying the media server error modal")
+
+	// Quit the app, this should cause the done channel to receive.
+	sendKey(screen, tcell.KeyEnter, ' ')
+
+	<-done
+}
+
+func TestIntegrationDockerClientError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
+
+	logger := testhelpers.NewTestLogger(t).With("component", "integration")
+
+	var dockerClient mocks.DockerClient
+	dockerClient.EXPECT().NetworkCreate(mock.Anything, mock.Anything, mock.Anything).Return(network.CreateResponse{}, errors.New("boom"))
+
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true}}})
+	screen, screenCaptureC, getContents := setupSimulationScreen(t)
+
+	done := make(chan struct{})
+	go func() {
+		defer func() {
+			done <- struct{}{}
+		}()
+
+		err := app.Run(ctx, app.RunParams{
+			ConfigService: configService,
+			DockerClient:  &dockerClient,
+			Screen: &terminal.Screen{
+				Screen:   screen,
+				Width:    200,
+				Height:   25,
+				CaptureC: screenCaptureC,
+			},
+			ClipboardAvailable: false,
+			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
+			Logger:             logger,
+		})
+		require.EqualError(t, err, "create container client: network create: boom")
+	}()
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			assert.True(t, contentsIncludes(getContents(), "An error occurred:"), "expected to see error message")
+			assert.True(t, contentsIncludes(getContents(), "create container client: network create: boom"), "expected to see message")
+		},
+		5*time.Second,
+		time.Second,
+		"expected to see fatal error modal",
+	)
+	printScreen(getContents, "Ater displaying the fatal error modal")
 
 	// Quit the app, this should cause the done channel to receive.
 	sendKey(screen, tcell.KeyEnter, ' ')

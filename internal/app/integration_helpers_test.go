@@ -44,6 +44,9 @@ func setupSimulationScreen(t *testing.T) (tcell.SimulationScreen, chan<- termina
 			if y > len(lines)-1 {
 				lines = append(lines, "")
 			}
+			if len(screenCells[n].Runes) == 0 { // shouldn't really happen unless there is no output
+				continue
+			}
 			lines[y] += string(screenCells[n].Runes[0])
 		}
 
