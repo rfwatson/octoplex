@@ -189,7 +189,7 @@ func TestIntegration(t *testing.T) {
 	)
 	printScreen(getContents, "After starting the destination streams")
 
-	sendKey(screen, tcell.KeyRune, 'r')
+	sendKey(screen, tcell.KeyDelete, ' ')
 	sendKey(screen, tcell.KeyEnter, ' ')
 
 	require.EventuallyWithT(

@@ -172,12 +172,13 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	aboutView.SetDirection(tview.FlexRow)
 	aboutView.SetBorder(true)
 	aboutView.SetTitle("Actions")
-	aboutView.AddItem(tview.NewTextView().SetText("[a] Add new destination"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetText("[r] Remove destination"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetText("[Space] Toggle destination"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetText("[u] Copy source RTMP URL"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetText("[c] Copy config file path"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetText("[?] About"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]a[-]        Add destination"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Del[-]      Remove destination"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Space[-]    Start/stop destination"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText(""), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]u[-]        Copy source RTMP URL"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]c[-]        Copy config file path"), 1, 0, false)
+	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]?[-]        About"), 1, 0, false)
 
 	sidebar.AddItem(aboutView, 0, 1, false)
 
@@ -298,9 +299,6 @@ func (ui *UI) handleInputCapture(event *tcell.EventKey) *tcell.EventKey {
 		case 'a', 'A':
 			ui.addDestination()
 			return nil
-		case 'r', 'R':
-			ui.removeDestination()
-			return nil
 		case ' ':
 			ui.toggleDestination()
 		case 'u', 'U':
@@ -310,6 +308,9 @@ func (ui *UI) handleInputCapture(event *tcell.EventKey) *tcell.EventKey {
 		case '?':
 			ui.showAbout()
 		}
+	case tcell.KeyDelete, tcell.KeyBackspace, tcell.KeyBackspace2:
+		ui.removeDestination()
+		return nil
 	case tcell.KeyUp:
 		row, _ := ui.destView.GetSelection()
 		if row == 1 {
