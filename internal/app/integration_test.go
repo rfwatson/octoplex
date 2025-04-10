@@ -325,7 +325,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			contents := getContents()
 
 			assert.True(t, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
-			assert.True(t, contentsIncludes(contents, "validate: destination URL must start with"), "expected to see config update error")
+			assert.True(t, contentsIncludes(contents, "validate: destination URL must be an RTMP URL"), "expected to see invalid RTMP URL error")
 		},
 		10*time.Second,
 		time.Second,
@@ -345,7 +345,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			contents := getContents()
 
 			assert.True(t, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
-			assert.True(t, contentsIncludes(contents, "validate: destination URL must start with"), "expected to see config update error")
+			assert.True(t, contentsIncludes(contents, "validate: destination URL must be an RTMP URL"), "expected to see invalid RTMP URL error")
 		},
 		10*time.Second,
 		time.Second,

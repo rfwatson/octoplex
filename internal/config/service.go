@@ -5,9 +5,9 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -204,8 +204,10 @@ func validate(cfg Config) error {
 	urlCounts := make(map[string]int)
 
 	for _, dest := range cfg.Destinations {
-		if !strings.HasPrefix(dest.URL, "rtmp://") {
-			err = errors.Join(err, fmt.Errorf("destination URL must start with rtmp://"))
+		if u, urlErr := url.Parse(dest.URL); urlErr != nil {
+			err = errors.Join(err, fmt.Errorf("invalid destination URL: %w", urlErr))
+		} else if u.Scheme != "rtmp" {
+			err = errors.Join(err, errors.New("destination URL must be an RTMP URL"))
 		}
 
 		urlCounts[dest.URL]++

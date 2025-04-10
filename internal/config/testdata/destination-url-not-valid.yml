@@ -1,0 +1,6 @@
+---
+logfile:
+  enabled: true
+  path: test.log
+destinations:
+- url: rtmp://rtmp.example.com/%%+

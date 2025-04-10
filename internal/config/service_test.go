@@ -25,8 +25,11 @@ var configLogfile []byte
 //go:embed testdata/no-logfile.yml
 var configNoLogfile []byte
 
-//go:embed testdata/invalid-destination-url.yml
-var configInvalidDestinationURL []byte
+//go:embed testdata/destination-url-not-rtmp.yml
+var configDestinationURLNotRTMP []byte
+
+//go:embed testdata/destination-url-not-valid.yml
+var configDestinationURLNotValid []byte
 
 //go:embed testdata/multiple-invalid-destination-urls.yml
 var configMultipleInvalidDestinationURLs []byte
@@ -120,14 +123,19 @@ func TestConfigServiceReadConfig(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid destination URL",
-			configBytes: configInvalidDestinationURL,
-			wantErr:     "destination URL must start with rtmp://",
+			name:        "destination URL is not rtmp scheme",
+			configBytes: configDestinationURLNotRTMP,
+			wantErr:     "destination URL must be an RTMP URL",
+		},
+		{
+			name:        "destination URL is not valid",
+			configBytes: configDestinationURLNotValid,
+			wantErr:     `invalid destination URL: parse "rtmp://rtmp.example.com/%%+": invalid URL escape "%%+"`,
 		},
 		{
 			name:        "multiple invalid destination URLs",
 			configBytes: configMultipleInvalidDestinationURLs,
-			wantErr:     "destination URL must start with rtmp://\ndestination URL must start with rtmp://",
+			wantErr:     "destination URL must be an RTMP URL\ndestination URL must be an RTMP URL",
 		},
 	}
 
