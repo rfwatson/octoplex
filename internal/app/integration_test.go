@@ -20,6 +20,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/terminal"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
+	typescontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
@@ -53,6 +54,18 @@ func TestIntegration(t *testing.T) {
 	logger.Info("Initialised logger", "debug_level", logger.Enabled(ctx, slog.LevelDebug), "runner_debug", os.Getenv("RUNNER_DEBUG"))
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 	require.NoError(t, err)
+
+	// List existing containers to debug Github Actions environment.
+	containers, err := dockerClient.ContainerList(ctx, typescontainer.ListOptions{})
+	require.NoError(t, err)
+
+	if len(containers) == 0 {
+		logger.Info("No existing containers found")
+	} else {
+		for _, ctr := range containers {
+			logger.Info("Container", "id", ctr.ID, "name", ctr.Names, "image", ctr.Image, "started", ctr.Created, "labels", ctr.Labels)
+		}
+	}
 
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
