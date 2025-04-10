@@ -68,6 +68,9 @@ type UI struct {
 	// hasDestinations is true if the UI thinks there are destinations
 	// configured.
 	hasDestinations bool
+	// lastSelectedDestIndex is the index of the last selected destination, starting
+	// at 1 (because 0 is the header).
+	lastSelectedDestIndex int
 }
 
 // Screen represents a terminal screen. This includes its desired dimensions,
@@ -242,11 +245,8 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 		urlsToStartState:  make(map[string]startState),
 	}
 
-	app.SetInputCapture(ui.handleInputCapture)
-
-	if ui.screenCaptureC != nil {
-		app.SetAfterDrawFunc(ui.captureScreen)
-	}
+	app.SetInputCapture(ui.inputCaptureHandler)
+	app.SetAfterDrawFunc(ui.afterDrawHandler)
 
 	go ui.run(ctx)
 
@@ -282,7 +282,7 @@ func (ui *UI) run(ctx context.Context) {
 	}
 }
 
-func (ui *UI) handleInputCapture(event *tcell.EventKey) *tcell.EventKey {
+func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
 	// Special case: handle CTRL-C even when a modal is visible.
 	if event.Key() == tcell.KeyCtrlC {
 		ui.confirmQuit()
@@ -396,6 +396,14 @@ func (ui *UI) ShowFatalErrorModal(err error) {
 			},
 		)
 	})
+}
+
+func (ui *UI) afterDrawHandler(screen tcell.Screen) {
+	if ui.screenCaptureC == nil {
+		return
+	}
+
+	ui.captureScreen(screen)
 }
 
 // captureScreen captures the screen and sends it to the screenCaptureC
@@ -519,24 +527,61 @@ const (
 	pageNameModalStartupCheck      = "modal-startup-check"
 )
 
-func (ui *UI) resetFocus() {
-	if name, el := ui.pages.GetFrontPage(); name == pageNameMain || name == pageNameNoDestinations {
-		ui.app.SetFocus(ui.destView)
-		// If we don't explicitly set the focus to some row, then sometimes no row
-		// is selected and the user must press up or down to select a row before
-		// continuing. This isn't completely a blocker but it is sometime a bit
-		// confusing and also makes integration tests less predictable. It would be
-		// nice to improve this behaviour so that e.g. if a new destination is
-		// added then that destination is selected, not the first in the row.
-		ui.destView.Select(1, 0)
-	} else {
-		ui.app.SetFocus(el)
-	}
-}
-
+// modalVisible returns true if any modal, including the add destination form,
+// is visible.
 func (ui *UI) modalVisible() bool {
 	pageName, _ := ui.pages.GetFrontPage()
 	return pageName != pageNameMain && pageName != pageNameNoDestinations
+}
+
+// saveSelectedDestination saves the last selected destination index to local
+// mutable state.
+//
+// This is needed so that the user's selection can be restored
+// after redrawing the screen. It may be possible to remove this if we can
+// re-render the screen more selectively instead of calling [redrawFromState]
+// every time the state changes.
+func (ui *UI) saveSelectedDestination() {
+	row, _ := ui.destView.GetSelection()
+	ui.mu.Lock()
+	ui.lastSelectedDestIndex = row
+	ui.mu.Unlock()
+}
+
+// selectPreviousDestination sets the focus to the last-selected destination.
+func (ui *UI) selectPreviousDestination() {
+	if ui.modalVisible() {
+		return
+	}
+
+	var row int
+	ui.mu.Lock()
+	row = ui.lastSelectedDestIndex
+	ui.mu.Unlock()
+
+	// If the last element has been removed, select the new last element.
+	row = min(ui.destView.GetRowCount()-1, row)
+
+	ui.app.SetFocus(ui.destView)
+
+	if row == 0 {
+		return
+	}
+
+	ui.destView.Select(row, 0)
+}
+
+// selectLastDestination sets the user selection to the last destination.
+func (ui *UI) selectLastDestination() {
+	if ui.modalVisible() {
+		return
+	}
+
+	ui.app.SetFocus(ui.destView)
+
+	if rowCount := ui.destView.GetRowCount(); rowCount > 1 {
+		ui.destView.Select(rowCount-1, 0)
+	}
 }
 
 func (ui *UI) showModal(pageName string, text string, buttons []string, doneFunc func(int, string)) {
@@ -553,16 +598,18 @@ func (ui *UI) showModal(pageName string, text string, buttons []string, doneFunc
 			ui.pages.RemovePage(pageName)
 
 			if !ui.modalVisible() {
-				ui.app.SetInputCapture(ui.handleInputCapture)
+				ui.app.SetInputCapture(ui.inputCaptureHandler)
 			}
-
-			ui.resetFocus()
 
 			if doneFunc != nil {
 				doneFunc(buttonIndex, buttonLabel)
 			}
+
+			ui.selectPreviousDestination()
 		}).
 		SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+
+	ui.saveSelectedDestination()
 
 	ui.pages.AddPage(pageName, modal, true, true)
 }
@@ -784,7 +831,10 @@ func (ui *UI) addDestination() {
 				URL:             form.GetFormItemByLabel(inputLabelURL).(*tview.InputField).GetText(),
 			}
 		}).
-		AddButton("Cancel", func() { ui.closeAddDestinationForm() }).
+		AddButton("Cancel", func() {
+			ui.closeAddDestinationForm()
+			ui.selectPreviousDestination()
+		}).
 		SetFieldBackgroundColor(tcell.ColorDarkSlateGrey).
 		SetBorder(true).
 		SetTitle("Add a new destination").
@@ -792,6 +842,7 @@ func (ui *UI) addDestination() {
 		SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 			if event.Key() == tcell.KeyEscape {
 				ui.closeAddDestinationForm()
+				ui.selectPreviousDestination()
 				return nil
 			}
 			return event
@@ -801,6 +852,8 @@ func (ui *UI) addDestination() {
 	ui.mu.Lock()
 	ui.addingDestination = true
 	ui.mu.Unlock()
+
+	ui.saveSelectedDestination()
 
 	ui.pages.HidePage(pageNameNoDestinations)
 	ui.pages.AddPage(pageNameAddDestination, form, false, true)
@@ -836,6 +889,7 @@ func (ui *UI) removeDestination() {
 	)
 }
 
+// DestinationAdded should be called when a new destination is added.
 func (ui *UI) DestinationAdded() {
 	ui.mu.Lock()
 	ui.hasDestinations = true
@@ -844,7 +898,13 @@ func (ui *UI) DestinationAdded() {
 	ui.app.QueueUpdateDraw(func() {
 		ui.pages.HidePage(pageNameNoDestinations)
 		ui.closeAddDestinationForm()
+		ui.selectLastDestination()
 	})
+}
+
+// DestinationRemoved should be called when a destination is removed.
+func (ui *UI) DestinationRemoved() {
+	ui.selectPreviousDestination()
 }
 
 func (ui *UI) closeAddDestinationForm() {
@@ -858,7 +918,6 @@ func (ui *UI) closeAddDestinationForm() {
 	if !hasDestinations {
 		ui.pages.ShowPage(pageNameNoDestinations)
 	}
-	ui.resetFocus()
 }
 
 func (ui *UI) toggleDestination() {

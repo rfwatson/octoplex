@@ -120,9 +120,8 @@ func Run(ctx context.Context, params RunParams) error {
 					return fmt.Errorf("start mediaserver: %w", err)
 				}
 			}
-		case cfg = <-params.ConfigService.C():
-			applyConfig(cfg, state)
-			updateUI()
+		case <-params.ConfigService.C():
+			// No-op, config updates are handled synchronously for now.
 		case cmd, ok := <-ui.C():
 			if !ok {
 				// TODO: keep UI open until all containers have closed
@@ -143,6 +142,8 @@ func Run(ctx context.Context, params RunParams) error {
 					ui.ConfigUpdateFailed(err)
 					continue
 				}
+				cfg = newCfg
+				handleConfigUpdate(cfg, state, ui)
 				ui.DestinationAdded()
 			case terminal.CommandRemoveDestination:
 				repl.StopDestination(c.URL) // no-op if not live
@@ -155,6 +156,9 @@ func Run(ctx context.Context, params RunParams) error {
 					ui.ConfigUpdateFailed(err)
 					continue
 				}
+				cfg = newCfg
+				handleConfigUpdate(cfg, state, ui)
+				ui.DestinationRemoved()
 			case terminal.CommandStartDestination:
 				if !state.Source.Live {
 					ui.ShowSourceNotLiveModal()
@@ -184,6 +188,12 @@ func Run(ctx context.Context, params RunParams) error {
 			updateUI()
 		}
 	}
+}
+
+// handleConfigUpdate applies the config to the app state, and updates the UI.
+func handleConfigUpdate(cfg config.Config, appState *domain.AppState, ui *terminal.UI) {
+	applyConfig(cfg, appState)
+	ui.SetState(*appState)
 }
 
 // applyServerState applies the current server state to the app state.
