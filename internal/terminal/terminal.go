@@ -293,6 +293,13 @@ func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
 		return event
 	}
 
+	handleKeyUp := func() {
+		row, _ := ui.destView.GetSelection()
+		if row == 1 {
+			ui.destView.Select(ui.destView.GetRowCount(), 0)
+		}
+	}
+
 	switch event.Key() {
 	case tcell.KeyRune:
 		switch event.Rune() {
@@ -307,15 +314,14 @@ func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
 			ui.copyConfigFilePathToClipboard(ui.clipboardAvailable, ui.configFilePath)
 		case '?':
 			ui.showAbout()
+		case 'k': // tview vim bindings
+			handleKeyUp()
 		}
 	case tcell.KeyDelete, tcell.KeyBackspace, tcell.KeyBackspace2:
 		ui.removeDestination()
 		return nil
 	case tcell.KeyUp:
-		row, _ := ui.destView.GetSelection()
-		if row == 1 {
-			ui.destView.Select(ui.destView.GetRowCount(), 0)
-		}
+		handleKeyUp()
 	}
 
 	return event
