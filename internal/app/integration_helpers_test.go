@@ -89,7 +89,7 @@ func contentsIncludes(contents []string, search string) bool {
 }
 
 func setupConfigService(t *testing.T, cfg config.Config) *config.Service {
-	tmpDir, err := os.MkdirTemp("", "octoplex_"+t.Name())
+	tmpDir, err := os.MkdirTemp("", "octoplex_"+strings.ReplaceAll(t.Name(), "/", "_"))
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
 	configService, err := config.NewService(func() (string, error) { return tmpDir, nil }, 1)

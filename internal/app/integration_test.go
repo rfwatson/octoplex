@@ -3,6 +3,7 @@
 package app_test
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -33,8 +34,20 @@ import (
 )
 
 func TestIntegration(t *testing.T) {
+	t.Run("with default stream key", func(t *testing.T) {
+		testIntegration(t, "")
+	})
+
+	t.Run("with custom stream key", func(t *testing.T) {
+		testIntegration(t, "s0meK3y")
+	})
+}
+
+func testIntegration(t *testing.T, streamKey string) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
+
+	wantStreamKey := cmp.Or(streamKey, "live")
 
 	destServer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
@@ -75,10 +88,10 @@ func TestIntegration(t *testing.T) {
 	}
 	const destHost = "172.17.0.1"
 
-	destURL1 := fmt.Sprintf("rtmp://%s:%d/live/dest1", destHost, destServerPort.Int())
-	destURL2 := fmt.Sprintf("rtmp://%s:%d/live/dest2", destHost, destServerPort.Int())
+	destURL1 := fmt.Sprintf("rtmp://%s:%d/%s/dest1", destHost, destServerPort.Int(), wantStreamKey)
+	destURL2 := fmt.Sprintf("rtmp://%s:%d/%s/dest2", destHost, destServerPort.Int(), wantStreamKey)
 	configService := setupConfigService(t, config.Config{
-		Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true, StreamKey: "live"}},
+		Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true, StreamKey: streamKey}},
 		// Load one destination from config, add the other in-app.
 		Destinations: []config.Destination{{Name: "Local server 1", URL: destURL1}},
 	})
@@ -120,14 +133,15 @@ func TestIntegration(t *testing.T) {
 	printScreen(getContents, "After starting the mediaserver")
 
 	// Start streaming a test video to the app:
-	testhelpers.StreamFLV(t, "rtmp://localhost:1935/live")
+	testhelpers.StreamFLV(t, "rtmp://localhost:1935/"+wantStreamKey)
 
 	require.EventuallyWithT(
 		t,
 		func(t *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
+			assert.Contains(t, contents[1], "URL      rtmp://localhost:1935/"+wantStreamKey, "expected mediaserver status to be receiving")
 			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
 			assert.Contains(t, contents[3], "Tracks   H264", "expected mediaserver tracks to be H264")
 			assert.Contains(t, contents[4], "Health   healthy", "expected mediaserver to be healthy")
@@ -154,7 +168,7 @@ func TestIntegration(t *testing.T) {
 		t,
 		func(t *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
 			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
 			assert.Contains(t, contents[3], "Tracks   H264", "expected mediaserver tracks to be H264")
@@ -182,7 +196,7 @@ func TestIntegration(t *testing.T) {
 		t,
 		func(t *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
 			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
 			assert.Contains(t, contents[3], "Tracks   H264", "expected mediaserver tracks to be H264")
@@ -210,7 +224,7 @@ func TestIntegration(t *testing.T) {
 		t,
 		func(t *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
 			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
 			assert.Contains(t, contents[3], "Tracks   H264", "expected mediaserver tracks to be H264")
@@ -230,15 +244,13 @@ func TestIntegration(t *testing.T) {
 	printScreen(getContents, "After removing the second destination")
 
 	// Stop remaining destination.
-	// It is currently necessary to press down to re-focus the destination:
-	sendKey(screen, tcell.KeyDown, ' ')
 	sendKey(screen, tcell.KeyRune, ' ')
 
 	require.EventuallyWithT(
 		t,
 		func(t *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
 			require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
 			assert.Contains(t, contents[2], "exited", "expected local server 1 to have exited")
