@@ -104,8 +104,10 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 }
 
 func (a *Actor) Start(ctx context.Context) error {
-	apiPortSpec := nat.Port(strconv.Itoa(a.apiPort) + ":9997")
-	rtmpPortSpec := nat.Port(strconv.Itoa(+a.rtmpPort) + ":1935")
+	// Exposed ports are bound to 127.0.0.1 for security.
+	// TODO: configurable RTMP bind address
+	apiPortSpec := nat.Port("127.0.0.1:" + strconv.Itoa(a.apiPort) + ":9997")
+	rtmpPortSpec := nat.Port("127.0.0.1:" + strconv.Itoa(+a.rtmpPort) + ":1935")
 	exposedPorts, portBindings, _ := nat.ParsePortSpecs([]string{string(apiPortSpec), string(rtmpPortSpec)})
 
 	// The RTMP URL is passed to the UI via the state.
