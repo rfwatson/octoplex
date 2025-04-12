@@ -44,7 +44,7 @@ func TestClientRunContainer(t *testing.T) {
 	dockerClient.
 		EXPECT().
 		ImagePull(mock.Anything, "alpine", image.PullOptions{}).
-		Return(io.NopCloser(bytes.NewReader(nil)), errors.New("error pulling image should not be fatal"))
+		Return(nil, errors.New("error pulling image should not be fatal"))
 	dockerClient.
 		EXPECT().
 		ContainerCreate(mock.Anything, mock.Anything, mock.Anything, mock.Anything, (*ocispec.Platform)(nil), mock.Anything).
@@ -69,10 +69,6 @@ func TestClientRunContainer(t *testing.T) {
 		EXPECT().
 		ContainerWait(mock.Anything, "123", dockercontainer.WaitConditionNextExit).
 		Return(containerWaitC, containerErrC)
-	dockerClient.
-		EXPECT().
-		ContainerInspect(mock.Anything, "123").
-		Return(dockercontainer.InspectResponse{ContainerJSONBase: &dockercontainer.ContainerJSONBase{State: &dockercontainer.State{Status: "exited"}}}, nil)
 	dockerClient.
 		EXPECT().
 		Events(mock.Anything, events.ListOptions{Filters: filters.NewArgs(filters.Arg("container", "123"), filters.Arg("type", "container"))}).
@@ -122,7 +118,120 @@ func TestClientRunContainer(t *testing.T) {
 	assert.Equal(t, "unhealthy", state.HealthState)
 	require.NotNil(t, state.ExitCode)
 	assert.Equal(t, 1, *state.ExitCode)
+	assert.Equal(t, 0, state.RestartCount)
+
+	<-done
+}
+
+func TestClientRunContainerWithRestart(t *testing.T) {
+	logger := testhelpers.NewTestLogger(t)
+
+	// channels returned by Docker's ContainerWait:
+	containerWaitC := make(chan dockercontainer.WaitResponse)
+	containerErrC := make(chan error)
+
+	// channels returned by Docker's Events:
+	eventsC := make(chan events.Message)
+	eventsErrC := make(chan error)
+
+	var dockerClient mocks.DockerClient
+	defer dockerClient.AssertExpectations(t)
+
+	dockerClient.
+		EXPECT().
+		NetworkCreate(mock.Anything, mock.Anything, mock.MatchedBy(func(opts network.CreateOptions) bool {
+			return opts.Driver == "bridge" && len(opts.Labels) > 0
+		})).
+		Return(network.CreateResponse{ID: "test-network"}, nil)
+	dockerClient.
+		EXPECT().
+		ImagePull(mock.Anything, "alpine", image.PullOptions{}).
+		Return(io.NopCloser(bytes.NewReader(nil)), nil)
+	dockerClient.
+		EXPECT().
+		ContainerCreate(mock.Anything, mock.Anything, mock.Anything, mock.Anything, (*ocispec.Platform)(nil), mock.Anything).
+		Return(dockercontainer.CreateResponse{ID: "123"}, nil)
+	dockerClient.
+		EXPECT().
+		NetworkConnect(mock.Anything, "test-network", "123", (*network.EndpointSettings)(nil)).
+		Return(nil)
+	dockerClient.
+		EXPECT().
+		ContainerStart(mock.Anything, "123", dockercontainer.StartOptions{}).
+		Once().
+		Return(nil)
+	dockerClient.
+		EXPECT().
+		ContainerStats(mock.Anything, "123", true).
+		Return(dockercontainer.StatsResponseReader{Body: io.NopCloser(bytes.NewReader(nil))}, nil)
+	dockerClient.
+		EXPECT().
+		ContainerWait(mock.Anything, "123", dockercontainer.WaitConditionNextExit).
+		Return(containerWaitC, containerErrC)
+	dockerClient.
+		EXPECT().
+		Events(mock.Anything, events.ListOptions{Filters: filters.NewArgs(filters.Arg("container", "123"), filters.Arg("type", "container"))}).
+		Return(eventsC, eventsErrC)
+	dockerClient.
+		EXPECT().
+		ContainerStart(mock.Anything, "123", dockercontainer.StartOptions{}). // restart
+		Return(nil)
+
+	containerClient, err := container.NewClient(t.Context(), &dockerClient, logger)
+	require.NoError(t, err)
+
+	containerStateC, errC := containerClient.RunContainer(t.Context(), container.RunContainerParams{
+		Name:            "test-run-container",
+		ChanSize:        1,
+		ContainerConfig: &dockercontainer.Config{Image: "alpine"},
+		HostConfig:      &dockercontainer.HostConfig{},
+		ShouldRestart: func(_ int64, restartCount int, _ time.Duration) (bool, error) {
+			if restartCount == 0 {
+				return true, nil
+			}
+
+			return false, errors.New("max restarts reached")
+		},
+		RestartInterval: 10 * time.Millisecond,
+	})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		require.NoError(t, <-errC)
+	}()
+
+	assert.Equal(t, "pulling", (<-containerStateC).Status)
+	assert.Equal(t, "created", (<-containerStateC).Status)
+	assert.Equal(t, "running", (<-containerStateC).Status)
+	assert.Equal(t, "running", (<-containerStateC).Status)
+
+	// Enough time for the restart to occur:
+	time.Sleep(100 * time.Millisecond)
+
+	containerWaitC <- dockercontainer.WaitResponse{StatusCode: 1}
+
+	state := <-containerStateC
+	assert.Equal(t, "restarting", state.Status)
+	assert.Equal(t, "unhealthy", state.HealthState)
+	assert.Nil(t, state.ExitCode)
+	assert.Zero(t, state.RestartCount) // not incremented until the actual restart
+
+	// During the restart, the "running" status is triggered by Docker events
+	// only. So we don't expect one in unit tests. (Probably the initial startup
+	// flow should behave the same.)
+
+	time.Sleep(100 * time.Millisecond)
+	containerWaitC <- dockercontainer.WaitResponse{StatusCode: 1}
+
+	state = <-containerStateC
+	assert.Equal(t, "exited", state.Status)
+	assert.Equal(t, "unhealthy", state.HealthState)
+	require.NotNil(t, state.ExitCode)
+	assert.Equal(t, 1, *state.ExitCode)
 	assert.Equal(t, 1, state.RestartCount)
+	assert.Equal(t, "max restarts reached", state.Err.Error())
 
 	<-done
 }

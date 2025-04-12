@@ -366,8 +366,6 @@ func (ui *UI) ShowStartupCheckModal() bool {
 }
 
 func (ui *UI) ShowDestinationErrorModal(name string, err error) {
-	done := make(chan struct{})
-
 	ui.app.QueueUpdateDraw(func() {
 		ui.showModal(
 			pageNameModalDestinationError,
@@ -377,13 +375,9 @@ func (ui *UI) ShowDestinationErrorModal(name string, err error) {
 				err,
 			),
 			[]string{"Ok"},
-			func(int, string) {
-				done <- struct{}{}
-			},
+			nil,
 		)
 	})
-
-	<-done
 }
 
 // ShowFatalErrorModal displays the provided error. It sends a CommandQuit to the

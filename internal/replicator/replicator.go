@@ -3,6 +3,7 @@ package replicator
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -105,11 +106,20 @@ func (a *Actor) StartDestination(url string) {
 					container.LabelURL:       url,
 				},
 			},
-			HostConfig: &typescontainer.HostConfig{
-				NetworkMode:   "default",
-				RestartPolicy: typescontainer.RestartPolicy{Name: "always"},
-			},
+			HostConfig:         &typescontainer.HostConfig{NetworkMode: "default"},
 			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth1", Tx: "eth0"},
+			ShouldRestart: func(_ int64, restartCount int, runningTime time.Duration) (bool, error) {
+				// Try to infer if the container failed to start.
+				//
+				// TODO: this is a bit hacky, we should check the container logs and
+				// include some details in the error message.
+				if restartCount == 0 && runningTime < 10*time.Second {
+					return false, errors.New("container failed to start")
+				}
+
+				// Otherwise, always restart, regardless of the exit code.
+				return true, nil
+			},
 		})
 
 		a.wg.Add(1)
