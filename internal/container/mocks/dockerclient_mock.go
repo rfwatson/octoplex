@@ -138,63 +138,6 @@ func (_c *DockerClient_ContainerCreate_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
-// ContainerInspect provides a mock function with given fields: _a0, _a1
-func (_m *DockerClient) ContainerInspect(_a0 context.Context, _a1 string) (typescontainer.InspectResponse, error) {
-	ret := _m.Called(_a0, _a1)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ContainerInspect")
-	}
-
-	var r0 typescontainer.InspectResponse
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) (typescontainer.InspectResponse, error)); ok {
-		return rf(_a0, _a1)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) typescontainer.InspectResponse); ok {
-		r0 = rf(_a0, _a1)
-	} else {
-		r0 = ret.Get(0).(typescontainer.InspectResponse)
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = rf(_a0, _a1)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// DockerClient_ContainerInspect_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ContainerInspect'
-type DockerClient_ContainerInspect_Call struct {
-	*mock.Call
-}
-
-// ContainerInspect is a helper method to define mock.On call
-//   - _a0 context.Context
-//   - _a1 string
-func (_e *DockerClient_Expecter) ContainerInspect(_a0 interface{}, _a1 interface{}) *DockerClient_ContainerInspect_Call {
-	return &DockerClient_ContainerInspect_Call{Call: _e.mock.On("ContainerInspect", _a0, _a1)}
-}
-
-func (_c *DockerClient_ContainerInspect_Call) Run(run func(_a0 context.Context, _a1 string)) *DockerClient_ContainerInspect_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string))
-	})
-	return _c
-}
-
-func (_c *DockerClient_ContainerInspect_Call) Return(_a0 typescontainer.InspectResponse, _a1 error) *DockerClient_ContainerInspect_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *DockerClient_ContainerInspect_Call) RunAndReturn(run func(context.Context, string) (typescontainer.InspectResponse, error)) *DockerClient_ContainerInspect_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // ContainerList provides a mock function with given fields: _a0, _a1
 func (_m *DockerClient) ContainerList(_a0 context.Context, _a1 typescontainer.ListOptions) ([]typescontainer.Summary, error) {
 	ret := _m.Called(_a0, _a1)

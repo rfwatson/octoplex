@@ -3,7 +3,10 @@
 package app_test
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -14,6 +17,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/terminal"
 	"github.com/gdamore/tcell/v2"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
 )
 
 func setupSimulationScreen(t *testing.T) (tcell.SimulationScreen, chan<- terminal.ScreenCapture, func() []string) {
@@ -127,4 +131,34 @@ func sendBackspaces(screen tcell.SimulationScreen, n int) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	time.Sleep(500 * time.Millisecond)
+}
+
+// kickFirstRTMPConn kicks the first RTMP connection from the mediaMTX server.
+func kickFirstRTMPConn(t *testing.T, srv testcontainers.Container) {
+	type conn struct {
+		ID string `json:"id"`
+	}
+
+	type apiResponse struct {
+		Items []conn `json:"items"`
+	}
+
+	port, err := srv.MappedPort(t.Context(), "9997/tcp")
+	require.NoError(t, err)
+
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/v3/rtmpconns/list", port.Int()))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var apiResp apiResponse
+	require.NoError(t, json.Unmarshal(respBody, &apiResp))
+	require.NoError(t, err)
+	require.True(t, len(apiResp.Items) > 0, "No RTMP connections found")
+
+	resp, err = http.Post(fmt.Sprintf("http://localhost:%d/v3/rtmpconns/kick/%s", port.Int(), apiResp.Items[0].ID), "application/json", nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 }

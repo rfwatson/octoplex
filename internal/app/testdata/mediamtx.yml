@@ -1,0 +1,12 @@
+rtmp: true
+rtmpAddress: :1936
+api: true
+authInternalUsers:
+- user: any
+  ips: []
+  permissions:
+  - action: api
+  - action: read
+  - action: publish
+paths:
+  live:
