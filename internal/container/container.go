@@ -38,6 +38,7 @@ type DockerClient interface {
 
 	ContainerCreate(context.Context, *container.Config, *container.HostConfig, *network.NetworkingConfig, *ocispec.Platform, string) (container.CreateResponse, error)
 	ContainerList(context.Context, container.ListOptions) ([]container.Summary, error)
+	ContainerLogs(context.Context, string, container.LogsOptions) (io.ReadCloser, error)
 	ContainerRemove(context.Context, string, container.RemoveOptions) error
 	ContainerStart(context.Context, string, container.StartOptions) error
 	ContainerStats(context.Context, string, bool) (container.StatsResponseReader, error)
@@ -136,21 +137,48 @@ func (a *Client) getEvents(containerID string) <-chan events.Message {
 	return ch
 }
 
+// getLogs returns a channel (which is never closed) that will receive
+// container logs.
+func (a *Client) getLogs(ctx context.Context, containerID string, cfg LogConfig) <-chan []byte {
+	if !cfg.Stdout && !cfg.Stderr {
+		return nil
+	}
+
+	ch := make(chan []byte)
+
+	go getLogs(ctx, containerID, a.apiClient, cfg, ch, a.logger)
+
+	return ch
+}
+
+// NetworkCountConfig holds configuration for observing network traffic.
 type NetworkCountConfig struct {
 	Rx string // the network name to count the Rx bytes
 	Tx string // the network name to count the Tx bytes
 }
 
+// CopyFileConfig holds configuration for a single file which should be copied
+// into a container.
 type CopyFileConfig struct {
 	Path    string
 	Payload io.Reader
 	Mode    int64
 }
 
+// LogConfig holds configuration for container logs.
+type LogConfig struct {
+	Stdout, Stderr bool
+}
+
 // ShouldRestartFunc is a callback function that is called when a container
 // exits. It should return true if the container is to be restarted. If not
 // restarting, err may be non-nil.
-type ShouldRestartFunc func(exitCode int64, restartCount int, runningTime time.Duration) (bool, error)
+type ShouldRestartFunc func(
+	exitCode int64,
+	restartCount int,
+	containerLogs [][]byte,
+	runningTime time.Duration,
+) (bool, error)
 
 // defaultRestartInterval is the default interval between restarts.
 // TODO: exponential backoff
@@ -164,7 +192,8 @@ type RunContainerParams struct {
 	HostConfig         *container.HostConfig
 	NetworkingConfig   *network.NetworkingConfig
 	NetworkCountConfig NetworkCountConfig
-	CopyFileConfigs    []CopyFileConfig
+	CopyFiles          []CopyFileConfig
+	Logs               LogConfig
 	ShouldRestart      ShouldRestartFunc
 	RestartInterval    time.Duration // defaults to 10 seconds
 }
@@ -227,7 +256,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 			return
 		}
 
-		if err = a.copyFilesToContainer(ctx, createResp.ID, params.CopyFileConfigs); err != nil {
+		if err = a.copyFilesToContainer(ctx, createResp.ID, params.CopyFiles); err != nil {
 			sendError(fmt.Errorf("copy files to container: %w", err))
 			return
 		}
@@ -252,6 +281,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 			createResp.ID,
 			params.ContainerConfig.Image,
 			params.NetworkCountConfig,
+			params.Logs,
 			params.ShouldRestart,
 			cmp.Or(params.RestartInterval, defaultRestartInterval),
 			containerStateC,
@@ -332,6 +362,14 @@ func (a *Client) pullImageIfNeeded(ctx context.Context, imageName string, contai
 	return nil
 }
 
+type containerWaitResponse struct {
+	container.WaitResponse
+
+	restarting   bool
+	restartCount int
+	err          error
+}
+
 // runContainerLoop is the control loop for a single container. It returns only
 // when the container exits.
 func (a *Client) runContainerLoop(
@@ -340,6 +378,7 @@ func (a *Client) runContainerLoop(
 	containerID string,
 	imageName string,
 	networkCountConfig NetworkCountConfig,
+	logConfig LogConfig,
 	shouldRestartFunc ShouldRestartFunc,
 	restartInterval time.Duration,
 	stateC chan<- domain.Container,
@@ -347,84 +386,15 @@ func (a *Client) runContainerLoop(
 ) {
 	defer cancel()
 
-	type containerWaitResponse struct {
-		container.WaitResponse
-
-		restarting   bool
-		restartCount int
-		err          error
-	}
-
 	containerRespC := make(chan containerWaitResponse)
-	containerErrC := make(chan error)
+	containerErrC := make(chan error, 1)
 	statsC := a.getStats(containerID, networkCountConfig)
 	eventsC := a.getEvents(containerID)
 
-	// ContainerWait only sends a result for the first non-running state, so we
-	// need to poll it repeatedly.
-	//
-	// The goroutine exits when a value is received on the error channel, or when
-	// the container exits and is not restarting, or when the context is cancelled.
 	go func() {
-		timer := time.NewTimer(restartInterval)
-		defer timer.Stop()
-		timer.Stop()
-
 		var restartCount int
-
-		for {
-			startedWaitingAt := time.Now()
-			respC, errC := a.apiClient.ContainerWait(ctx, containerID, container.WaitConditionNextExit)
-			select {
-			case resp := <-respC:
-				exit := func(err error) {
-					a.logger.Info("Container exited", "id", shortID(containerID), "should_restart", "false", "exit_code", resp.StatusCode, "restart_count", restartCount)
-					containerRespC <- containerWaitResponse{
-						WaitResponse: resp,
-						restarting:   false,
-						restartCount: restartCount,
-						err:          err,
-					}
-				}
-
-				if shouldRestartFunc == nil {
-					exit(nil)
-					return
-				}
-
-				shouldRestart, err := shouldRestartFunc(resp.StatusCode, restartCount, time.Since(startedWaitingAt))
-				if shouldRestart && err != nil {
-					panic(fmt.Errorf("shouldRestart must return nil error if restarting, but returned: %w", err))
-				}
-				if !shouldRestart {
-					exit(err)
-					return
-				}
-
-				a.logger.Info("Container exited", "id", shortID(containerID), "should_restart", "true", "exit_code", resp.StatusCode, "restart_count", restartCount)
-				timer.Reset(restartInterval)
-
-				containerRespC <- containerWaitResponse{
-					WaitResponse: resp,
-					restarting:   true,
-					restartCount: restartCount,
-				}
-			case <-timer.C:
-				a.logger.Info("Container restarting", "id", shortID(containerID), "restart_count", restartCount)
-				restartCount++
-				if err := a.apiClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
-					containerErrC <- fmt.Errorf("container start: %w", err)
-					return
-				}
-				a.logger.Info("Restarted container", "id", shortID(containerID))
-			case err := <-errC:
-				containerErrC <- err
-				return
-			case <-ctx.Done():
-				// This is probably because the container was stopped.
-				containerRespC <- containerWaitResponse{WaitResponse: container.WaitResponse{}, restarting: false}
-				return
-			}
+		for a.waitForContainerExit(ctx, containerID, containerRespC, containerErrC, logConfig, shouldRestartFunc, restartInterval, restartCount) {
+			restartCount++
 		}
 	}()
 
@@ -483,6 +453,7 @@ func (a *Client) runContainerLoop(
 			if evt.Action == "start" {
 				state.Status = domain.ContainerStatusRunning
 				sendState()
+
 				continue
 			}
 
@@ -508,6 +479,96 @@ func (a *Client) runContainerLoop(
 			state.TxRate = s.txRate
 			state.RxSince = s.rxSince
 			sendState()
+		}
+	}
+}
+
+// waitForContainerExit blocks while it waits for a container to exit, and restarts
+// it if configured to do so.
+func (a *Client) waitForContainerExit(
+	ctx context.Context,
+	containerID string,
+	containerRespC chan<- containerWaitResponse,
+	containerErrC chan<- error,
+	logConfig LogConfig,
+	shouldRestartFunc ShouldRestartFunc,
+	restartInterval time.Duration,
+	restartCount int,
+) bool {
+	var logs [][]byte
+	startedWaitingAt := time.Now()
+	respC, errC := a.apiClient.ContainerWait(ctx, containerID, container.WaitConditionNextExit)
+	logsC := a.getLogs(ctx, containerID, logConfig)
+
+	timer := time.NewTimer(restartInterval)
+	defer timer.Stop()
+	timer.Stop()
+
+	for {
+		select {
+		case resp := <-respC:
+			exit := func(err error) {
+				a.logger.Info("Container exited", "id", shortID(containerID), "should_restart", "false", "exit_code", resp.StatusCode, "restart_count", restartCount)
+				containerRespC <- containerWaitResponse{
+					WaitResponse: resp,
+					restarting:   false,
+					restartCount: restartCount,
+					err:          err,
+				}
+			}
+
+			// If the container exited with a non-zero status code, and debug
+			// logging is not enabled, log the container logs at ERROR level for
+			// debugging.
+			// TODO: parameterize
+			if resp.StatusCode != 0 && !a.logger.Enabled(ctx, slog.LevelDebug) {
+				for _, line := range logs {
+					a.logger.Error("Container log", "id", shortID(containerID), "log", string(line))
+				}
+			}
+
+			if shouldRestartFunc == nil {
+				exit(nil)
+				return false
+			}
+
+			shouldRestart, err := shouldRestartFunc(resp.StatusCode, restartCount, logs, time.Since(startedWaitingAt))
+			if shouldRestart && err != nil {
+				panic(fmt.Errorf("shouldRestart must return nil error if restarting, but returned: %w", err))
+			}
+			if !shouldRestart {
+				exit(err)
+				return false
+			}
+
+			a.logger.Info("Container exited", "id", shortID(containerID), "should_restart", "true", "exit_code", resp.StatusCode, "restart_count", restartCount)
+			timer.Reset(restartInterval)
+
+			containerRespC <- containerWaitResponse{
+				WaitResponse: resp,
+				restarting:   true,
+				restartCount: restartCount,
+			}
+			// Don't return yet. Wait for the timer to fire.
+		case <-timer.C:
+			a.logger.Info("Container restarting", "id", shortID(containerID), "restart_count", restartCount)
+			if err := a.apiClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
+				containerErrC <- fmt.Errorf("container start: %w", err)
+				return false
+			}
+			a.logger.Info("Restarted container", "id", shortID(containerID))
+			return true
+		case line := <-logsC:
+			a.logger.Debug("Container log", "id", shortID(containerID), "log", string(line))
+			// TODO: limit max stored lines
+			logs = append(logs, line)
+		case err := <-errC:
+			containerErrC <- err
+			return false
+		case <-ctx.Done():
+			// This is probably because the container was stopped.
+			containerRespC <- containerWaitResponse{WaitResponse: container.WaitResponse{}, restarting: false}
+			return false
 		}
 	}
 }

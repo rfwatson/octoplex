@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -96,6 +97,7 @@ func (a *Actor) StartDestination(url string) {
 			ContainerConfig: &typescontainer.Config{
 				Image: imageNameFFMPEG,
 				Cmd: []string{
+					"-loglevel", "level+error",
 					"-i", a.sourceURL,
 					"-c", "copy",
 					"-f", "flv",
@@ -108,13 +110,13 @@ func (a *Actor) StartDestination(url string) {
 			},
 			HostConfig:         &typescontainer.HostConfig{NetworkMode: "default"},
 			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth1", Tx: "eth0"},
-			ShouldRestart: func(_ int64, restartCount int, runningTime time.Duration) (bool, error) {
+			Logs:               container.LogConfig{Stderr: true},
+			ShouldRestart: func(_ int64, restartCount int, logs [][]byte, runningTime time.Duration) (bool, error) {
 				// Try to infer if the container failed to start.
 				//
-				// TODO: this is a bit hacky, we should check the container logs and
-				// include some details in the error message.
+				// For now, we just check if it was running for less than ten seconds.
 				if restartCount == 0 && runningTime < 10*time.Second {
-					return false, errors.New("container failed to start")
+					return false, containerStartErrFromLogs(logs)
 				}
 
 				// Otherwise, always restart, regardless of the exit code.
@@ -129,6 +131,32 @@ func (a *Actor) StartDestination(url string) {
 			a.destLoop(url, containerStateC, errC)
 		}()
 	}
+}
+
+// Grab the first fatal log line, if it exists, or the first error log line,
+// from the FFmpeg output.
+func containerStartErrFromLogs(logs [][]byte) error {
+	var fatalLog, errLog string
+
+	for _, logBytes := range logs {
+		log := string(logBytes)
+		if strings.HasPrefix(log, "[fatal]") {
+			fatalLog = log
+			break
+		}
+	}
+
+	if fatalLog == "" {
+		for _, logBytes := range logs {
+			log := string(logBytes)
+			if strings.HasPrefix(log, "[error]") {
+				errLog = log
+				break
+			}
+		}
+	}
+
+	return errors.New(cmp.Or(fatalLog, errLog, "container failed to start"))
 }
 
 // StopDestination stops a destination stream.

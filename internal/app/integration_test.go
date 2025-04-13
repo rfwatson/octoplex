@@ -483,7 +483,7 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 		func(t *assert.CollectT) {
 			contents := getContents()
 			assert.True(t, contentsIncludes(contents, "Streaming to Example server failed:"), "expected to see destination error")
-			assert.True(t, contentsIncludes(contents, "container failed to start"), "expected to see destination error")
+			assert.True(t, contentsIncludes(contents, "Error opening output files: I/O error"), "expected to see destination error")
 		},
 		time.Minute,
 		time.Second,
