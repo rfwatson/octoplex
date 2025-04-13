@@ -197,6 +197,66 @@ func (_c *DockerClient_ContainerList_Call) RunAndReturn(run func(context.Context
 	return _c
 }
 
+// ContainerLogs provides a mock function with given fields: _a0, _a1, _a2
+func (_m *DockerClient) ContainerLogs(_a0 context.Context, _a1 string, _a2 typescontainer.LogsOptions) (io.ReadCloser, error) {
+	ret := _m.Called(_a0, _a1, _a2)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ContainerLogs")
+	}
+
+	var r0 io.ReadCloser
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, typescontainer.LogsOptions) (io.ReadCloser, error)); ok {
+		return rf(_a0, _a1, _a2)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, typescontainer.LogsOptions) io.ReadCloser); ok {
+		r0 = rf(_a0, _a1, _a2)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(io.ReadCloser)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, typescontainer.LogsOptions) error); ok {
+		r1 = rf(_a0, _a1, _a2)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// DockerClient_ContainerLogs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ContainerLogs'
+type DockerClient_ContainerLogs_Call struct {
+	*mock.Call
+}
+
+// ContainerLogs is a helper method to define mock.On call
+//   - _a0 context.Context
+//   - _a1 string
+//   - _a2 typescontainer.LogsOptions
+func (_e *DockerClient_Expecter) ContainerLogs(_a0 interface{}, _a1 interface{}, _a2 interface{}) *DockerClient_ContainerLogs_Call {
+	return &DockerClient_ContainerLogs_Call{Call: _e.mock.On("ContainerLogs", _a0, _a1, _a2)}
+}
+
+func (_c *DockerClient_ContainerLogs_Call) Run(run func(_a0 context.Context, _a1 string, _a2 typescontainer.LogsOptions)) *DockerClient_ContainerLogs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(typescontainer.LogsOptions))
+	})
+	return _c
+}
+
+func (_c *DockerClient_ContainerLogs_Call) Return(_a0 io.ReadCloser, _a1 error) *DockerClient_ContainerLogs_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *DockerClient_ContainerLogs_Call) RunAndReturn(run func(context.Context, string, typescontainer.LogsOptions) (io.ReadCloser, error)) *DockerClient_ContainerLogs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ContainerRemove provides a mock function with given fields: _a0, _a1, _a2
 func (_m *DockerClient) ContainerRemove(_a0 context.Context, _a1 string, _a2 typescontainer.RemoveOptions) error {
 	ret := _m.Called(_a0, _a1, _a2)

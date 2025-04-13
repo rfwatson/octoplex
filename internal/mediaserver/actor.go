@@ -186,7 +186,8 @@ func (a *Actor) Start(ctx context.Context) error {
 				PortBindings: portBindings,
 			},
 			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth0", Tx: "eth1"},
-			CopyFileConfigs: []container.CopyFileConfig{
+			Logs:               container.LogConfig{Stdout: true},
+			CopyFiles: []container.CopyFileConfig{
 				{
 					Path:    "/mediamtx.yml",
 					Payload: bytes.NewReader(cfg),

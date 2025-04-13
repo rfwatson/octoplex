@@ -73,6 +73,10 @@ func TestClientRunContainer(t *testing.T) {
 		EXPECT().
 		Events(mock.Anything, events.ListOptions{Filters: filters.NewArgs(filters.Arg("container", "123"), filters.Arg("type", "container"))}).
 		Return(eventsC, eventsErrC)
+	dockerClient.
+		EXPECT().
+		ContainerLogs(mock.Anything, "123", mock.Anything).
+		Return(io.NopCloser(bytes.NewReader(nil)), nil)
 
 	containerClient, err := container.NewClient(t.Context(), &dockerClient, logger)
 	require.NoError(t, err)
@@ -82,7 +86,8 @@ func TestClientRunContainer(t *testing.T) {
 		ChanSize:        1,
 		ContainerConfig: &dockercontainer.Config{Image: "alpine"},
 		HostConfig:      &dockercontainer.HostConfig{},
-		CopyFileConfigs: []container.CopyFileConfig{
+		Logs:            container.LogConfig{Stdout: true},
+		CopyFiles: []container.CopyFileConfig{
 			{
 				Path:    "/hello",
 				Payload: bytes.NewReader([]byte("world")),
@@ -176,6 +181,10 @@ func TestClientRunContainerWithRestart(t *testing.T) {
 		EXPECT().
 		ContainerStart(mock.Anything, "123", dockercontainer.StartOptions{}). // restart
 		Return(nil)
+	dockerClient.
+		EXPECT().
+		ContainerLogs(mock.Anything, "123", mock.Anything).
+		Return(io.NopCloser(bytes.NewReader(nil)), nil)
 
 	containerClient, err := container.NewClient(t.Context(), &dockerClient, logger)
 	require.NoError(t, err)
@@ -185,7 +194,8 @@ func TestClientRunContainerWithRestart(t *testing.T) {
 		ChanSize:        1,
 		ContainerConfig: &dockercontainer.Config{Image: "alpine"},
 		HostConfig:      &dockercontainer.HostConfig{},
-		ShouldRestart: func(_ int64, restartCount int, _ time.Duration) (bool, error) {
+		Logs:            container.LogConfig{Stdout: true},
+		ShouldRestart: func(_ int64, restartCount int, _ [][]byte, _ time.Duration) (bool, error) {
 			if restartCount == 0 {
 				return true, nil
 			}
