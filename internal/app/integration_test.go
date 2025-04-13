@@ -7,10 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
-	"os"
-	"runtime"
 	"testing"
 	"time"
 
@@ -69,20 +66,13 @@ func testIntegration(t *testing.T, streamKey string) {
 	require.NoError(t, err)
 
 	logger := testhelpers.NewTestLogger(t).With("component", "integration")
-	logger.Info("Initialised logger", "debug_level", logger.Enabled(ctx, slog.LevelDebug), "runner_debug", os.Getenv("RUNNER_DEBUG"))
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 	require.NoError(t, err)
 
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	// https://stackoverflow.com/a/60740997/62871
-	if runtime.GOOS != "linux" {
-		panic("TODO: try host.docker.internal or Mac equivalent here")
-	}
-	const destHost = "172.17.0.1"
-
-	destURL1 := fmt.Sprintf("rtmp://%s:%d/%s/dest1", destHost, destServerPort.Int(), wantStreamKey)
-	destURL2 := fmt.Sprintf("rtmp://%s:%d/%s/dest2", destHost, destServerPort.Int(), wantStreamKey)
+	destURL1 := fmt.Sprintf("rtmp://%s:%d/%s/dest1", hostIP, destServerPort.Int(), wantStreamKey)
+	destURL2 := fmt.Sprintf("rtmp://%s:%d/%s/dest2", hostIP, destServerPort.Int(), wantStreamKey)
 	configService := setupConfigService(t, config.Config{
 		Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true, StreamKey: streamKey}},
 		// Load one destination from config, add the other in-app.
@@ -289,7 +279,6 @@ func TestIntegrationRestartDestination(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := testhelpers.NewTestLogger(t).With("component", "integration")
-	logger.Info("Initialised logger", "debug_level", logger.Enabled(ctx, slog.LevelDebug), "runner_debug", os.Getenv("RUNNER_DEBUG"))
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 	require.NoError(t, err)
 
@@ -309,20 +298,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		err := app.Run(ctx, app.RunParams{
-			ConfigService: configService,
-			DockerClient:  dockerClient,
-			Screen: &terminal.Screen{
-				Screen:   screen,
-				Width:    160,
-				Height:   25,
-				CaptureC: screenCaptureC,
-			},
-			ClipboardAvailable: false,
-			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
-			Logger:             logger,
-		})
-		require.NoError(t, err)
+		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
 	}()
 
 	require.EventuallyWithT(
@@ -465,20 +441,7 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		err := app.Run(ctx, app.RunParams{
-			ConfigService: configService,
-			DockerClient:  dockerClient,
-			Screen: &terminal.Screen{
-				Screen:   screen,
-				Width:    160,
-				Height:   25,
-				CaptureC: screenCaptureC,
-			},
-			ClipboardAvailable: false,
-			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
-			Logger:             logger,
-		})
-		require.NoError(t, err)
+		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
 	}()
 
 	require.EventuallyWithT(
@@ -553,20 +516,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		err := app.Run(ctx, app.RunParams{
-			ConfigService: configService,
-			DockerClient:  dockerClient,
-			Screen: &terminal.Screen{
-				Screen:   screen,
-				Width:    160,
-				Height:   25,
-				CaptureC: screenCaptureC,
-			},
-			ClipboardAvailable: false,
-			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
-			Logger:             logger,
-		})
-		require.NoError(t, err)
+		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
 	}()
 
 	require.EventuallyWithT(
@@ -709,20 +659,7 @@ func TestIntegrationStartupCheck(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		err := app.Run(ctx, app.RunParams{
-			ConfigService: configService,
-			DockerClient:  dockerClient,
-			Screen: &terminal.Screen{
-				Screen:   screen,
-				Width:    200,
-				Height:   25,
-				CaptureC: screenCaptureC,
-			},
-			ClipboardAvailable: false,
-			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
-			Logger:             logger,
-		})
-		require.NoError(t, err)
+		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
 	}()
 
 	require.EventuallyWithT(
@@ -791,20 +728,7 @@ func TestIntegrationMediaServerError(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		err := app.Run(ctx, app.RunParams{
-			ConfigService: configService,
-			DockerClient:  dockerClient,
-			Screen: &terminal.Screen{
-				Screen:   screen,
-				Width:    200,
-				Height:   25,
-				CaptureC: screenCaptureC,
-			},
-			ClipboardAvailable: false,
-			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
-			Logger:             logger,
-		})
-		require.NoError(t, err)
+		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
 	}()
 
 	require.EventuallyWithT(
@@ -843,20 +767,11 @@ func TestIntegrationDockerClientError(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		err := app.Run(ctx, app.RunParams{
-			ConfigService: configService,
-			DockerClient:  &dockerClient,
-			Screen: &terminal.Screen{
-				Screen:   screen,
-				Width:    200,
-				Height:   25,
-				CaptureC: screenCaptureC,
-			},
-			ClipboardAvailable: false,
-			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
-			Logger:             logger,
-		})
-		require.EqualError(t, err, "create container client: network create: boom")
+		require.EqualError(
+			t,
+			app.Run(ctx, buildAppParams(t, configService, &dockerClient, screen, screenCaptureC, logger)),
+			"create container client: network create: boom",
+		)
 	}()
 
 	require.EventuallyWithT(

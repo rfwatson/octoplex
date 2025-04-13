@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -13,12 +14,40 @@ import (
 	"testing"
 	"time"
 
+	"git.netflux.io/rob/octoplex/internal/app"
 	"git.netflux.io/rob/octoplex/internal/config"
+	"git.netflux.io/rob/octoplex/internal/container"
+	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/terminal"
 	"github.com/gdamore/tcell/v2"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 )
+
+func buildAppParams(
+	t *testing.T,
+	configService *config.Service,
+	dockerClient container.DockerClient,
+	screen tcell.SimulationScreen,
+	screenCaptureC chan<- terminal.ScreenCapture,
+	logger *slog.Logger,
+) app.RunParams {
+	t.Helper()
+
+	return app.RunParams{
+		ConfigService: configService,
+		DockerClient:  dockerClient,
+		Screen: &terminal.Screen{
+			Screen:   screen,
+			Width:    180,
+			Height:   25,
+			CaptureC: screenCaptureC,
+		},
+		ClipboardAvailable: false,
+		BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
+		Logger:             logger,
+	}
+}
 
 func setupSimulationScreen(t *testing.T) (tcell.SimulationScreen, chan<- terminal.ScreenCapture, func() []string) {
 	t.Helper()
