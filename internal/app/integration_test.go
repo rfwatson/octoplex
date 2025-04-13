@@ -123,7 +123,7 @@ func testIntegration(t *testing.T, streamKey string) {
 		time.Second,
 		"expected the mediaserver to start",
 	)
-	printScreen(getContents, "After starting the mediaserver")
+	printScreen(t, getContents, "After starting the mediaserver")
 
 	// Start streaming a test video to the app:
 	testhelpers.StreamFLV(t, "rtmp://localhost:1935/"+wantStreamKey)
@@ -143,19 +143,19 @@ func testIntegration(t *testing.T, streamKey string) {
 		time.Second,
 		"expected to receive an ingress stream",
 	)
-	printScreen(getContents, "After receiving the ingress stream")
+	printScreen(t, getContents, "After receiving the ingress stream")
 
 	// Add a second destination in-app:
-	sendKey(screen, tcell.KeyRune, 'a')
+	sendKey(t, screen, tcell.KeyRune, 'a')
 
-	sendBackspaces(screen, 30)
-	sendKeys(screen, "Local server 2")
-	sendKey(screen, tcell.KeyTab, ' ')
+	sendBackspaces(t, screen, 30)
+	sendKeys(t, screen, "Local server 2")
+	sendKey(t, screen, tcell.KeyTab, ' ')
 
-	sendBackspaces(screen, 30)
-	sendKeys(screen, destURL2)
-	sendKey(screen, tcell.KeyTab, ' ')
-	sendKey(screen, tcell.KeyEnter, ' ')
+	sendBackspaces(t, screen, 30)
+	sendKeys(t, screen, destURL2)
+	sendKey(t, screen, tcell.KeyTab, ' ')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
 
 	require.EventuallyWithT(
 		t,
@@ -178,12 +178,12 @@ func testIntegration(t *testing.T, streamKey string) {
 		time.Second,
 		"expected to add the destinations",
 	)
-	printScreen(getContents, "After adding the destinations")
+	printScreen(t, getContents, "After adding the destinations")
 
 	// Start destinations:
-	sendKey(screen, tcell.KeyRune, ' ')
-	sendKey(screen, tcell.KeyDown, ' ')
-	sendKey(screen, tcell.KeyRune, ' ')
+	sendKey(t, screen, tcell.KeyRune, ' ')
+	sendKey(t, screen, tcell.KeyDown, ' ')
+	sendKey(t, screen, tcell.KeyRune, ' ')
 
 	require.EventuallyWithT(
 		t,
@@ -207,11 +207,11 @@ func testIntegration(t *testing.T, streamKey string) {
 		time.Second,
 		"expected to start the destination streams",
 	)
-	printScreen(getContents, "After starting the destination streams")
+	printScreen(t, getContents, "After starting the destination streams")
 
-	sendKey(screen, tcell.KeyUp, ' ')
-	sendKey(screen, tcell.KeyDelete, ' ')
-	sendKey(screen, tcell.KeyEnter, ' ')
+	sendKey(t, screen, tcell.KeyUp, ' ')
+	sendKey(t, screen, tcell.KeyDelete, ' ')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
 
 	require.EventuallyWithT(
 		t,
@@ -234,10 +234,10 @@ func testIntegration(t *testing.T, streamKey string) {
 		time.Second,
 		"expected to remove the second destination",
 	)
-	printScreen(getContents, "After removing the second destination")
+	printScreen(t, getContents, "After removing the second destination")
 
 	// Stop remaining destination.
-	sendKey(screen, tcell.KeyRune, ' ')
+	sendKey(t, screen, tcell.KeyRune, ' ')
 
 	require.EventuallyWithT(
 		t,
@@ -255,7 +255,7 @@ func testIntegration(t *testing.T, streamKey string) {
 		"expected to stop the first destination stream",
 	)
 
-	printScreen(getContents, "After stopping the first destination")
+	printScreen(t, getContents, "After stopping the first destination")
 
 	// TODO:
 	// - Source error
@@ -337,7 +337,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 		time.Second,
 		"expected the mediaserver to start",
 	)
-	printScreen(getContents, "After starting the mediaserver")
+	printScreen(t, getContents, "After starting the mediaserver")
 
 	// Start streaming a test video to the app:
 	testhelpers.StreamFLV(t, "rtmp://localhost:1935/live")
@@ -354,10 +354,10 @@ func TestIntegrationRestartDestination(t *testing.T) {
 		time.Second,
 		"expected to receive an ingress stream",
 	)
-	printScreen(getContents, "After receiving the ingress stream")
+	printScreen(t, getContents, "After receiving the ingress stream")
 
 	// Start destination:
-	sendKey(screen, tcell.KeyRune, ' ')
+	sendKey(t, screen, tcell.KeyRune, ' ')
 
 	require.EventuallyWithT(
 		t,
@@ -375,7 +375,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 		time.Second,
 		"expected to start the destination stream",
 	)
-	printScreen(getContents, "After starting the destination stream")
+	printScreen(t, getContents, "After starting the destination stream")
 
 	// Wait for enough time that the container will be restarted.
 	// Then, kick the connection to force a restart.
@@ -398,7 +398,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 		time.Second,
 		"expected to begin restarting",
 	)
-	printScreen(getContents, "After stopping the destination server")
+	printScreen(t, getContents, "After stopping the destination server")
 
 	require.EventuallyWithT(
 		t,
@@ -416,10 +416,10 @@ func TestIntegrationRestartDestination(t *testing.T) {
 		time.Second,
 		"expected to restart the destination stream",
 	)
-	printScreen(getContents, "After restarting the destination stream")
+	printScreen(t, getContents, "After restarting the destination stream")
 
 	// Stop destination.
-	sendKey(screen, tcell.KeyRune, ' ')
+	sendKey(t, screen, tcell.KeyRune, ' ')
 
 	require.EventuallyWithT(
 		t,
@@ -437,7 +437,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 		"expected to stop the destination stream",
 	)
 
-	printScreen(getContents, "After stopping the destination")
+	printScreen(t, getContents, "After stopping the destination")
 
 	cancel()
 
@@ -493,7 +493,7 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 		time.Second,
 		"expected the mediaserver to start",
 	)
-	printScreen(getContents, "After starting the mediaserver")
+	printScreen(t, getContents, "After starting the mediaserver")
 
 	// Start streaming a test video to the app:
 	testhelpers.StreamFLV(t, "rtmp://localhost:1935/live")
@@ -510,10 +510,10 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 		time.Second,
 		"expected to receive an ingress stream",
 	)
-	printScreen(getContents, "After receiving the ingress stream")
+	printScreen(t, getContents, "After receiving the ingress stream")
 
 	// Start destination:
-	sendKey(screen, tcell.KeyRune, ' ')
+	sendKey(t, screen, tcell.KeyRune, ' ')
 
 	require.EventuallyWithT(
 		t,
@@ -526,7 +526,7 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 		time.Second,
 		"expected to see the destination start error modal",
 	)
-	printScreen(getContents, "After starting the destination stream fails")
+	printScreen(t, getContents, "After starting the destination stream fails")
 
 	cancel()
 
@@ -582,13 +582,13 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 		time.Second,
 		"expected the mediaserver to start",
 	)
-	printScreen(getContents, "After starting the mediaserver")
+	printScreen(t, getContents, "After starting the mediaserver")
 
-	sendKey(screen, tcell.KeyRune, 'a')
-	sendKey(screen, tcell.KeyTab, ' ')
-	sendBackspaces(screen, 10)
-	sendKey(screen, tcell.KeyTab, ' ')
-	sendKey(screen, tcell.KeyEnter, ' ')
+	sendKey(t, screen, tcell.KeyRune, 'a')
+	sendKey(t, screen, tcell.KeyTab, ' ')
+	sendBackspaces(t, screen, 10)
+	sendKey(t, screen, tcell.KeyTab, ' ')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
 
 	require.EventuallyWithT(
 		t,
@@ -602,13 +602,13 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 		time.Second,
 		"expected a validation error for an empty URL",
 	)
-	printScreen(getContents, "After entering an empty destination URL")
+	printScreen(t, getContents, "After entering an empty destination URL")
 
-	sendKey(screen, tcell.KeyEnter, ' ')
-	sendKey(screen, tcell.KeyBacktab, ' ')
-	sendKeys(screen, "nope")
-	sendKey(screen, tcell.KeyTab, ' ')
-	sendKey(screen, tcell.KeyEnter, ' ')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
+	sendKey(t, screen, tcell.KeyBacktab, ' ')
+	sendKeys(t, screen, "nope")
+	sendKey(t, screen, tcell.KeyTab, ' ')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
 
 	require.EventuallyWithT(
 		t,
@@ -622,14 +622,14 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 		time.Second,
 		"expected a validation error for an invalid URL",
 	)
-	printScreen(getContents, "After entering an invalid destination URL")
+	printScreen(t, getContents, "After entering an invalid destination URL")
 
-	sendKey(screen, tcell.KeyEnter, ' ')
-	sendKey(screen, tcell.KeyBacktab, ' ')
-	sendBackspaces(screen, len("nope"))
-	sendKeys(screen, "rtmp://rtmp.youtube.com:1935/live")
-	sendKey(screen, tcell.KeyTab, ' ')
-	sendKey(screen, tcell.KeyEnter, ' ')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
+	sendKey(t, screen, tcell.KeyBacktab, ' ')
+	sendBackspaces(t, screen, len("nope"))
+	sendKeys(t, screen, "rtmp://rtmp.youtube.com:1935/live")
+	sendKey(t, screen, tcell.KeyTab, ' ')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
 
 	require.EventuallyWithT(
 		t,
@@ -645,14 +645,14 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 		time.Second,
 		"expected to add the destination",
 	)
-	printScreen(getContents, "After adding the destination")
+	printScreen(t, getContents, "After adding the destination")
 
-	sendKey(screen, tcell.KeyRune, 'a')
-	sendKey(screen, tcell.KeyTab, ' ')
-	sendBackspaces(screen, 10)
-	sendKeys(screen, "rtmp://rtmp.youtube.com:1935/live")
-	sendKey(screen, tcell.KeyTab, ' ')
-	sendKey(screen, tcell.KeyEnter, ' ')
+	sendKey(t, screen, tcell.KeyRune, 'a')
+	sendKey(t, screen, tcell.KeyTab, ' ')
+	sendBackspaces(t, screen, 10)
+	sendKeys(t, screen, "rtmp://rtmp.youtube.com:1935/live")
+	sendKey(t, screen, tcell.KeyTab, ' ')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
 
 	// Start streaming a test video to the app:
 	testhelpers.StreamFLV(t, "rtmp://localhost:1935/live")
@@ -669,7 +669,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 		time.Second,
 		"expected a validation error for a duplicate URL",
 	)
-	printScreen(getContents, "After entering a duplicate destination URL")
+	printScreen(t, getContents, "After entering a duplicate destination URL")
 	cancel()
 
 	<-done
@@ -734,9 +734,9 @@ func TestIntegrationStartupCheck(t *testing.T) {
 		time.Second,
 		"expected to see startup check modal",
 	)
-	printScreen(getContents, "Ater displaying the startup check modal")
+	printScreen(t, getContents, "Ater displaying the startup check modal")
 
-	sendKey(screen, tcell.KeyEnter, ' ') // quit other containers
+	sendKey(t, screen, tcell.KeyEnter, ' ') // quit other containers
 
 	require.EventuallyWithT(
 		t,
@@ -750,7 +750,7 @@ func TestIntegrationStartupCheck(t *testing.T) {
 		2*time.Second,
 		"expected to quit the other containers",
 	)
-	printScreen(getContents, "After quitting the other containers")
+	printScreen(t, getContents, "After quitting the other containers")
 
 	require.EventuallyWithT(
 		t,
@@ -764,7 +764,7 @@ func TestIntegrationStartupCheck(t *testing.T) {
 		time.Second,
 		"expected the mediaserver to start",
 	)
-	printScreen(getContents, "After starting the mediaserver")
+	printScreen(t, getContents, "After starting the mediaserver")
 	cancel()
 
 	<-done
@@ -817,10 +817,10 @@ func TestIntegrationMediaServerError(t *testing.T) {
 		time.Second,
 		"expected to see media server error modal",
 	)
-	printScreen(getContents, "Ater displaying the media server error modal")
+	printScreen(t, getContents, "Ater displaying the media server error modal")
 
 	// Quit the app, this should cause the done channel to receive.
-	sendKey(screen, tcell.KeyEnter, ' ')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
 
 	<-done
 }
@@ -869,10 +869,10 @@ func TestIntegrationDockerClientError(t *testing.T) {
 		time.Second,
 		"expected to see fatal error modal",
 	)
-	printScreen(getContents, "Ater displaying the fatal error modal")
+	printScreen(t, getContents, "Ater displaying the fatal error modal")
 
 	// Quit the app, this should cause the done channel to receive.
-	sendKey(screen, tcell.KeyEnter, ' ')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
 
 	<-done
 }

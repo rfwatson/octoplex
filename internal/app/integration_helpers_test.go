@@ -21,6 +21,8 @@ import (
 )
 
 func setupSimulationScreen(t *testing.T) (tcell.SimulationScreen, chan<- terminal.ScreenCapture, func() []string) {
+	t.Helper()
+
 	// Fetching the screen contents is tricky at this level of the test pyramid,
 	// because we need to:
 	//
@@ -59,7 +61,7 @@ func setupSimulationScreen(t *testing.T) (tcell.SimulationScreen, chan<- termina
 
 	t.Cleanup(func() {
 		if t.Failed() {
-			printScreen(getContents, "After failing")
+			printScreen(t, getContents, "After failing")
 		}
 	})
 
@@ -93,6 +95,8 @@ func contentsIncludes(contents []string, search string) bool {
 }
 
 func setupConfigService(t *testing.T, cfg config.Config) *config.Service {
+	t.Helper()
+
 	tmpDir, err := os.MkdirTemp("", "octoplex_"+strings.ReplaceAll(t.Name(), "/", "_"))
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
@@ -103,29 +107,32 @@ func setupConfigService(t *testing.T, cfg config.Config) *config.Service {
 	return configService
 }
 
-func printScreen(getContents func() []string, label string) {
+func printScreen(t *testing.T, getContents func() []string, label string) {
+	t.Helper()
+
 	fmt.Println(label + ":")
 	for _, line := range getContents() {
 		fmt.Println(line)
 	}
 }
 
-func sendKey(screen tcell.SimulationScreen, key tcell.Key, ch rune) {
+func sendKey(t *testing.T, screen tcell.SimulationScreen, key tcell.Key, ch rune) {
+	t.Helper()
+
 	screen.InjectKey(key, ch, tcell.ModNone)
 	time.Sleep(50 * time.Millisecond)
 }
 
-func sendKeyShift(screen tcell.SimulationScreen, key tcell.Key, ch rune) {
-	screen.InjectKey(key, ch, tcell.ModShift)
-	time.Sleep(50 * time.Millisecond)
-}
+func sendKeys(t *testing.T, screen tcell.SimulationScreen, keys string) {
+	t.Helper()
 
-func sendKeys(screen tcell.SimulationScreen, keys string) {
 	screen.InjectKeyBytes([]byte(keys))
 	time.Sleep(500 * time.Millisecond)
 }
 
-func sendBackspaces(screen tcell.SimulationScreen, n int) {
+func sendBackspaces(t *testing.T, screen tcell.SimulationScreen, n int) {
+	t.Helper()
+
 	for range n {
 		screen.InjectKey(tcell.KeyBackspace, ' ', tcell.ModNone)
 		time.Sleep(50 * time.Millisecond)
@@ -135,6 +142,8 @@ func sendBackspaces(screen tcell.SimulationScreen, n int) {
 
 // kickFirstRTMPConn kicks the first RTMP connection from the mediaMTX server.
 func kickFirstRTMPConn(t *testing.T, srv testcontainers.Container) {
+	t.Helper()
+
 	type conn struct {
 		ID string `json:"id"`
 	}
