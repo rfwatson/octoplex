@@ -5,7 +5,7 @@ logfile:
 sources:
   rtmp:
     enabled: true
-    streamkey: s3cr3t
+    streamKey: s3cr3t
 destinations:
 - name: my stream
   url: rtmp://rtmp.example.com:1935/live

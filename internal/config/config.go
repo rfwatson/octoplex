@@ -25,7 +25,7 @@ func (l LogFile) GetPath() string {
 // RTMPSource holds the configuration for the RTMP source.
 type RTMPSource struct {
 	Enabled   bool   `yaml:"enabled"`
-	StreamKey string `yaml:"streamkey,omitempty"`
+	StreamKey string `yaml:"streamKey,omitempty"`
 }
 
 // Sources holds the configuration for the sources.

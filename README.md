@@ -87,7 +87,7 @@ logfile:
 sources:
   rtmp:
     enabled: true                      # must be true
-    streamkey: live                    # defaults to "live"
+    streamKey: live                    # defaults to "live"
 destinations:
   - name: YouTube                      # Destination name, used only for display
     url: rtmp://rtmp.youtube.com/12345 # Destination  URL with stream key
