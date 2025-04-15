@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/shortid"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"golang.design/x/clipboard"
@@ -333,6 +334,7 @@ func (ui *UI) ShowSourceNotLiveModal() {
 			pageNameModalStartupCheck,
 			fmt.Sprintf("Waiting for stream.\nStart streaming to the source URL then try again:\n\n%s", ui.sourceViews.url.GetText(true)),
 			[]string{"Ok"},
+			false,
 			nil,
 		)
 	})
@@ -352,6 +354,7 @@ func (ui *UI) ShowStartupCheckModal() bool {
 			pageNameModalStartupCheck,
 			"Another instance of Octoplex may already be running.\n\nPressing continue will close that instance. Continue?",
 			[]string{"Continue", "Exit"},
+			false,
 			func(buttonIndex int, _ string) {
 				if buttonIndex == 0 {
 					done <- true
@@ -375,6 +378,7 @@ func (ui *UI) ShowDestinationErrorModal(name string, err error) {
 				err,
 			),
 			[]string{"Ok"},
+			true,
 			nil,
 		)
 	})
@@ -391,6 +395,7 @@ func (ui *UI) ShowFatalErrorModal(err error) {
 				err,
 			),
 			[]string{"Quit"},
+			false,
 			func(int, string) {
 				ui.commandC <- CommandQuit{}
 			},
@@ -584,8 +589,16 @@ func (ui *UI) selectLastDestination() {
 	}
 }
 
-func (ui *UI) showModal(pageName string, text string, buttons []string, doneFunc func(int, string)) {
-	if ui.pages.HasPage(pageName) {
+func (ui *UI) showModal(
+	pageName string,
+	text string,
+	buttons []string,
+	allowMultiple bool,
+	doneFunc func(int, string),
+) {
+	if allowMultiple {
+		pageName = pageName + "-" + shortid.New().String()
+	} else if ui.pages.HasPage(pageName) {
 		return
 	}
 
@@ -796,6 +809,7 @@ func (ui *UI) ConfigUpdateFailed(err error) {
 			pageNameConfigUpdateFailed,
 			"Configuration update failed:\n\n"+err.Error(),
 			[]string{"Ok"},
+			false,
 			func(int, string) {
 				pageName, frontPage := ui.pages.GetFrontPage()
 				if pageName != pageNameAddDestination {
@@ -881,6 +895,7 @@ func (ui *UI) removeDestination() {
 		pageNameModalRemoveDestination,
 		text,
 		[]string{"Remove", "Cancel"},
+		false,
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
 				ui.commandC <- CommandRemoveDestination{URL: url}
@@ -971,6 +986,7 @@ func (ui *UI) copySourceURLToClipboard(clipboardAvailable bool) {
 		pageNameModalClipboard,
 		text,
 		[]string{"Ok"},
+		false,
 		nil,
 	)
 }
@@ -992,6 +1008,7 @@ func (ui *UI) copyConfigFilePathToClipboard(clipboardAvailable bool, configFileP
 		pageNameModalClipboard,
 		text,
 		[]string{"Ok"},
+		false,
 		nil,
 	)
 }
@@ -1001,6 +1018,7 @@ func (ui *UI) confirmQuit() {
 		pageNameModalQuit,
 		"Are you sure you want to quit?",
 		[]string{"Quit", "Cancel"},
+		false,
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
 				ui.commandC <- CommandQuit{}
@@ -1026,6 +1044,7 @@ func (ui *UI) showAbout() {
 			ui.buildInfo.GoVersion,
 		),
 		[]string{"Ok"},
+		false,
 		nil,
 	)
 }
