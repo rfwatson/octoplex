@@ -46,7 +46,18 @@ MacOS: https://docs.docker.com/desktop/setup/install/mac-install/
 
 ### Octoplex
 
-Download the latest build for your platform from the [releases page](https://github.com/rfwatson/octoplex/releases).
+#### Homebrew
+
+Octoplex can be installed using Homebrew on MacOS or Linux.
+
+```
+$ brew tap rfwatson/octoplex
+$ brew install octoplex
+```
+
+#### From Github
+
+Alternatively, grab the latest build for your platform from the [releases page](https://github.com/rfwatson/octoplex/releases).
 
 Unarchive the `octoplex` binary and copy it somewhere in your $PATH.
 
