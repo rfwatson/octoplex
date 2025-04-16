@@ -26,6 +26,23 @@ archives:
       - goos: windows
         formats: [zip]
 
+brews:
+  - name: octoplex
+    description: "Octoplex is a live video restreamer for the terminal."
+    homepage: "https://github.com/rfwatson/octoplex"
+    repository:
+        owner: rfwatson
+        name: homebrew-octoplex
+    install: |
+      bin.install "octoplex"
+    test: |
+      system "#{bin}/octoplex -h"
+
+release:
+  github:
+    owner: rfwatson
+    name: octoplex
+
 changelog:
   use: github
   filters:
