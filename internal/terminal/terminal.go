@@ -386,13 +386,13 @@ func (ui *UI) ShowDestinationErrorModal(name string, err error) {
 
 // ShowFatalErrorModal displays the provided error. It sends a CommandQuit to the
 // command channel when the user selects the Quit button.
-func (ui *UI) ShowFatalErrorModal(err error) {
+func (ui *UI) ShowFatalErrorModal(errString string) {
 	ui.app.QueueUpdateDraw(func() {
 		ui.showModal(
 			pageNameModalFatalError,
 			fmt.Sprintf(
 				"An error occurred:\n\n%s",
-				err,
+				errString,
 			),
 			[]string{"Quit"},
 			false,

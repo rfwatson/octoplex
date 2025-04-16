@@ -14,6 +14,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/mediaserver"
 	"git.netflux.io/rob/octoplex/internal/replicator"
 	"git.netflux.io/rob/octoplex/internal/terminal"
+	"github.com/docker/docker/client"
 )
 
 // RunParams holds the parameters for running the application.
@@ -69,7 +70,15 @@ func Run(ctx context.Context, params RunParams) error {
 	containerClient, err := container.NewClient(ctx, params.DockerClient, logger.With("component", "container_client"))
 	if err != nil {
 		err = fmt.Errorf("create container client: %w", err)
-		ui.ShowFatalErrorModal(err)
+
+		var errString string
+		if client.IsErrConnectionFailed(err) {
+			errString = "Could not connect to Docker. Is Docker installed and running?"
+		} else {
+			errString = err.Error()
+		}
+		ui.ShowFatalErrorModal(errString)
+
 		emptyUI()
 		<-ui.C()
 		return err
@@ -86,7 +95,7 @@ func Run(ctx context.Context, params RunParams) error {
 	})
 	if err != nil {
 		err = fmt.Errorf("create mediaserver: %w", err)
-		ui.ShowFatalErrorModal(err)
+		ui.ShowFatalErrorModal(err.Error())
 		emptyUI()
 		<-ui.C()
 		return err

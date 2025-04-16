@@ -791,3 +791,42 @@ func TestIntegrationDockerClientError(t *testing.T) {
 
 	<-done
 }
+func TestIntegrationDockerConnectionError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
+
+	logger := testhelpers.NewTestLogger(t).With("component", "integration")
+	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.WithHost("http://docker.example.com"))
+	require.NoError(t, err)
+
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true}}})
+	screen, screenCaptureC, getContents := setupSimulationScreen(t)
+
+	done := make(chan struct{})
+	go func() {
+		defer func() {
+			done <- struct{}{}
+		}()
+
+		err := app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger))
+		require.ErrorContains(t, err, "dial tcp: lookup docker.example.com")
+		require.ErrorContains(t, err, "no such host")
+	}()
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			assert.True(t, contentsIncludes(getContents(), "An error occurred:"), "expected to see error message")
+			assert.True(t, contentsIncludes(getContents(), "Could not connect to Docker. Is Docker installed"), "expected to see message")
+		},
+		5*time.Second,
+		time.Second,
+		"expected to see fatal error modal",
+	)
+	printScreen(t, getContents, "Ater displaying the fatal error modal")
+
+	// Quit the app, this should cause the done channel to receive.
+	sendKey(t, screen, tcell.KeyEnter, ' ')
+
+	<-done
+}
