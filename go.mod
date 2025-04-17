@@ -3,12 +3,12 @@ module git.netflux.io/rob/octoplex
 go 1.24.0
 
 require (
-	github.com/docker/docker v28.0.1+incompatible
+	github.com/docker/docker v28.0.4+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/gdamore/tcell/v2 v2.8.1
 	github.com/google/go-cmp v0.7.0
 	github.com/opencontainers/image-spec v1.1.1
-	github.com/rivo/tview v0.0.0-20241227133733-17b7edb88c57
+	github.com/rivo/tview v0.0.0-20250330220935-949945f8d922
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.35.0
 	golang.design/x/clipboard v0.7.0
@@ -90,16 +90,16 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/exp v0.0.0-20250210185358-939b2ce775ac // indirect
-	golang.org/x/exp/shiny v0.0.0-20250305212735-054e65f0b394 // indirect
-	golang.org/x/image v0.25.0 // indirect
-	golang.org/x/mobile v0.0.0-20250305212854-3a7bc9f8a4de // indirect
+	golang.org/x/exp/shiny v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
+	golang.org/x/image v0.26.0 // indirect
+	golang.org/x/mobile v0.0.0-20250408133729-978277e7eaf7 // indirect
 	golang.org/x/mod v0.24.0 // indirect
-	golang.org/x/sync v0.12.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/term v0.30.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/sync v0.13.0 // indirect
+	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/term v0.31.0 // indirect
+	golang.org/x/text v0.24.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
-	golang.org/x/tools v0.31.0 // indirect
+	golang.org/x/tools v0.32.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )
 
