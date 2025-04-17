@@ -1,8 +1,8 @@
 # Octoplex :octopus:
 
-![build status](https://github.com/rfwatson/octoplex/actions/workflows/ci-build.yml/badge.svg)
+![build status](https://github.com/rfwatson/octoplex/actions/workflows/build.yml/badge.svg)
+![scan status](https://github.com/rfwatson/octoplex/actions/workflows/codeql.yml/badge.svg)
 ![GitHub Release](https://img.shields.io/github/v/release/rfwatson/octoplex)
-![CodeQL coverage](https://github.com/rfwatson/octoplex/actions/workflows/ci-scan.yml/badge.svg)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 Octoplex is a live video restreamer for the terminal.
