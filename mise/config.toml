@@ -29,6 +29,12 @@ dir = "{{cwd}}"
 run = "golangci-lint run"
 alias = "l"
 
+[tasks.fmt]
+description = "Run formatter"
+dir = "{{cwd}}"
+run = "goimports -w ."
+alias = "f"
+
 [tasks.generate_mocks]
 description = "Generate mocks"
 dir = "{{cwd}}"
