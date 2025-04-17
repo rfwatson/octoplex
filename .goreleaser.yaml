@@ -33,6 +33,7 @@ brews:
     repository:
         owner: rfwatson
         name: homebrew-octoplex
+        token: "{{ .Env.HOMEBREW_TOKEN }}"
     install: |
       bin.install "octoplex"
     test: |
