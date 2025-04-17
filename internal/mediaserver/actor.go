@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	typescontainer "github.com/docker/docker/api/types/container"
@@ -29,7 +28,9 @@ type StreamKey string
 const (
 	defaultFetchIngressStateInterval           = 5 * time.Second                           // default interval to fetch the state of the media server
 	defaultAPIPort                             = 9997                                      // default API host port for the media server
+	defaultRTMPIP                              = "127.0.0.1"                               // default RTMP host IP, bound to localhost for security
 	defaultRTMPPort                            = 1935                                      // default RTMP host port for the media server
+	defaultRTMPHost                            = "localhost"                               // default RTMP host name, used for the RTMP URL
 	defaultChanSize                            = 64                                        // default channel size for asynchronous non-error channels
 	imageNameMediaMTX                          = "ghcr.io/rfwatson/mediamtx-alpine:latest" // image name for mediamtx
 	defaultStreamKey                 StreamKey = "live"                                    // Default stream key. See [StreamKey].
@@ -47,7 +48,8 @@ type Actor struct {
 	chanSize                  int
 	containerClient           *container.Client
 	apiPort                   int
-	rtmpPort                  int
+	rtmpAddr                  domain.NetAddr
+	rtmpHost                  string
 	streamKey                 StreamKey
 	fetchIngressStateInterval time.Duration
 	pass                      string // password for the media server
@@ -62,11 +64,12 @@ type Actor struct {
 // NewActorParams contains the parameters for building a new media server
 // actor.
 type NewActorParams struct {
-	APIPort                   int           // defaults to 9997
-	RTMPPort                  int           // defaults to 1935
-	StreamKey                 StreamKey     // defaults to "live"
-	ChanSize                  int           // defaults to 64
-	FetchIngressStateInterval time.Duration // defaults to 5 seconds
+	APIPort                   int            // defaults to 9997
+	RTMPAddr                  domain.NetAddr // defaults to 127.0.0.1:1935
+	RTMPHost                  string         // defaults to "localhost"
+	StreamKey                 StreamKey      // defaults to "live"
+	ChanSize                  int            // defaults to 64
+	FetchIngressStateInterval time.Duration  // defaults to 5 seconds
 	ContainerClient           *container.Client
 	Logger                    *slog.Logger
 }
@@ -84,10 +87,15 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 		return nil, fmt.Errorf("build API client: %w", err)
 	}
 
+	rtmpAddr := params.RTMPAddr
+	rtmpAddr.IP = cmp.Or(rtmpAddr.IP, defaultRTMPIP)
+	rtmpAddr.Port = cmp.Or(rtmpAddr.Port, defaultRTMPPort)
+
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
 	return &Actor{
 		apiPort:                   cmp.Or(params.APIPort, defaultAPIPort),
-		rtmpPort:                  cmp.Or(params.RTMPPort, defaultRTMPPort),
+		rtmpAddr:                  rtmpAddr,
+		rtmpHost:                  cmp.Or(params.RTMPHost, defaultRTMPHost),
 		streamKey:                 cmp.Or(params.StreamKey, defaultStreamKey),
 		fetchIngressStateInterval: cmp.Or(params.FetchIngressStateInterval, defaultFetchIngressStateInterval),
 		tlsCert:                   tlsCert,
@@ -104,10 +112,8 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 }
 
 func (a *Actor) Start(ctx context.Context) error {
-	// Exposed ports are bound to 127.0.0.1 for security.
-	// TODO: configurable RTMP bind address
-	apiPortSpec := nat.Port("127.0.0.1:" + strconv.Itoa(a.apiPort) + ":9997")
-	rtmpPortSpec := nat.Port("127.0.0.1:" + strconv.Itoa(+a.rtmpPort) + ":1935")
+	apiPortSpec := nat.Port(fmt.Sprintf("127.0.0.1:%d:9997", a.apiPort))
+	rtmpPortSpec := nat.Port(fmt.Sprintf("%s:%d:%d", a.rtmpAddr.IP, a.rtmpAddr.Port, 1935))
 	exposedPorts, portBindings, _ := nat.ParsePortSpecs([]string{string(apiPortSpec), string(rtmpPortSpec)})
 
 	// The RTMP URL is passed to the UI via the state.
@@ -155,6 +161,7 @@ func (a *Actor) Start(ctx context.Context) error {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 
+	a.logger.Info("Starting media server", "host", a.rtmpHost, "bind_ip", a.rtmpAddr.IP, "bind_port", a.rtmpAddr.Port)
 	containerStateC, errC := a.containerClient.RunContainer(
 		ctx,
 		container.RunContainerParams{
@@ -352,7 +359,7 @@ func (s *Actor) handleContainerExit(err error) {
 
 // RTMPURL returns the RTMP URL for the media server, accessible from the host.
 func (s *Actor) RTMPURL() string {
-	return fmt.Sprintf("rtmp://localhost:%d/%s", s.rtmpPort, s.streamKey)
+	return fmt.Sprintf("rtmp://%s:%d/%s", s.rtmpHost, s.rtmpAddr.Port, s.streamKey)
 }
 
 // RTMPInternalURL returns the RTMP URL for the media server, accessible from

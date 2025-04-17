@@ -100,6 +100,10 @@ sources:
   rtmp:
     enabled: true                      # must be true
     streamKey: live                    # defaults to "live"
+    host: rtmp.example.com             # defaults to "localhost"
+    bindAddr:                          # optional
+      ip: 0.0.0.0                      # defaults to 127.0.0.1
+      port: 1935                       # defaults to 1935
 destinations:
   - name: YouTube                      # Destination name, used only for display
     url: rtmp://rtmp.youtube.com/12345 # Destination  URL with stream key
@@ -108,8 +112,12 @@ destinations:
   # other destinations here
 ```
 
-:warning: It is also possible to add and remove destinations directly from the
+:information_source: It is also possible to add and remove destinations directly from the
 terminal user interface.
+
+:warning: `sources.rtmp.bindAddr.ip` must be set to a valid IP address if you want
+to accept connections from other hosts. Leave it blank to bind only to
+localhost (`127.0.0.1`) or use `0.0.0.0` to bind to all network interfaces.
 
 ## Contributing
 

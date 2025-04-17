@@ -57,6 +57,12 @@ type Destination struct {
 	URL       string
 }
 
+// NetAddr holds a network address.
+type NetAddr struct {
+	IP   string
+	Port int
+}
+
 // Container status strings.
 //
 // TODO: refactor to strictly reflect Docker status strings.

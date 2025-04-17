@@ -89,6 +89,8 @@ func Run(ctx context.Context, params RunParams) error {
 	updateUI()
 
 	srv, err := mediaserver.NewActor(ctx, mediaserver.NewActorParams{
+		RTMPAddr:        domain.NetAddr(cfg.Sources.RTMP.BindAddr),
+		RTMPHost:        cfg.Sources.RTMP.Host,
 		StreamKey:       mediaserver.StreamKey(cfg.Sources.RTMP.StreamKey),
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "mediaserver"),

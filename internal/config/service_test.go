@@ -93,6 +93,11 @@ func TestConfigServiceReadConfig(t *testing.T) {
 								RTMP: config.RTMPSource{
 									Enabled:   true,
 									StreamKey: "s3cr3t",
+									Host:      "rtmp.example.com",
+									BindAddr: config.NetAddr{
+										IP:   "0.0.0.0",
+										Port: 19350,
+									},
 								},
 							},
 							Destinations: []config.Destination{

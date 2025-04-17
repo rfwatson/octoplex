@@ -30,12 +30,12 @@ import (
 )
 
 func TestIntegration(t *testing.T) {
-	t.Run("with default stream key", func(t *testing.T) {
-		testIntegration(t, "")
+	t.Run("with default host, port and stream key", func(t *testing.T) {
+		testIntegration(t, "", "", 0, "")
 	})
 
-	t.Run("with custom stream key", func(t *testing.T) {
-		testIntegration(t, "s0meK3y")
+	t.Run("with custom host, port and stream key", func(t *testing.T) {
+		testIntegration(t, "localhost", "0.0.0.0", 3000, "s0meK3y")
 	})
 }
 
@@ -45,11 +45,14 @@ func TestIntegration(t *testing.T) {
 // https://stackoverflow.com/a/60740997/62871
 const hostIP = "172.17.0.1"
 
-func testIntegration(t *testing.T, streamKey string) {
+func testIntegration(t *testing.T, rtmpHost string, rtmpIP string, rtmpPort int, streamKey string) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
 
+	wantRTMPHost := cmp.Or(rtmpHost, "localhost")
+	wantRTMPPort := cmp.Or(rtmpPort, 1935)
 	wantStreamKey := cmp.Or(streamKey, "live")
+	wantRTMPURL := fmt.Sprintf("rtmp://%s:%d/%s", wantRTMPHost, wantRTMPPort, wantStreamKey)
 
 	destServer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
@@ -74,7 +77,13 @@ func testIntegration(t *testing.T, streamKey string) {
 	destURL1 := fmt.Sprintf("rtmp://%s:%d/%s/dest1", hostIP, destServerPort.Int(), wantStreamKey)
 	destURL2 := fmt.Sprintf("rtmp://%s:%d/%s/dest2", hostIP, destServerPort.Int(), wantStreamKey)
 	configService := setupConfigService(t, config.Config{
-		Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true, StreamKey: streamKey}},
+		Sources: config.Sources{
+			RTMP: config.RTMPSource{
+				Enabled:   true,
+				Host:      rtmpHost,
+				BindAddr:  config.NetAddr{IP: rtmpIP, Port: rtmpPort},
+				StreamKey: streamKey,
+			}},
 		// Load one destination from config, add the other in-app.
 		Destinations: []config.Destination{{Name: "Local server 1", URL: destURL1}},
 	})
@@ -116,7 +125,7 @@ func testIntegration(t *testing.T, streamKey string) {
 	printScreen(t, getContents, "After starting the mediaserver")
 
 	// Start streaming a test video to the app:
-	testhelpers.StreamFLV(t, "rtmp://localhost:1935/"+wantStreamKey)
+	testhelpers.StreamFLV(t, wantRTMPURL)
 
 	require.EventuallyWithT(
 		t,
@@ -124,7 +133,7 @@ func testIntegration(t *testing.T, streamKey string) {
 			contents := getContents()
 			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
-			assert.Contains(t, contents[1], "URL      rtmp://localhost:1935/"+wantStreamKey, "expected mediaserver status to be receiving")
+			assert.Contains(t, contents[1], "URL      "+wantRTMPURL, "expected mediaserver status to be receiving")
 			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
 			assert.Contains(t, contents[3], "Tracks   H264", "expected mediaserver tracks to be H264")
 			assert.Contains(t, contents[4], "Health   healthy", "expected mediaserver to be healthy")
@@ -256,6 +265,48 @@ func testIntegration(t *testing.T, streamKey string) {
 	<-done
 }
 
+func TestIntegrationCustomRTMPURL(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
+
+	logger := testhelpers.NewTestLogger(t).With("component", "integration")
+	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	require.NoError(t, err)
+
+	configService := setupConfigService(t, config.Config{
+		Sources: config.Sources{
+			RTMP: config.RTMPSource{
+				Enabled: true,
+				Host:    "rtmp.live.tv",
+			},
+		},
+	})
+	screen, screenCaptureC, getContents := setupSimulationScreen(t)
+
+	done := make(chan struct{})
+	go func() {
+		defer func() {
+			done <- struct{}{}
+		}()
+
+		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+	}()
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			assert.True(t, contentsIncludes(getContents(), "URL      rtmp://rtmp.live.tv:1935/live"), "expected to see custom host name")
+		},
+		5*time.Second,
+		time.Second,
+		"expected to see custom host name",
+	)
+	printScreen(t, getContents, "Ater displaying the fatal error modal")
+
+	cancel()
+
+	<-done
+}
 func TestIntegrationRestartDestination(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()

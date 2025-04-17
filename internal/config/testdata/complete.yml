@@ -6,6 +6,10 @@ sources:
   rtmp:
     enabled: true
     streamKey: s3cr3t
+    host: rtmp.example.com
+    bindAddr:
+      ip: 0.0.0.0
+      port: 19350 
 destinations:
 - name: my stream
   url: rtmp://rtmp.example.com:1935/live

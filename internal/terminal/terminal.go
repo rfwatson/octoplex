@@ -696,7 +696,7 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 			SetSelectable(false)
 	}
 
-	ui.sourceViews.url.SetText(state.Source.RTMPURL)
+	ui.sourceViews.url.SetText(cmp.Or(state.Source.RTMPURL, dash))
 
 	tracks := dash
 	if state.Source.Live && len(state.Source.Tracks) > 0 {

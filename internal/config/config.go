@@ -22,10 +22,18 @@ func (l LogFile) GetPath() string {
 	return cmp.Or(l.Path, l.defaultPath)
 }
 
+// NetAddr holds an IP and/or port.
+type NetAddr struct {
+	IP   string `yaml:"ip,omitempty"`
+	Port int    `yaml:"port,omitempty"`
+}
+
 // RTMPSource holds the configuration for the RTMP source.
 type RTMPSource struct {
-	Enabled   bool   `yaml:"enabled"`
-	StreamKey string `yaml:"streamKey,omitempty"`
+	Enabled   bool    `yaml:"enabled"`
+	StreamKey string  `yaml:"streamKey,omitempty"`
+	Host      string  `yaml:"host,omitempty"`
+	BindAddr  NetAddr `yaml:"bindAddr,omitempty"`
 }
 
 // Sources holds the configuration for the sources.
