@@ -39,8 +39,8 @@ func Run(ctx context.Context, params RunParams) error {
 	applyConfig(cfg, state)
 
 	// While RTMP is the only source, it doesn't make sense to disable it.
-	if !cfg.Sources.RTMP.Enabled {
-		return errors.New("config: sources.rtmp.enabled must be set to true")
+	if cfg.Sources.MediaServer.RTMP == nil {
+		return errors.New("config: sources.mediaServer.rtmp is required")
 	}
 
 	logger := params.Logger
@@ -89,9 +89,9 @@ func Run(ctx context.Context, params RunParams) error {
 	updateUI()
 
 	srv, err := mediaserver.NewActor(ctx, mediaserver.NewActorParams{
-		RTMPAddr:        domain.NetAddr(cfg.Sources.RTMP.BindAddr),
-		RTMPHost:        cfg.Sources.RTMP.Host,
-		StreamKey:       mediaserver.StreamKey(cfg.Sources.RTMP.StreamKey),
+		RTMPAddr:        domain.NetAddr(cfg.Sources.MediaServer.RTMP.NetAddr),
+		Host:            cfg.Sources.MediaServer.Host,
+		StreamKey:       mediaserver.StreamKey(cfg.Sources.MediaServer.StreamKey),
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "mediaserver"),
 	})

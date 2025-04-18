@@ -97,11 +97,10 @@ logfile:
   enabled: true                        # defaults to false
   path: /path/to/logfile               # defaults to $XDG_STATE_HOME/octoplex/octoplex.log
 sources:
-  rtmp:
-    enabled: true                      # must be true
+  mediaServer:
     streamKey: live                    # defaults to "live"
     host: rtmp.example.com             # defaults to "localhost"
-    bindAddr:                          # optional
+    rtmp:                              # must be present, use `rtmp: {}` for defaults
       ip: 0.0.0.0                      # defaults to 127.0.0.1
       port: 1935                       # defaults to 1935
 destinations:
@@ -115,8 +114,8 @@ destinations:
 :information_source: It is also possible to add and remove destinations directly from the
 terminal user interface.
 
-:warning: `sources.rtmp.bindAddr.ip` must be set to a valid IP address if you want
-to accept connections from other hosts. Leave it blank to bind only to
+:warning: `sources.mediaServer.rtmp.ip` must be set to a valid IP address if
+you want to accept connections from other hosts. Leave it blank to bind only to
 localhost (`127.0.0.1`) or use `0.0.0.0` to bind to all network interfaces.
 
 ## Contributing

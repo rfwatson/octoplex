@@ -3,11 +3,10 @@ logfile:
   enabled: true
   path: test.log
 sources:
-  rtmp:
-    enabled: true
+  mediaServer:
     streamKey: s3cr3t
     host: rtmp.example.com
-    bindAddr:
+    rtmp:
       ip: 0.0.0.0
       port: 19350 
 destinations:

@@ -78,12 +78,13 @@ func testIntegration(t *testing.T, rtmpHost string, rtmpIP string, rtmpPort int,
 	destURL2 := fmt.Sprintf("rtmp://%s:%d/%s/dest2", hostIP, destServerPort.Int(), wantStreamKey)
 	configService := setupConfigService(t, config.Config{
 		Sources: config.Sources{
-			RTMP: config.RTMPSource{
-				Enabled:   true,
+			MediaServer: config.MediaServerSource{
 				Host:      rtmpHost,
-				BindAddr:  config.NetAddr{IP: rtmpIP, Port: rtmpPort},
 				StreamKey: streamKey,
-			}},
+				RTMP: &config.RTMPSource{
+					NetAddr: config.NetAddr{IP: rtmpIP, Port: rtmpPort},
+				}},
+		},
 		// Load one destination from config, add the other in-app.
 		Destinations: []config.Destination{{Name: "Local server 1", URL: destURL1}},
 	})
@@ -275,9 +276,9 @@ func TestIntegrationCustomRTMPURL(t *testing.T) {
 
 	configService := setupConfigService(t, config.Config{
 		Sources: config.Sources{
-			RTMP: config.RTMPSource{
-				Enabled: true,
-				Host:    "rtmp.live.tv",
+			MediaServer: config.MediaServerSource{
+				Host: "rtmp.live.tv",
+				RTMP: &config.RTMPSource{},
 			},
 		},
 	})
@@ -336,7 +337,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	configService := setupConfigService(t, config.Config{
-		Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true}},
+		Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}},
 		Destinations: []config.Destination{{
 			Name: "Local server 1",
 			URL:  fmt.Sprintf("rtmp://%s:%d/live", hostIP, destServerRTMPPort.Int()),
@@ -482,7 +483,7 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	configService := setupConfigService(t, config.Config{
-		Sources:      config.Sources{RTMP: config.RTMPSource{Enabled: true}},
+		Sources:      config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}},
 		Destinations: []config.Destination{{Name: "Example server", URL: "rtmp://rtmp.example.com/live"}},
 	})
 
@@ -558,7 +559,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	configService := setupConfigService(t, config.Config{
-		Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true, StreamKey: "live"}},
+		Sources: config.Sources{MediaServer: config.MediaServerSource{StreamKey: "live", RTMP: &config.RTMPSource{}}},
 	})
 
 	done := make(chan struct{})
@@ -701,7 +702,7 @@ func TestIntegrationStartupCheck(t *testing.T) {
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 	require.NoError(t, err)
 
-	configService := setupConfigService(t, config.Config{Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true}}})
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	done := make(chan struct{})
@@ -770,7 +771,7 @@ func TestIntegrationMediaServerError(t *testing.T) {
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 	require.NoError(t, err)
 
-	configService := setupConfigService(t, config.Config{Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true}}})
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	done := make(chan struct{})
@@ -809,7 +810,7 @@ func TestIntegrationDockerClientError(t *testing.T) {
 	var dockerClient mocks.DockerClient
 	dockerClient.EXPECT().NetworkCreate(mock.Anything, mock.Anything, mock.Anything).Return(network.CreateResponse{}, errors.New("boom"))
 
-	configService := setupConfigService(t, config.Config{Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true}}})
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	done := make(chan struct{})
@@ -850,7 +851,7 @@ func TestIntegrationDockerConnectionError(t *testing.T) {
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.WithHost("http://docker.example.com"))
 	require.NoError(t, err)
 
-	configService := setupConfigService(t, config.Config{Sources: config.Sources{RTMP: config.RTMPSource{Enabled: true}}})
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	done := make(chan struct{})

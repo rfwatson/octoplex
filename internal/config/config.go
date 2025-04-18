@@ -30,15 +30,19 @@ type NetAddr struct {
 
 // RTMPSource holds the configuration for the RTMP source.
 type RTMPSource struct {
-	Enabled   bool    `yaml:"enabled"`
-	StreamKey string  `yaml:"streamKey,omitempty"`
-	Host      string  `yaml:"host,omitempty"`
-	BindAddr  NetAddr `yaml:"bindAddr,omitempty"`
+	NetAddr `yaml:",inline"`
+}
+
+// MediaServerSource holds the configuration for the media server source.
+type MediaServerSource struct {
+	StreamKey string      `yaml:"streamKey,omitempty"`
+	Host      string      `yaml:"host,omitempty"`
+	RTMP      *RTMPSource `yaml:"rtmp,omitempty"`
 }
 
 // Sources holds the configuration for the sources.
 type Sources struct {
-	RTMP RTMPSource `yaml:"rtmp"`
+	MediaServer MediaServerSource `yaml:"mediaServer"`
 }
 
 // Config holds the configuration for the application.

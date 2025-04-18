@@ -30,7 +30,7 @@ const (
 	defaultAPIPort                       = 9997                                      // default API host port for the media server
 	defaultRTMPIP                        = "127.0.0.1"                               // default RTMP host IP, bound to localhost for security
 	defaultRTMPPort                      = 1935                                      // default RTMP host port for the media server
-	defaultRTMPHost                      = "localhost"                               // default RTMP host name, used for the RTMP URL
+	defaultHost                          = "localhost"                               // default RTMP host name, used for the RTMP URL
 	defaultChanSize                      = 64                                        // default channel size for asynchronous non-error channels
 	imageNameMediaMTX                    = "ghcr.io/rfwatson/mediamtx-alpine:latest" // image name for mediamtx
 	defaultStreamKey           StreamKey = "live"                                    // Default stream key. See [StreamKey].
@@ -66,7 +66,7 @@ type Actor struct {
 type NewActorParams struct {
 	APIPort             int            // defaults to 9997
 	RTMPAddr            domain.NetAddr // defaults to 127.0.0.1:1935
-	RTMPHost            string         // defaults to "localhost"
+	Host                string         // defaults to "localhost"
 	StreamKey           StreamKey      // defaults to "live"
 	ChanSize            int            // defaults to 64
 	UpdateStateInterval time.Duration  // defaults to 5 seconds
@@ -95,7 +95,7 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 	return &Actor{
 		apiPort:             cmp.Or(params.APIPort, defaultAPIPort),
 		rtmpAddr:            rtmpAddr,
-		rtmpHost:            cmp.Or(params.RTMPHost, defaultRTMPHost),
+		rtmpHost:            cmp.Or(params.Host, defaultHost),
 		streamKey:           cmp.Or(params.StreamKey, defaultStreamKey),
 		updateStateInterval: cmp.Or(params.UpdateStateInterval, defaultUpdateStateInterval),
 		tlsCert:             tlsCert,

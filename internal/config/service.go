@@ -182,8 +182,8 @@ func (s *Service) writeConfig(cfgBytes []byte) error {
 //
 // This function may set exported fields to arbitrary values.
 func (s *Service) populateConfigOnBuild(cfg *Config) {
-	cfg.Sources.RTMP.Enabled = true
-	cfg.Sources.RTMP.StreamKey = "live"
+	cfg.Sources.MediaServer.StreamKey = "live"
+	cfg.Sources.MediaServer.RTMP = &RTMPSource{NetAddr{"127.0.0.1", 1935}}
 
 	s.populateConfigOnRead(cfg)
 }

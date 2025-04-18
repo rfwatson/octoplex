@@ -44,7 +44,9 @@ func TestConfigServiceCurrent(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, os.RemoveAll(systemConfigDir)) })
 
 	// Ensure defaults are set:
-	assert.True(t, service.Current().Sources.RTMP.Enabled)
+	assert.NotNil(t, service.Current().Sources.MediaServer.RTMP)
+	assert.Equal(t, "127.0.0.1", service.Current().Sources.MediaServer.RTMP.IP)
+	assert.Equal(t, 1935, service.Current().Sources.MediaServer.RTMP.Port)
 }
 
 func TestConfigServiceCreateConfig(t *testing.T) {
@@ -67,7 +69,9 @@ func TestConfigServiceCreateConfig(t *testing.T) {
 
 	var readCfg config.Config
 	require.NoError(t, yaml.Unmarshal(cfgBytes, &readCfg))
-	assert.True(t, readCfg.Sources.RTMP.Enabled, "default values not set")
+	assert.NotNil(t, readCfg.Sources.MediaServer.RTMP)
+	assert.Equal(t, "127.0.0.1", readCfg.Sources.MediaServer.RTMP.IP)
+	assert.Equal(t, 1935, readCfg.Sources.MediaServer.RTMP.Port)
 }
 
 func TestConfigServiceReadConfig(t *testing.T) {
@@ -90,13 +94,14 @@ func TestConfigServiceReadConfig(t *testing.T) {
 								Path:    "test.log",
 							},
 							Sources: config.Sources{
-								RTMP: config.RTMPSource{
-									Enabled:   true,
+								MediaServer: config.MediaServerSource{
 									StreamKey: "s3cr3t",
 									Host:      "rtmp.example.com",
-									BindAddr: config.NetAddr{
-										IP:   "0.0.0.0",
-										Port: 19350,
+									RTMP: &config.RTMPSource{
+										NetAddr: config.NetAddr{
+											IP:   "0.0.0.0",
+											Port: 19350,
+										},
 									},
 								},
 							},
