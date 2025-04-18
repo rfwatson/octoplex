@@ -301,7 +301,7 @@ func TestIntegrationCustomRTMPURL(t *testing.T) {
 		time.Second,
 		"expected to see custom host name",
 	)
-	printScreen(t, getContents, "Ater displaying the fatal error modal")
+	printScreen(t, getContents, "Ater opening the app with a custom host name")
 
 	cancel()
 
