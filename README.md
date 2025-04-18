@@ -100,9 +100,14 @@ sources:
   mediaServer:
     streamKey: live                    # defaults to "live"
     host: rtmp.example.com             # defaults to "localhost"
-    rtmp:                              # must be present, use `rtmp: {}` for defaults
-      ip: 0.0.0.0                      # defaults to 127.0.0.1
+    rtmp:
+      enabled: true                    # defaults to false
+      ip: 127.0.0.1                    # defaults to 127.0.0.1
       port: 1935                       # defaults to 1935
+    rtmps:
+      enabled: true                    # defaults to false
+      ip: 0.0.0.0                      # defaults to 127.0.0.1
+      port: 1936                       # defaults to 1936
 destinations:
   - name: YouTube                      # Destination name, used only for display
     url: rtmp://rtmp.youtube.com/12345 # Destination  URL with stream key

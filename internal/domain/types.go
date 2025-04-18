@@ -35,7 +35,6 @@ type Source struct {
 	Live          bool
 	LiveChangedAt time.Time
 	Tracks        []string
-	RTMPURL       string
 	ExitReason    string
 }
 
@@ -60,6 +59,11 @@ type Destination struct {
 type NetAddr struct {
 	IP   string
 	Port int
+}
+
+// IsZero returns true if the NetAddr is zero value.
+func (n NetAddr) IsZero() bool {
+	return n.IP == "" && n.Port == 0
 }
 
 // Container status strings.

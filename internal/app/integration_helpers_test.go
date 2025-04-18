@@ -85,6 +85,8 @@ func setupSimulationScreen(t *testing.T) (tcell.SimulationScreen, chan<- termina
 			lines[y] += string(screenCells[n].Runes[0])
 		}
 
+		require.GreaterOrEqual(t, len(lines), 5, "Screen contents should have at least 5 lines")
+
 		return lines
 	}
 

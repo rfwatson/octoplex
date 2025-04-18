@@ -29,13 +29,41 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+const waitTime = time.Minute
+
 func TestIntegration(t *testing.T) {
-	t.Run("with default host, port and stream key", func(t *testing.T) {
-		testIntegration(t, "", "", 0, "")
+	t.Run("RTMP with default host, port and stream key", func(t *testing.T) {
+		testIntegration(t, config.MediaServerSource{
+			RTMP: config.RTMPSource{Enabled: true},
+		})
 	})
 
-	t.Run("with custom host, port and stream key", func(t *testing.T) {
-		testIntegration(t, "localhost", "0.0.0.0", 3000, "s0meK3y")
+	t.Run("RTMPS with default host, port and stream key", func(t *testing.T) {
+		testIntegration(t, config.MediaServerSource{
+			RTMPS: config.RTMPSource{Enabled: true},
+		})
+	})
+
+	t.Run("RTMP with custom host, port and stream key", func(t *testing.T) {
+		testIntegration(t, config.MediaServerSource{
+			StreamKey: "s0meK3y",
+			Host:      "localhost",
+			RTMP: config.RTMPSource{
+				Enabled: true,
+				NetAddr: config.NetAddr{IP: "0.0.0.0", Port: 3000},
+			},
+		})
+	})
+
+	t.Run("RTMPS with custom host, port and stream key", func(t *testing.T) {
+		testIntegration(t, config.MediaServerSource{
+			StreamKey: "an0therK3y",
+			Host:      "localhost",
+			RTMPS: config.RTMPSource{
+				Enabled: true,
+				NetAddr: config.NetAddr{IP: "0.0.0.0", Port: 443},
+			},
+		})
 	})
 }
 
@@ -45,27 +73,39 @@ func TestIntegration(t *testing.T) {
 // https://stackoverflow.com/a/60740997/62871
 const hostIP = "172.17.0.1"
 
-func testIntegration(t *testing.T, rtmpHost string, rtmpIP string, rtmpPort int, streamKey string) {
+func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
 
-	wantRTMPHost := cmp.Or(rtmpHost, "localhost")
-	wantRTMPPort := cmp.Or(rtmpPort, 1935)
-	wantStreamKey := cmp.Or(streamKey, "live")
-	wantRTMPURL := fmt.Sprintf("rtmp://%s:%d/%s", wantRTMPHost, wantRTMPPort, wantStreamKey)
+	var rtmpConfig config.RTMPSource
+	var proto string
+	var defaultPort int
+	if mediaServerConfig.RTMP.Enabled {
+		rtmpConfig = mediaServerConfig.RTMP
+		proto = "rtmp://"
+		defaultPort = 1935
+	} else {
+		rtmpConfig = mediaServerConfig.RTMPS
+		proto = "rtmps://"
+		defaultPort = 1936
+	}
+
+	wantHost := cmp.Or(mediaServerConfig.Host, "localhost")
+	wantRTMPPort := cmp.Or(rtmpConfig.Port, defaultPort)
+	wantStreamKey := cmp.Or(mediaServerConfig.StreamKey, "live")
+	wantRTMPURL := fmt.Sprintf("%s%s:%d/%s", proto, wantHost, wantRTMPPort, wantStreamKey)
 
 	destServer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:        "bluenviron/mediamtx:latest",
-			Env:          map[string]string{"MTX_RTMPADDRESS": ":1936"},
-			ExposedPorts: []string{"1936/tcp"},
-			WaitingFor:   wait.ForListeningPort("1936/tcp"),
+			ExposedPorts: []string{"1935/tcp"},
+			WaitingFor:   wait.ForListeningPort("1935/tcp"),
 		},
 		Started: true,
 	})
 	testcontainers.CleanupContainer(t, destServer)
 	require.NoError(t, err)
-	destServerPort, err := destServer.MappedPort(ctx, "1936/tcp")
+	destServerPort, err := destServer.MappedPort(ctx, "1935/tcp")
 	require.NoError(t, err)
 
 	logger := testhelpers.NewTestLogger(t).With("component", "integration")
@@ -74,17 +114,10 @@ func testIntegration(t *testing.T, rtmpHost string, rtmpIP string, rtmpPort int,
 
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	destURL1 := fmt.Sprintf("rtmp://%s:%d/%s/dest1", hostIP, destServerPort.Int(), wantStreamKey)
-	destURL2 := fmt.Sprintf("rtmp://%s:%d/%s/dest2", hostIP, destServerPort.Int(), wantStreamKey)
+	destURL1 := fmt.Sprintf("rtmp://%s:%d/live/dest1", hostIP, destServerPort.Int())
+	destURL2 := fmt.Sprintf("rtmp://%s:%d/live/dest2", hostIP, destServerPort.Int())
 	configService := setupConfigService(t, config.Config{
-		Sources: config.Sources{
-			MediaServer: config.MediaServerSource{
-				Host:      rtmpHost,
-				StreamKey: streamKey,
-				RTMP: &config.RTMPSource{
-					NetAddr: config.NetAddr{IP: rtmpIP, Port: rtmpPort},
-				}},
-		},
+		Sources: config.Sources{MediaServer: mediaServerConfig},
 		// Load one destination from config, add the other in-app.
 		Destinations: []config.Destination{{Name: "Local server 1", URL: destURL1}},
 	})
@@ -113,13 +146,12 @@ func testIntegration(t *testing.T, rtmpHost string, rtmpIP string, rtmpPort int,
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
 
-			assert.Contains(t, contents[2], "Status   waiting for stream", "expected mediaserver status to be waiting")
+			assert.Contains(c, contents[1], "Status   waiting for stream", "expected mediaserver status to be waiting")
 		},
-		2*time.Minute,
+		waitTime,
 		time.Second,
 		"expected the mediaserver to start",
 	)
@@ -130,16 +162,14 @@ func testIntegration(t *testing.T, rtmpHost string, rtmpIP string, rtmpPort int,
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
-			assert.Contains(t, contents[1], "URL      "+wantRTMPURL, "expected mediaserver status to be receiving")
-			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
-			assert.Contains(t, contents[3], "Tracks   H264", "expected mediaserver tracks to be H264")
-			assert.Contains(t, contents[4], "Health   healthy", "expected mediaserver to be healthy")
+			assert.Contains(c, contents[1], "Status   receiving", "expected mediaserver status to be receiving")
+			assert.Contains(c, contents[2], "Tracks   H264", "expected mediaserver tracks to be H264")
+			assert.Contains(c, contents[3], "Health   healthy", "expected mediaserver to be healthy")
 		},
-		time.Minute,
+		waitTime,
 		time.Second,
 		"expected to receive an ingress stream",
 	)
@@ -159,22 +189,21 @@ func testIntegration(t *testing.T, rtmpHost string, rtmpIP string, rtmpPort int,
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
-			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
-			assert.Contains(t, contents[3], "Tracks   H264", "expected mediaserver tracks to be H264")
-			assert.Contains(t, contents[4], "Health   healthy", "expected mediaserver to be healthy")
+			assert.Contains(c, contents[1], "Status   receiving", "expected mediaserver status to be receiving")
+			assert.Contains(c, contents[2], "Tracks   H264", "expected mediaserver tracks to be H264")
+			assert.Contains(c, contents[3], "Health   healthy", "expected mediaserver to be healthy")
 
-			require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
-			assert.Contains(t, contents[2], "off-air", "expected local server 1 to be off-air")
+			require.Contains(c, contents[2], "Local server 1", "expected local server 1 to be present")
+			assert.Contains(c, contents[3], "off-air", "expected local server 0 to be off-air")
 
-			require.Contains(t, contents[3], "Local server 2", "expected local server 2 to be present")
-			assert.Contains(t, contents[3], "off-air", "expected local server 2 to be off-air")
+			require.Contains(c, contents[3], "Local server 2", "expected local server 2 to be present")
+			assert.Contains(c, contents[3], "off-air", "expected local server 2 to be off-air")
 
 		},
-		2*time.Minute,
+		waitTime,
 		time.Second,
 		"expected to add the destinations",
 	)
@@ -187,23 +216,22 @@ func testIntegration(t *testing.T, rtmpHost string, rtmpIP string, rtmpPort int,
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
-			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
-			assert.Contains(t, contents[3], "Tracks   H264", "expected mediaserver tracks to be H264")
-			assert.Contains(t, contents[4], "Health   healthy", "expected mediaserver to be healthy")
+			assert.Contains(c, contents[1], "Status   receiving", "expected mediaserver status to be receiving")
+			assert.Contains(c, contents[2], "Tracks   H264", "expected mediaserver tracks to be H264")
+			assert.Contains(c, contents[3], "Health   healthy", "expected mediaserver to be healthy")
 
-			require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
-			assert.Contains(t, contents[2], "sending", "expected local server 1 to be sending")
-			assert.Contains(t, contents[2], "healthy", "expected local server 1 to be healthy")
+			require.Contains(c, contents[2], "Local server 1", "expected local server 1 to be present")
+			assert.Contains(c, contents[2], "sending", "expected local server 1 to be sending")
+			assert.Contains(c, contents[2], "healthy", "expected local server 1 to be healthy")
 
-			require.Contains(t, contents[3], "Local server 2", "expected local server 2 to be present")
-			assert.Contains(t, contents[3], "sending", "expected local server 2 to be sending")
-			assert.Contains(t, contents[3], "healthy", "expected local server 2 to be healthy")
+			require.Contains(c, contents[3], "Local server 2", "expected local server 2 to be present")
+			assert.Contains(c, contents[3], "sending", "expected local server 2 to be sending")
+			assert.Contains(c, contents[3], "healthy", "expected local server 2 to be healthy")
 		},
-		2*time.Minute,
+		waitTime,
 		time.Second,
 		"expected to start the destination streams",
 	)
@@ -215,22 +243,21 @@ func testIntegration(t *testing.T, rtmpHost string, rtmpIP string, rtmpPort int,
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
-			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
-			assert.Contains(t, contents[3], "Tracks   H264", "expected mediaserver tracks to be H264")
-			assert.Contains(t, contents[4], "Health   healthy", "expected mediaserver to be healthy")
+			assert.Contains(c, contents[1], "Status   receiving", "expected mediaserver status to be receiving")
+			assert.Contains(c, contents[2], "Tracks   H264", "expected mediaserver tracks to be H264")
+			assert.Contains(c, contents[3], "Health   healthy", "expected mediaserver to be healthy")
 
-			require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
-			assert.Contains(t, contents[2], "sending", "expected local server 1 to be sending")
-			assert.Contains(t, contents[2], "healthy", "expected local server 1 to be healthy")
+			require.Contains(c, contents[2], "Local server 1", "expected local server 1 to be present")
+			assert.Contains(c, contents[2], "sending", "expected local server 1 to be sending")
+			assert.Contains(c, contents[2], "healthy", "expected local server 1 to be healthy")
 
-			require.NotContains(t, contents[3], "Local server 2", "expected local server 2 to not be present")
+			require.NotContains(c, contents[3], "Local server 2", "expected local server 2 to not be present")
 
 		},
-		2*time.Minute,
+		waitTime,
 		time.Second,
 		"expected to remove the second destination",
 	)
@@ -241,16 +268,15 @@ func testIntegration(t *testing.T, rtmpHost string, rtmpIP string, rtmpPort int,
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
-			require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
-			assert.Contains(t, contents[2], "exited", "expected local server 1 to have exited")
+			require.Contains(c, contents[2], "Local server 1", "expected local server 1 to be present")
+			assert.Contains(c, contents[2], "exited", "expected local server 1 to have exited")
 
-			require.NotContains(t, contents[3], "Local server 2", "expected local server 2 to not be present")
+			require.NotContains(c, contents[3], "Local server 2", "expected local server 2 to not be present")
 		},
-		time.Minute,
+		waitTime,
 		time.Second,
 		"expected to stop the first destination stream",
 	)
@@ -278,7 +304,7 @@ func TestIntegrationCustomRTMPURL(t *testing.T) {
 		Sources: config.Sources{
 			MediaServer: config.MediaServerSource{
 				Host: "rtmp.live.tv",
-				RTMP: &config.RTMPSource{},
+				RTMP: config.RTMPSource{Enabled: true},
 			},
 		},
 	})
@@ -293,12 +319,15 @@ func TestIntegrationCustomRTMPURL(t *testing.T) {
 		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
 	}()
 
+	time.Sleep(time.Second)
+	sendKey(t, screen, tcell.KeyF1, ' ')
+
 	require.EventuallyWithT(
 		t,
 		func(t *assert.CollectT) {
-			assert.True(t, contentsIncludes(getContents(), "URL      rtmp://rtmp.live.tv:1935/live"), "expected to see custom host name")
+			assert.True(t, contentsIncludes(getContents(), "rtmp://rtmp.live.tv:1935/live"), "expected to see custom host name")
 		},
-		5*time.Second,
+		waitTime,
 		time.Second,
 		"expected to see custom host name",
 	)
@@ -308,6 +337,7 @@ func TestIntegrationCustomRTMPURL(t *testing.T) {
 
 	<-done
 }
+
 func TestIntegrationRestartDestination(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
@@ -337,7 +367,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	configService := setupConfigService(t, config.Config{
-		Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}},
+		Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
 		Destinations: []config.Destination{{
 			Name: "Local server 1",
 			URL:  fmt.Sprintf("rtmp://%s:%d/live", hostIP, destServerRTMPPort.Int()),
@@ -355,13 +385,12 @@ func TestIntegrationRestartDestination(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
 
-			assert.Contains(t, contents[2], "Status   waiting for stream", "expected mediaserver status to be waiting")
+			assert.Contains(c, contents[1], "Status   waiting for stream", "expected mediaserver status to be waiting")
 		},
-		2*time.Minute,
+		waitTime,
 		time.Second,
 		"expected the mediaserver to start",
 	)
@@ -372,13 +401,12 @@ func TestIntegrationRestartDestination(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 3, "expected at least 3 lines of output")
 
-			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
+			assert.Contains(c, contents[1], "Status   receiving", "expected mediaserver status to be receiving")
 		},
-		time.Minute,
+		waitTime,
 		time.Second,
 		"expected to receive an ingress stream",
 	)
@@ -389,17 +417,16 @@ func TestIntegrationRestartDestination(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 4, "expected at least 5 lines of output")
 
-			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
+			assert.Contains(c, contents[1], "Status   receiving", "expected mediaserver status to be receiving")
 
-			require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
-			assert.Contains(t, contents[2], "sending", "expected local server 1 to be sending")
-			assert.Contains(t, contents[2], "healthy", "expected local server 1 to be healthy")
+			require.Contains(c, contents[2], "Local server 1", "expected local server 1 to be present")
+			assert.Contains(c, contents[2], "sending", "expected local server 1 to be sending")
+			assert.Contains(c, contents[2], "healthy", "expected local server 1 to be healthy")
 		},
-		2*time.Minute,
+		waitTime,
 		time.Second,
 		"expected to start the destination stream",
 	)
@@ -412,17 +439,16 @@ func TestIntegrationRestartDestination(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 3, "expected at least 3 lines of output")
 
-			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
+			assert.Contains(c, contents[1], "Status   receiving", "expected mediaserver status to be receiving")
 
-			require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
-			assert.Contains(t, contents[2], "off-air", "expected local server 1 to be off-air")
-			assert.Contains(t, contents[2], "restarting", "expected local server 1 to be restarting")
+			require.Contains(c, contents[2], "Local server 1", "expected local server 1 to be present")
+			assert.Contains(c, contents[2], "off-air", "expected local server 1 to be off-air")
+			assert.Contains(c, contents[2], "restarting", "expected local server 1 to be restarting")
 		},
-		20*time.Second,
+		waitTime,
 		time.Second,
 		"expected to begin restarting",
 	)
@@ -430,17 +456,16 @@ func TestIntegrationRestartDestination(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 4, "expected at least 4 lines of output")
 
-			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
+			assert.Contains(c, contents[1], "Status   receiving", "expected mediaserver status to be receiving")
 
-			require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
-			assert.Contains(t, contents[2], "sending", "expected local server 1 to be sending")
-			assert.Contains(t, contents[2], "healthy", "expected local server 1 to be healthy")
+			require.Contains(c, contents[2], "Local server 1", "expected local server 1 to be present")
+			assert.Contains(c, contents[2], "sending", "expected local server 1 to be sending")
+			assert.Contains(c, contents[2], "healthy", "expected local server 1 to be healthy")
 		},
-		2*time.Minute,
+		waitTime,
 		time.Second,
 		"expected to restart the destination stream",
 	)
@@ -451,16 +476,15 @@ func TestIntegrationRestartDestination(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 4, "expected at least 4 lines of output")
 
-			require.Contains(t, contents[2], "Local server 1", "expected local server 1 to be present")
-			assert.Contains(t, contents[2], "exited", "expected local server 1 to have exited")
+			require.Contains(c, contents[2], "Local server 1", "expected local server 1 to be present")
+			assert.Contains(c, contents[2], "exited", "expected local server 1 to have exited")
 
-			require.NotContains(t, contents[3], "Local server 2", "expected local server 2 to not be present")
+			require.NotContains(c, contents[3], "Local server 2", "expected local server 2 to not be present")
 		},
-		time.Minute,
+		waitTime,
 		time.Second,
 		"expected to stop the destination stream",
 	)
@@ -483,7 +507,7 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	configService := setupConfigService(t, config.Config{
-		Sources:      config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}},
+		Sources:      config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
 		Destinations: []config.Destination{{Name: "Example server", URL: "rtmp://rtmp.example.com/live"}},
 	})
 
@@ -498,13 +522,12 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
 
-			assert.Contains(t, contents[2], "Status   waiting for stream", "expected mediaserver status to be waiting")
+			assert.Contains(c, contents[1], "Status   waiting for stream", "expected mediaserver status to be waiting")
 		},
-		2*time.Minute,
+		waitTime,
 		time.Second,
 		"expected the mediaserver to start",
 	)
@@ -515,13 +538,12 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 3, "expected at least 3 lines of output")
 
-			assert.Contains(t, contents[2], "Status   receiving", "expected mediaserver status to be receiving")
+			assert.Contains(c, contents[1], "Status   receiving", "expected mediaserver status to be receiving")
 		},
-		time.Minute,
+		waitTime,
 		time.Second,
 		"expected to receive an ingress stream",
 	)
@@ -532,12 +554,12 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			assert.True(t, contentsIncludes(contents, "Streaming to Example server failed:"), "expected to see destination error")
-			assert.True(t, contentsIncludes(contents, "Error opening output files: I/O error"), "expected to see destination error")
+			assert.True(c, contentsIncludes(contents, "Streaming to Example server failed:"), "expected to see destination error")
+			assert.True(c, contentsIncludes(contents, "Error opening output files: I/O error"), "expected to see destination error")
 		},
-		time.Minute,
+		waitTime,
 		time.Second,
 		"expected to see the destination start error modal",
 	)
@@ -559,7 +581,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	configService := setupConfigService(t, config.Config{
-		Sources: config.Sources{MediaServer: config.MediaServerSource{StreamKey: "live", RTMP: &config.RTMPSource{}}},
+		Sources: config.Sources{MediaServer: config.MediaServerSource{StreamKey: "live", RTMP: config.RTMPSource{Enabled: true}}},
 	})
 
 	done := make(chan struct{})
@@ -573,14 +595,14 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+			require.True(c, len(contents) > 2, "expected at least 3 lines of output")
 
-			assert.Contains(t, contents[2], "Status   waiting for stream", "expected mediaserver status to be waiting")
-			assert.True(t, contentsIncludes(contents, "No destinations added yet. Press [a] to add a new destination."), "expected to see no destinations message")
+			assert.Contains(c, contents[1], "Status   waiting for stream", "expected mediaserver status to be waiting")
+			assert.True(c, contentsIncludes(contents, "No destinations added yet. Press [a] to add a new destination."), "expected to see no destinations message")
 		},
-		2*time.Minute,
+		waitTime,
 		time.Second,
 		"expected the mediaserver to start",
 	)
@@ -594,13 +616,13 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
 
-			assert.True(t, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
-			assert.True(t, contentsIncludes(contents, "validate: destination URL must be an RTMP URL"), "expected to see invalid RTMP URL error")
+			assert.True(c, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
+			assert.True(c, contentsIncludes(contents, "validate: destination URL must be an RTMP URL"), "expected to see invalid RTMP URL error")
 		},
-		10*time.Second,
+		waitTime,
 		time.Second,
 		"expected a validation error for an empty URL",
 	)
@@ -614,13 +636,13 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
 
-			assert.True(t, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
-			assert.True(t, contentsIncludes(contents, "validate: destination URL must be an RTMP URL"), "expected to see invalid RTMP URL error")
+			assert.True(c, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
+			assert.True(c, contentsIncludes(contents, "validate: destination URL must be an RTMP URL"), "expected to see invalid RTMP URL error")
 		},
-		10*time.Second,
+		waitTime,
 		time.Second,
 		"expected a validation error for an invalid URL",
 	)
@@ -635,15 +657,14 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
 
-			require.Contains(t, contents[2], "My stream", "expected new destination to be present")
-			assert.Contains(t, contents[2], "off-air", "expected new destination to be off-air")
-			assert.False(t, contentsIncludes(contents, "No destinations added yet. Press [a] to add a new destination."), "expected to not see no destinations message")
+			require.Contains(c, contents[2], "My stream", "expected new destination to be present")
+			assert.Contains(c, contents[2], "off-air", "expected new destination to be off-air")
+			assert.False(c, contentsIncludes(contents, "No destinations added yet"), "expected to not see no destinations message")
 		},
-		10*time.Second,
+		waitTime,
 		time.Second,
 		"expected to add the destination",
 	)
@@ -661,13 +682,13 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
 
-			assert.True(t, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
-			assert.True(t, contentsIncludes(contents, "validate: duplicate destination URL: rtmp://"), "expected to see config update error")
+			assert.True(c, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
+			assert.True(c, contentsIncludes(contents, "validate: duplicate destination URL: rtmp://"), "expected to see config update error")
 		},
-		10*time.Second,
+		waitTime,
 		time.Second,
 		"expected a validation error for a duplicate URL",
 	)
@@ -702,7 +723,7 @@ func TestIntegrationStartupCheck(t *testing.T) {
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 	require.NoError(t, err)
 
-	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}}})
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	done := make(chan struct{})
@@ -716,10 +737,10 @@ func TestIntegrationStartupCheck(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
-			assert.True(t, contentsIncludes(getContents(), "Another instance of Octoplex may already be running."), "expected to see startup check modal")
+		func(c *assert.CollectT) {
+			assert.True(c, contentsIncludes(getContents(), "Another instance of Octoplex may already be running."), "expected to see startup check modal")
 		},
-		30*time.Second,
+		waitTime,
 		time.Second,
 		"expected to see startup check modal",
 	)
@@ -729,13 +750,13 @@ func TestIntegrationStartupCheck(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			_, err := staleContainer.State(context.Background())
 			// IsRunning() does not work, probably because we're undercutting the
 			// testcontainers API.
-			require.True(t, errdefs.IsNotFound(err), "expected to not find the container")
+			require.True(c, errdefs.IsNotFound(err), "expected to not find the container")
 		},
-		time.Minute,
+		waitTime,
 		2*time.Second,
 		"expected to quit the other containers",
 	)
@@ -743,13 +764,13 @@ func TestIntegrationStartupCheck(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
+		func(c *assert.CollectT) {
 			contents := getContents()
-			require.True(t, len(contents) > 2, "expected at least 3 lines of output")
+			require.True(c, len(contents) > 2, "expected at least 3 lines of output")
 
-			assert.Contains(t, contents[2], "Status   waiting for stream", "expected mediaserver status to be waiting")
+			assert.Contains(c, contents[1], "Status   waiting for stream", "expected mediaserver status to be waiting")
 		},
-		10*time.Second,
+		waitTime,
 		time.Second,
 		"expected the mediaserver to start",
 	)
@@ -771,7 +792,7 @@ func TestIntegrationMediaServerError(t *testing.T) {
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 	require.NoError(t, err)
 
-	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}}})
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	done := make(chan struct{})
@@ -785,11 +806,11 @@ func TestIntegrationMediaServerError(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
-			assert.True(t, contentsIncludes(getContents(), "Mediaserver error: Server process exited unexpectedly."), "expected to see title")
-			assert.True(t, contentsIncludes(getContents(), "address already in use"), "expected to see message")
+		func(c *assert.CollectT) {
+			assert.True(c, contentsIncludes(getContents(), "Mediaserver error: Server process exited unexpectedly."), "expected to see title")
+			assert.True(c, contentsIncludes(getContents(), "address already in use"), "expected to see message")
 		},
-		time.Minute,
+		waitTime,
 		time.Second,
 		"expected to see media server error modal",
 	)
@@ -810,7 +831,7 @@ func TestIntegrationDockerClientError(t *testing.T) {
 	var dockerClient mocks.DockerClient
 	dockerClient.EXPECT().NetworkCreate(mock.Anything, mock.Anything, mock.Anything).Return(network.CreateResponse{}, errors.New("boom"))
 
-	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}}})
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	done := make(chan struct{})
@@ -828,11 +849,11 @@ func TestIntegrationDockerClientError(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
-			assert.True(t, contentsIncludes(getContents(), "An error occurred:"), "expected to see error message")
-			assert.True(t, contentsIncludes(getContents(), "create container client: network create: boom"), "expected to see message")
+		func(c *assert.CollectT) {
+			assert.True(c, contentsIncludes(getContents(), "An error occurred:"), "expected to see error message")
+			assert.True(c, contentsIncludes(getContents(), "create container client: network create: boom"), "expected to see message")
 		},
-		5*time.Second,
+		waitTime,
 		time.Second,
 		"expected to see fatal error modal",
 	)
@@ -843,6 +864,7 @@ func TestIntegrationDockerClientError(t *testing.T) {
 
 	<-done
 }
+
 func TestIntegrationDockerConnectionError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
@@ -851,7 +873,7 @@ func TestIntegrationDockerConnectionError(t *testing.T) {
 	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.WithHost("http://docker.example.com"))
 	require.NoError(t, err)
 
-	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: &config.RTMPSource{}}}})
+	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
 	done := make(chan struct{})
@@ -867,11 +889,11 @@ func TestIntegrationDockerConnectionError(t *testing.T) {
 
 	require.EventuallyWithT(
 		t,
-		func(t *assert.CollectT) {
-			assert.True(t, contentsIncludes(getContents(), "An error occurred:"), "expected to see error message")
-			assert.True(t, contentsIncludes(getContents(), "Could not connect to Docker. Is Docker installed"), "expected to see message")
+		func(c *assert.CollectT) {
+			assert.True(c, contentsIncludes(getContents(), "An error occurred:"), "expected to see error message")
+			assert.True(c, contentsIncludes(getContents(), "Could not connect to Docker. Is Docker installed"), "expected to see message")
 		},
-		5*time.Second,
+		waitTime,
 		time.Second,
 		"expected to see fatal error modal",
 	)
@@ -881,4 +903,104 @@ func TestIntegrationDockerConnectionError(t *testing.T) {
 	sendKey(t, screen, tcell.KeyEnter, ' ')
 
 	<-done
+}
+
+func TestIntegrationCopyURLs(t *testing.T) {
+	type binding struct {
+		key     tcell.Key
+		content string
+		url     string
+	}
+
+	testCases := []struct {
+		name              string
+		mediaServerConfig config.MediaServerSource
+		wantBindings      []binding
+		wantNot           []string
+	}{
+		{
+			name:              "RTMP only",
+			mediaServerConfig: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}},
+			wantBindings: []binding{
+				{
+					key:     tcell.KeyF1,
+					content: "F1       Copy source RTMP URL",
+					url:     "rtmp://localhost:1935/live",
+				},
+			},
+			wantNot: []string{"F2"},
+		},
+		{
+			name:              "RTMPS only",
+			mediaServerConfig: config.MediaServerSource{RTMPS: config.RTMPSource{Enabled: true}},
+			wantBindings: []binding{
+				{
+					key:     tcell.KeyF1,
+					content: "F1       Copy source RTMPS URL",
+					url:     "rtmps://localhost:1936/live",
+				},
+			},
+			wantNot: []string{"F2"},
+		},
+		{
+			name:              "RTMP and RTMPS",
+			mediaServerConfig: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}, RTMPS: config.RTMPSource{Enabled: true}},
+			wantBindings: []binding{
+				{
+					key:     tcell.KeyF1,
+					content: "F1       Copy source RTMP URL",
+					url:     "rtmp://localhost:1935/live",
+				},
+				{
+					key:     tcell.KeyF2,
+					content: "F2       Copy source RTMPS URL",
+					url:     "rtmps://localhost:1936/live",
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+			defer cancel()
+
+			logger := testhelpers.NewTestLogger(t).With("component", "integration")
+			dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+			require.NoError(t, err)
+
+			configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: tc.mediaServerConfig}})
+			screen, screenCaptureC, getContents := setupSimulationScreen(t)
+
+			done := make(chan struct{})
+			go func() {
+				defer func() {
+					done <- struct{}{}
+				}()
+
+				require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+			}()
+
+			time.Sleep(3 * time.Second)
+			printScreen(t, getContents, "Ater loading the app")
+
+			for _, want := range tc.wantBindings {
+				assert.True(t, contentsIncludes(getContents(), want.content), "expected to see %q", want)
+
+				sendKey(t, screen, want.key, ' ')
+				time.Sleep(3 * time.Second)
+				assert.True(t, contentsIncludes(getContents(), want.url), "expected to see copied message")
+
+				sendKey(t, screen, tcell.KeyEscape, ' ')
+			}
+
+			for _, wantNot := range tc.wantNot {
+				assert.False(t, contentsIncludes(getContents(), wantNot), "expected to not see %q", wantNot)
+			}
+
+			cancel()
+
+			<-done
+		})
+	}
 }

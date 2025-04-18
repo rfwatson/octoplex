@@ -31,3 +31,12 @@ func TestAppStateClone(t *testing.T) {
 	s.Destinations[0].Name = "Twitch"
 	assert.Equal(t, "YouTube", s2.Destinations[0].Name)
 }
+
+func TestNetAddr(t *testing.T) {
+	var addr domain.NetAddr
+	assert.True(t, addr.IsZero())
+
+	addr.IP = "127.0.0.1"
+	addr.Port = 3000
+	assert.False(t, addr.IsZero())
+}

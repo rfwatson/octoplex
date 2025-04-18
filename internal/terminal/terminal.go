@@ -20,7 +20,6 @@ import (
 )
 
 type sourceViews struct {
-	url    *tview.TextView
 	status *tview.TextView
 	tracks *tview.TextView
 	health *tview.TextView
@@ -44,6 +43,7 @@ type UI struct {
 	commandC           chan Command
 	clipboardAvailable bool
 	configFilePath     string
+	rtmpURL, rtmpsURL  string
 	buildInfo          domain.BuildInfo
 	logger             *slog.Logger
 
@@ -57,6 +57,7 @@ type UI struct {
 	sourceViews       sourceViews
 	destView          *tview.Table
 	noDestView        *tview.TextView
+	aboutView         *tview.Flex
 	pullProgressModal *tview.Modal
 
 	// other mutable state
@@ -127,8 +128,8 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	sourceView := tview.NewFlex()
 	sourceView.SetDirection(tview.FlexColumn)
 	sourceView.SetBorder(true)
-	sourceView.SetTitle("Source RTMP server")
-	sidebar.AddItem(sourceView, 9, 0, false)
+	sourceView.SetTitle("Source")
+	sidebar.AddItem(sourceView, 8, 0, false)
 
 	leftCol := tview.NewFlex()
 	leftCol.SetDirection(tview.FlexRow)
@@ -136,11 +137,6 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	rightCol.SetDirection(tview.FlexRow)
 	sourceView.AddItem(leftCol, 9, 0, false)
 	sourceView.AddItem(rightCol, 0, 1, false)
-
-	urlHeaderTextView := tview.NewTextView().SetDynamicColors(true).SetText("[grey]" + headerURL)
-	leftCol.AddItem(urlHeaderTextView, 1, 0, false)
-	urlTextView := tview.NewTextView().SetDynamicColors(true).SetText("[white]" + dash)
-	rightCol.AddItem(urlTextView, 1, 0, false)
 
 	statusHeaderTextView := tview.NewTextView().SetDynamicColors(true).SetText("[grey]" + headerStatus)
 	leftCol.AddItem(statusHeaderTextView, 1, 0, false)
@@ -176,13 +172,6 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	aboutView.SetDirection(tview.FlexRow)
 	aboutView.SetBorder(true)
 	aboutView.SetTitle("Actions")
-	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]a[-]        Add destination"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Del[-]      Remove destination"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Space[-]    Start/stop destination"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText(""), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]u[-]        Copy source RTMP URL"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]c[-]        Copy config file path"), 1, 0, false)
-	aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]?[-]        About"), 1, 0, false)
 
 	sidebar.AddItem(aboutView, 0, 1, false)
 
@@ -232,7 +221,6 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 		pages:              pages,
 		container:          container,
 		sourceViews: sourceViews{
-			url:    urlTextView,
 			status: statusTextView,
 			tracks: tracksTextView,
 			health: healthTextView,
@@ -242,6 +230,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 		},
 		destView:          destView,
 		noDestView:        noDestView,
+		aboutView:         aboutView,
 		pullProgressModal: pullProgressModal,
 		urlsToStartState:  make(map[string]startState),
 	}
@@ -252,6 +241,30 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	go ui.run(ctx)
 
 	return ui, nil
+}
+
+func (ui *UI) renderAboutView() {
+	ui.aboutView.Clear()
+
+	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]a[-]        Add destination"), 1, 0, false)
+	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Del[-]      Remove destination"), 1, 0, false)
+	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Space[-]    Start/stop destination"), 1, 0, false)
+	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText(""), 1, 0, false)
+
+	i := 1
+	if ui.rtmpURL != "" {
+		rtmpURLView := tview.NewTextView().SetDynamicColors(true).SetText(fmt.Sprintf("[grey]F%d[-]       Copy source RTMP URL", i))
+		ui.aboutView.AddItem(rtmpURLView, 1, 0, false)
+		i++
+	}
+
+	if ui.rtmpsURL != "" {
+		rtmpsURLView := tview.NewTextView().SetDynamicColors(true).SetText(fmt.Sprintf("[grey]F%d[-]       Copy source RTMPS URL", i))
+		ui.aboutView.AddItem(rtmpsURLView, 1, 0, false)
+	}
+
+	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]c[-]        Copy config file path"), 1, 0, false)
+	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]?[-]        About"), 1, 0, false)
 }
 
 // C returns a channel that receives commands from the user interface.
@@ -283,6 +296,17 @@ func (ui *UI) run(ctx context.Context) {
 	}
 }
 
+// SetRTMPURLs sets the RTMP and RTMPS URLs for the user interface, which are
+// unavailable when the UI is first created.
+func (ui *UI) SetRTMPURLs(rtmpURL, rtmpsURL string) {
+	ui.mu.Lock()
+	ui.rtmpURL = rtmpURL
+	ui.rtmpsURL = rtmpsURL
+	ui.mu.Unlock()
+
+	ui.renderAboutView()
+}
+
 func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
 	// Special case: handle CTRL-C even when a modal is visible.
 	if event.Key() == tcell.KeyCtrlC {
@@ -309,8 +333,6 @@ func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
 			return nil
 		case ' ':
 			ui.toggleDestination()
-		case 'u', 'U':
-			ui.copySourceURLToClipboard(ui.clipboardAvailable)
 		case 'c', 'C':
 			ui.copyConfigFilePathToClipboard(ui.clipboardAvailable, ui.configFilePath)
 		case '?':
@@ -318,6 +340,8 @@ func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
 		case 'k': // tview vim bindings
 			handleKeyUp()
 		}
+	case tcell.KeyF1, tcell.KeyF2:
+		ui.fkeyHandler(event.Key())
 	case tcell.KeyDelete, tcell.KeyBackspace, tcell.KeyBackspace2:
 		ui.removeDestination()
 		return nil
@@ -328,11 +352,34 @@ func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
 	return event
 }
 
+func (ui *UI) fkeyHandler(key tcell.Key) {
+	var urls []string
+	if ui.rtmpURL != "" {
+		urls = append(urls, ui.rtmpURL)
+	}
+	if ui.rtmpsURL != "" {
+		urls = append(urls, ui.rtmpsURL)
+	}
+
+	switch key {
+	case tcell.KeyF1:
+		if len(urls) == 0 {
+			return
+		}
+		ui.copySourceURLToClipboard(urls[0])
+	case tcell.KeyF2:
+		if len(urls) < 2 {
+			return
+		}
+		ui.copySourceURLToClipboard(urls[1])
+	}
+}
+
 func (ui *UI) ShowSourceNotLiveModal() {
 	ui.app.QueueUpdateDraw(func() {
 		ui.showModal(
-			pageNameModalStartupCheck,
-			fmt.Sprintf("Waiting for stream.\nStart streaming to the source URL then try again:\n\n%s", ui.sourceViews.url.GetText(true)),
+			pageNameModalNotLive,
+			"Waiting for stream.\n\nStart streaming to a source URL then try again.",
 			[]string{"Ok"},
 			false,
 			nil,
@@ -519,6 +566,7 @@ func (ui *UI) updateProgressModal(container domain.Container) {
 const (
 	pageNameMain                   = "main"
 	pageNameAddDestination         = "add-destination"
+	pageNameViewURLs               = "view-urls"
 	pageNameConfigUpdateFailed     = "modal-config-update-failed"
 	pageNameNoDestinations         = "no-destinations"
 	pageNameModalAbout             = "modal-about"
@@ -530,6 +578,7 @@ const (
 	pageNameModalRemoveDestination = "modal-remove-destination"
 	pageNameModalSourceError       = "modal-source-error"
 	pageNameModalStartupCheck      = "modal-startup-check"
+	pageNameModalNotLive           = "modal-not-live"
 )
 
 // modalVisible returns true if any modal, including the add destination form,
@@ -695,8 +744,6 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 			SetAlign(tview.AlignLeft).
 			SetSelectable(false)
 	}
-
-	ui.sourceViews.url.SetText(cmp.Or(state.Source.RTMPURL, dash))
 
 	tracks := dash
 	if state.Source.Live && len(state.Source.Tracks) > 0 {
@@ -971,13 +1018,12 @@ func (ui *UI) toggleDestination() {
 	}
 }
 
-func (ui *UI) copySourceURLToClipboard(clipboardAvailable bool) {
+func (ui *UI) copySourceURLToClipboard(url string) {
 	var text string
 
-	url := ui.sourceViews.url.GetText(true)
-	if clipboardAvailable {
+	if ui.clipboardAvailable {
 		clipboard.Write(clipboard.FmtText, []byte(url))
-		text = "Source URL copied to clipboard:\n\n" + url
+		text = "URL copied to clipboard:\n\n" + url
 	} else {
 		text = "Copy to clipboard not available:\n\n" + url
 	}

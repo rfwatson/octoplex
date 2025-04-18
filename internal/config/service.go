@@ -180,10 +180,13 @@ func (s *Service) writeConfig(cfgBytes []byte) error {
 // populateConfigOnBuild is called to set default values for a new, empty
 // configuration.
 //
-// This function may set exported fields to arbitrary values.
+// This function may set serialized fields to arbitrary values.
 func (s *Service) populateConfigOnBuild(cfg *Config) {
 	cfg.Sources.MediaServer.StreamKey = "live"
-	cfg.Sources.MediaServer.RTMP = &RTMPSource{NetAddr{"127.0.0.1", 1935}}
+	cfg.Sources.MediaServer.RTMP = RTMPSource{
+		Enabled: true,
+		NetAddr: NetAddr{IP: "127.0.0.1", Port: 1935},
+	}
 
 	s.populateConfigOnRead(cfg)
 }
@@ -191,7 +194,7 @@ func (s *Service) populateConfigOnBuild(cfg *Config) {
 // populateConfigOnRead is called to set default values for a configuration
 // read from an existing file.
 //
-// This function should not update any exported values, which would be a
+// This function should not update any serialized values, which would be a
 // confusing experience for the user.
 func (s *Service) populateConfigOnRead(cfg *Config) {
 	cfg.LogFile.defaultPath = filepath.Join(s.appStateDir, "octoplex.log")

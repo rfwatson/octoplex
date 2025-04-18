@@ -38,9 +38,9 @@ func Run(ctx context.Context, params RunParams) error {
 	state := new(domain.AppState)
 	applyConfig(cfg, state)
 
-	// While RTMP is the only source, it doesn't make sense to disable it.
-	if cfg.Sources.MediaServer.RTMP == nil {
-		return errors.New("config: sources.mediaServer.rtmp is required")
+	// Ensure there is at least one active source.
+	if !cfg.Sources.MediaServer.RTMP.Enabled && !cfg.Sources.MediaServer.RTMPS.Enabled {
+		return errors.New("config: either sources.mediaServer.rtmp.enabled or sources.mediaServer.rtmps.enabled must be set")
 	}
 
 	logger := params.Logger
@@ -89,7 +89,8 @@ func Run(ctx context.Context, params RunParams) error {
 	updateUI()
 
 	srv, err := mediaserver.NewActor(ctx, mediaserver.NewActorParams{
-		RTMPAddr:        domain.NetAddr(cfg.Sources.MediaServer.RTMP.NetAddr),
+		RTMPAddr:        buildNetAddr(cfg.Sources.MediaServer.RTMP),
+		RTMPSAddr:       buildNetAddr(cfg.Sources.MediaServer.RTMPS),
 		Host:            cfg.Sources.MediaServer.Host,
 		StreamKey:       mediaserver.StreamKey(cfg.Sources.MediaServer.StreamKey),
 		ContainerClient: containerClient,
@@ -103,6 +104,10 @@ func Run(ctx context.Context, params RunParams) error {
 		return err
 	}
 	defer srv.Close()
+
+	// Set the RTMP and RTMPS URLs in the UI, which are only known after the
+	// MediaServer is available.
+	ui.SetRTMPURLs(srv.RTMPURL(), srv.RTMPSURL())
 
 	repl := replicator.StartActor(ctx, replicator.StartActorParams{
 		SourceURL:       srv.RTMPInternalURL(),
@@ -320,4 +325,13 @@ func doStartupCheck(ctx context.Context, containerClient *container.Client, show
 	}()
 
 	return ch
+}
+
+// buildNetAddr builds a [mediaserver.OptionalNetAddr] from the config.
+func buildNetAddr(src config.RTMPSource) mediaserver.OptionalNetAddr {
+	if !src.Enabled {
+		return mediaserver.OptionalNetAddr{Enabled: false}
+	}
+
+	return mediaserver.OptionalNetAddr{Enabled: true, NetAddr: domain.NetAddr(src.NetAddr)}
 }

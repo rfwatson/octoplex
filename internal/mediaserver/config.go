@@ -17,8 +17,12 @@ type Config struct {
 	APIEncryption     bool            `yaml:"apiEncryption,omitempty"`
 	APIServerCert     string          `yaml:"apiServerCert,omitempty"`
 	APIServerKey      string          `yaml:"apiServerKey,omitempty"`
-	RTMP              bool            `yaml:"rtmp,omitempty"`
+	RTMP              bool            `yaml:"rtmp"`
+	RTMPEncryption    string          `yaml:"rtmpEncryption,omitempty"`
 	RTMPAddress       string          `yaml:"rtmpAddress,omitempty"`
+	RTMPSAddress      string          `yaml:"rtmpsAddress,omitempty"`
+	RTMPServerCert    string          `yaml:"rtmpServerCert,omitempty"`
+	RTMPServerKey     string          `yaml:"rtmpServerKey,omitempty"`
 	HLS               bool            `yaml:"hls"`
 	RTSP              bool            `yaml:"rtsp"`
 	WebRTC            bool            `yaml:"webrtc"`

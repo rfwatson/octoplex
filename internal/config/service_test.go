@@ -19,6 +19,9 @@ import (
 //go:embed testdata/complete.yml
 var configComplete []byte
 
+//go:embed testdata/rtmps-only.yml
+var configRTMPSOnly []byte
+
 //go:embed testdata/logfile.yml
 var configLogfile []byte
 
@@ -97,10 +100,18 @@ func TestConfigServiceReadConfig(t *testing.T) {
 								MediaServer: config.MediaServerSource{
 									StreamKey: "s3cr3t",
 									Host:      "rtmp.example.com",
-									RTMP: &config.RTMPSource{
+									RTMP: config.RTMPSource{
+										Enabled: true,
 										NetAddr: config.NetAddr{
 											IP:   "0.0.0.0",
 											Port: 19350,
+										},
+									},
+									RTMPS: config.RTMPSource{
+										Enabled: true,
+										NetAddr: config.NetAddr{
+											IP:   "0.0.0.0",
+											Port: 19443,
 										},
 									},
 								},
@@ -109,6 +120,33 @@ func TestConfigServiceReadConfig(t *testing.T) {
 								{
 									Name: "my stream",
 									URL:  "rtmp://rtmp.example.com:1935/live",
+								},
+							},
+						},
+						cfg,
+						cmpopts.IgnoreUnexported(config.LogFile{}),
+					),
+				)
+			},
+		},
+		{
+			name:        "RTMPS only",
+			configBytes: configRTMPSOnly,
+			want: func(t *testing.T, cfg config.Config) {
+				require.Empty(
+					t,
+					gocmp.Diff(
+						config.Config{
+							LogFile: config.LogFile{Enabled: true},
+							Sources: config.Sources{
+								MediaServer: config.MediaServerSource{
+									RTMPS: config.RTMPSource{
+										Enabled: true,
+										NetAddr: config.NetAddr{
+											IP:   "0.0.0.0",
+											Port: 1935,
+										},
+									},
 								},
 							},
 						},
