@@ -26,16 +26,16 @@ import (
 type StreamKey string
 
 const (
-	defaultFetchIngressStateInterval           = 5 * time.Second                           // default interval to fetch the state of the media server
-	defaultAPIPort                             = 9997                                      // default API host port for the media server
-	defaultRTMPIP                              = "127.0.0.1"                               // default RTMP host IP, bound to localhost for security
-	defaultRTMPPort                            = 1935                                      // default RTMP host port for the media server
-	defaultRTMPHost                            = "localhost"                               // default RTMP host name, used for the RTMP URL
-	defaultChanSize                            = 64                                        // default channel size for asynchronous non-error channels
-	imageNameMediaMTX                          = "ghcr.io/rfwatson/mediamtx-alpine:latest" // image name for mediamtx
-	defaultStreamKey                 StreamKey = "live"                                    // Default stream key. See [StreamKey].
-	componentName                              = "mediaserver"                             // component name, mostly used for Docker labels
-	httpClientTimeout                          = time.Second                               // timeout for outgoing HTTP client requests
+	defaultUpdateStateInterval           = 5 * time.Second                           // default interval to update the state of the media server
+	defaultAPIPort                       = 9997                                      // default API host port for the media server
+	defaultRTMPIP                        = "127.0.0.1"                               // default RTMP host IP, bound to localhost for security
+	defaultRTMPPort                      = 1935                                      // default RTMP host port for the media server
+	defaultRTMPHost                      = "localhost"                               // default RTMP host name, used for the RTMP URL
+	defaultChanSize                      = 64                                        // default channel size for asynchronous non-error channels
+	imageNameMediaMTX                    = "ghcr.io/rfwatson/mediamtx-alpine:latest" // image name for mediamtx
+	defaultStreamKey           StreamKey = "live"                                    // Default stream key. See [StreamKey].
+	componentName                        = "mediaserver"                             // component name, mostly used for Docker labels
+	httpClientTimeout                    = time.Second                               // timeout for outgoing HTTP client requests
 )
 
 // action is an action to be performed by the actor.
@@ -43,19 +43,19 @@ type action func()
 
 // Actor is responsible for managing the media server.
 type Actor struct {
-	actorC                    chan action
-	stateC                    chan domain.Source
-	chanSize                  int
-	containerClient           *container.Client
-	apiPort                   int
-	rtmpAddr                  domain.NetAddr
-	rtmpHost                  string
-	streamKey                 StreamKey
-	fetchIngressStateInterval time.Duration
-	pass                      string // password for the media server
-	tlsCert, tlsKey           []byte // TLS cert and key for the media server
-	logger                    *slog.Logger
-	apiClient                 *http.Client
+	actorC              chan action
+	stateC              chan domain.Source
+	chanSize            int
+	containerClient     *container.Client
+	apiPort             int
+	rtmpAddr            domain.NetAddr
+	rtmpHost            string
+	streamKey           StreamKey
+	updateStateInterval time.Duration
+	pass                string // password for the media server
+	tlsCert, tlsKey     []byte // TLS cert and key for the media server
+	logger              *slog.Logger
+	apiClient           *http.Client
 
 	// mutable state
 	state *domain.Source
@@ -64,14 +64,14 @@ type Actor struct {
 // NewActorParams contains the parameters for building a new media server
 // actor.
 type NewActorParams struct {
-	APIPort                   int            // defaults to 9997
-	RTMPAddr                  domain.NetAddr // defaults to 127.0.0.1:1935
-	RTMPHost                  string         // defaults to "localhost"
-	StreamKey                 StreamKey      // defaults to "live"
-	ChanSize                  int            // defaults to 64
-	FetchIngressStateInterval time.Duration  // defaults to 5 seconds
-	ContainerClient           *container.Client
-	Logger                    *slog.Logger
+	APIPort             int            // defaults to 9997
+	RTMPAddr            domain.NetAddr // defaults to 127.0.0.1:1935
+	RTMPHost            string         // defaults to "localhost"
+	StreamKey           StreamKey      // defaults to "live"
+	ChanSize            int            // defaults to 64
+	UpdateStateInterval time.Duration  // defaults to 5 seconds
+	ContainerClient     *container.Client
+	Logger              *slog.Logger
 }
 
 // NewActor creates a new media server actor.
@@ -93,21 +93,21 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
 	return &Actor{
-		apiPort:                   cmp.Or(params.APIPort, defaultAPIPort),
-		rtmpAddr:                  rtmpAddr,
-		rtmpHost:                  cmp.Or(params.RTMPHost, defaultRTMPHost),
-		streamKey:                 cmp.Or(params.StreamKey, defaultStreamKey),
-		fetchIngressStateInterval: cmp.Or(params.FetchIngressStateInterval, defaultFetchIngressStateInterval),
-		tlsCert:                   tlsCert,
-		tlsKey:                    tlsKey,
-		pass:                      generatePassword(),
-		actorC:                    make(chan action, chanSize),
-		state:                     new(domain.Source),
-		stateC:                    make(chan domain.Source, chanSize),
-		chanSize:                  chanSize,
-		containerClient:           params.ContainerClient,
-		logger:                    params.Logger,
-		apiClient:                 apiClient,
+		apiPort:             cmp.Or(params.APIPort, defaultAPIPort),
+		rtmpAddr:            rtmpAddr,
+		rtmpHost:            cmp.Or(params.RTMPHost, defaultRTMPHost),
+		streamKey:           cmp.Or(params.StreamKey, defaultStreamKey),
+		updateStateInterval: cmp.Or(params.UpdateStateInterval, defaultUpdateStateInterval),
+		tlsCert:             tlsCert,
+		tlsKey:              tlsKey,
+		pass:                generatePassword(),
+		actorC:              make(chan action, chanSize),
+		state:               new(domain.Source),
+		stateC:              make(chan domain.Source, chanSize),
+		chanSize:            chanSize,
+		containerClient:     params.ContainerClient,
+		logger:              params.Logger,
+		apiClient:           apiClient,
 	}, nil
 }
 
@@ -255,16 +255,8 @@ func (s *Actor) Close() error {
 // actorLoop is the main loop of the media server actor. It exits when the
 // actor is closed, or the parent context is cancelled.
 func (s *Actor) actorLoop(ctx context.Context, containerStateC <-chan domain.Container, errC <-chan error) {
-	fetchStateT := time.NewTicker(s.fetchIngressStateInterval)
-	defer fetchStateT.Stop()
-
-	// fetchTracksT is used to signal that tracks should be fetched from the
-	// media server, after the stream goes on-air. A short delay is needed due to
-	// workaround a race condition in the media server.
-	var fetchTracksT *time.Timer
-	resetFetchTracksT := func(d time.Duration) { fetchTracksT = time.NewTimer(d) }
-	resetFetchTracksT(time.Second)
-	fetchTracksT.Stop()
+	updateStateT := time.NewTicker(s.updateStateInterval)
+	defer updateStateT.Stop()
 
 	sendState := func() { s.stateC <- *s.state }
 
@@ -274,7 +266,7 @@ func (s *Actor) actorLoop(ctx context.Context, containerStateC <-chan domain.Con
 			s.state.Container = containerState
 
 			if s.state.Container.Status == domain.ContainerStatusExited {
-				fetchStateT.Stop()
+				updateStateT.Stop()
 				s.handleContainerExit(nil)
 			}
 
@@ -293,43 +285,21 @@ func (s *Actor) actorLoop(ctx context.Context, containerStateC <-chan domain.Con
 				s.logger.Error("Error from container client", "err", err, "id", shortID(s.state.Container.ID))
 			}
 
-			fetchStateT.Stop()
+			updateStateT.Stop()
 			s.handleContainerExit(err)
 
 			sendState()
-		case <-fetchStateT.C:
-			ingressState, err := fetchIngressState(s.rtmpConnsURL(), s.streamKey, s.apiClient)
+		case <-updateStateT.C:
+			path, err := fetchPath(s.pathURL(string(s.streamKey)), s.apiClient)
 			if err != nil {
-				s.logger.Error("Error fetching server state", "err", err)
+				s.logger.Error("Error fetching path", "err", err)
 				continue
 			}
 
-			var shouldSendState bool
-			if ingressState.ready != s.state.Live {
-				s.state.Live = ingressState.ready
+			if path.Ready != s.state.Live {
+				s.state.Live = path.Ready
 				s.state.LiveChangedAt = time.Now()
-				resetFetchTracksT(time.Second)
-				shouldSendState = true
-			}
-			if ingressState.listeners != s.state.Listeners {
-				s.state.Listeners = ingressState.listeners
-				shouldSendState = true
-			}
-			if shouldSendState {
-				sendState()
-			}
-		case <-fetchTracksT.C:
-			if !s.state.Live {
-				continue
-			}
-
-			if tracks, err := fetchTracks(s.pathsURL(), s.streamKey, s.apiClient); err != nil {
-				s.logger.Error("Error fetching tracks", "err", err)
-				resetFetchTracksT(3 * time.Second)
-			} else if len(tracks) == 0 {
-				resetFetchTracksT(time.Second)
-			} else {
-				s.state.Tracks = tracks
+				s.state.Tracks = path.Tracks
 				sendState()
 			}
 		case action, ok := <-s.actorC:
@@ -369,15 +339,9 @@ func (s *Actor) RTMPInternalURL() string {
 	return fmt.Sprintf("rtmp://mediaserver:1935/%s?user=api&pass=%s", s.streamKey, s.pass)
 }
 
-// rtmpConnsURL returns the URL for fetching RTMP connections, accessible from
-// the host.
-func (s *Actor) rtmpConnsURL() string {
-	return fmt.Sprintf("https://api:%s@localhost:%d/v3/rtmpconns/list", s.pass, s.apiPort)
-}
-
-// pathsURL returns the URL for fetching paths, accessible from the host.
-func (s *Actor) pathsURL() string {
-	return fmt.Sprintf("https://api:%s@localhost:%d/v3/paths/list", s.pass, s.apiPort)
+// pathURL returns the URL for fetching a path, accessible from the host.
+func (s *Actor) pathURL(path string) string {
+	return fmt.Sprintf("https://api:%s@localhost:%d/v3/paths/get/%s", s.pass, s.apiPort, path)
 }
 
 // healthCheckURL returns the URL for the health check, accessible from the
