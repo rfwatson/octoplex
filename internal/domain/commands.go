@@ -1,4 +1,4 @@
-package terminal
+package domain
 
 // CommandAddDestination adds a destination.
 type CommandAddDestination struct {

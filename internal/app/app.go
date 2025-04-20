@@ -155,7 +155,7 @@ func Run(ctx context.Context, params RunParams) error {
 
 			logger.Debug("Command received", "cmd", cmd.Name())
 			switch c := cmd.(type) {
-			case terminal.CommandAddDestination:
+			case domain.CommandAddDestination:
 				newCfg := cfg
 				newCfg.Destinations = append(newCfg.Destinations, config.Destination{
 					Name: c.DestinationName,
@@ -169,7 +169,7 @@ func Run(ctx context.Context, params RunParams) error {
 				cfg = newCfg
 				handleConfigUpdate(cfg, state, ui)
 				ui.DestinationAdded()
-			case terminal.CommandRemoveDestination:
+			case domain.CommandRemoveDestination:
 				repl.StopDestination(c.URL) // no-op if not live
 				newCfg := cfg
 				newCfg.Destinations = slices.DeleteFunc(newCfg.Destinations, func(dest config.Destination) bool {
@@ -183,16 +183,16 @@ func Run(ctx context.Context, params RunParams) error {
 				cfg = newCfg
 				handleConfigUpdate(cfg, state, ui)
 				ui.DestinationRemoved()
-			case terminal.CommandStartDestination:
+			case domain.CommandStartDestination:
 				if !state.Source.Live {
 					ui.ShowSourceNotLiveModal()
 					continue
 				}
 
 				repl.StartDestination(c.URL)
-			case terminal.CommandStopDestination:
+			case domain.CommandStopDestination:
 				repl.StopDestination(c.URL)
-			case terminal.CommandQuit:
+			case domain.CommandQuit:
 				return nil
 			}
 		case <-uiUpdateT.C:

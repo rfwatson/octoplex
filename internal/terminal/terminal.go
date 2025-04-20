@@ -40,7 +40,7 @@ const (
 
 // UI is responsible for managing the terminal user interface.
 type UI struct {
-	commandC           chan Command
+	commandC           chan domain.Command
 	clipboardAvailable bool
 	configFilePath     string
 	rtmpURL, rtmpsURL  string
@@ -106,7 +106,7 @@ const defaultChanSize = 64
 // StartUI starts the terminal user interface.
 func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
-	commandCh := make(chan Command, chanSize)
+	commandCh := make(chan domain.Command, chanSize)
 
 	app := tview.NewApplication()
 
@@ -268,7 +268,7 @@ func (ui *UI) renderAboutView() {
 }
 
 // C returns a channel that receives commands from the user interface.
-func (ui *UI) C() <-chan Command {
+func (ui *UI) C() <-chan domain.Command {
 	return ui.commandC
 }
 
@@ -444,7 +444,7 @@ func (ui *UI) ShowFatalErrorModal(errString string) {
 			[]string{"Quit"},
 			false,
 			func(int, string) {
-				ui.commandC <- CommandQuit{}
+				ui.commandC <- domain.CommandQuit{}
 			},
 		)
 	})
@@ -697,7 +697,7 @@ func (ui *UI) handleMediaServerClosed(exitReason string) {
 			SetBackgroundColor(tcell.ColorBlack).
 			SetTextColor(tcell.ColorWhite).
 			SetDoneFunc(func(int, string) {
-				ui.commandC <- CommandQuit{}
+				ui.commandC <- domain.CommandQuit{}
 			})
 		modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
@@ -887,7 +887,7 @@ func (ui *UI) addDestination() {
 		AddInputField(inputLabelName, "My stream", inputLen, nil, nil).
 		AddInputField(inputLabelURL, "rtmp://", inputLen, nil, nil).
 		AddButton("Add", func() {
-			ui.commandC <- CommandAddDestination{
+			ui.commandC <- domain.CommandAddDestination{
 				DestinationName: form.GetFormItemByLabel(inputLabelName).(*tview.InputField).GetText(),
 				URL:             form.GetFormItemByLabel(inputLabelURL).(*tview.InputField).GetText(),
 			}
@@ -945,7 +945,7 @@ func (ui *UI) removeDestination() {
 		false,
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.commandC <- CommandRemoveDestination{URL: url}
+				ui.commandC <- domain.CommandRemoveDestination{URL: url}
 			}
 		},
 	)
@@ -1009,12 +1009,12 @@ func (ui *UI) toggleDestination() {
 	switch ss {
 	case startStateNotStarted:
 		ui.urlsToStartState[url] = startStateStarting
-		ui.commandC <- CommandStartDestination{URL: url}
+		ui.commandC <- domain.CommandStartDestination{URL: url}
 	case startStateStarting:
 		// do nothing
 		return
 	case startStateStarted:
-		ui.commandC <- CommandStopDestination{URL: url}
+		ui.commandC <- domain.CommandStopDestination{URL: url}
 	}
 }
 
@@ -1067,7 +1067,7 @@ func (ui *UI) confirmQuit() {
 		false,
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.commandC <- CommandQuit{}
+				ui.commandC <- domain.CommandQuit{}
 			}
 		},
 	)
