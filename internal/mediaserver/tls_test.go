@@ -12,7 +12,7 @@ import (
 )
 
 func TestGenerateTLSCert(t *testing.T) {
-	keyPair, err := generateTLSCert()
+	keyPair, err := generateTLSCert("localhost", "rtmp.example.com")
 	require.NoError(t, err)
 	require.NotEmpty(t, keyPair.Cert)
 	require.NotEmpty(t, keyPair.Key)
@@ -33,6 +33,8 @@ func TestGenerateTLSCert(t *testing.T) {
 	assert.True(t, cert.BasicConstraintsValid, "basic constraints should be valid")
 	assert.Contains(t, cert.ExtKeyUsage, x509.ExtKeyUsageServerAuth)
 	assert.Contains(t, cert.ExtKeyUsage, x509.ExtKeyUsageClientAuth)
+	assert.Contains(t, cert.DNSNames, "localhost", "DNS names should include localhost")
+	assert.Contains(t, cert.DNSNames, "rtmp.example.com", "DNS names should include rtmp.example.com")
 
 	block, _ = pem.Decode(keyPair.Key)
 	require.NotNil(t, block, "failed to decode private key PEM")

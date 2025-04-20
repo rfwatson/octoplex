@@ -15,7 +15,7 @@ import (
 )
 
 // generateTLSCert generates a self-signed TLS certificate and private key.
-func generateTLSCert() (domain.KeyPair, error) {
+func generateTLSCert(dnsNames ...string) (domain.KeyPair, error) {
 	privKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
 		return domain.KeyPair{}, err
@@ -37,7 +37,7 @@ func generateTLSCert() (domain.KeyPair, error) {
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
-		DNSNames:              []string{"localhost"},
+		DNSNames:              dnsNames,
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privKey.PublicKey, privKey)

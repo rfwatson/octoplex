@@ -296,6 +296,74 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 	<-done
 }
 
+func TestIntegrationCustomHost(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
+
+	logger := testhelpers.NewTestLogger(t).With("component", "integration")
+	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	require.NoError(t, err)
+
+	configService := setupConfigService(t, config.Config{
+		Sources: config.Sources{
+			MediaServer: config.MediaServerSource{
+				Host: "rtmp.example.com",
+				RTMP: config.RTMPSource{Enabled: true},
+			},
+		},
+	})
+	screen, screenCaptureC, getContents := setupSimulationScreen(t)
+
+	done := make(chan struct{})
+	go func() {
+		defer func() {
+			done <- struct{}{}
+		}()
+
+		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+	}()
+
+	time.Sleep(time.Second)
+	sendKey(t, screen, tcell.KeyF1, ' ')
+
+	require.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			assert.True(t, contentsIncludes(getContents(), "rtmp://rtmp.example.com:1935/live"), "expected to see custom host name")
+		},
+		waitTime,
+		time.Second,
+		"expected to see custom host name",
+	)
+	printScreen(t, getContents, "Ater opening the app with a custom host name")
+
+	require.EventuallyWithT(
+		t,
+		func(c *assert.CollectT) {
+			conn, err := tls.Dial("tcp", "localhost:9997", &tls.Config{
+				InsecureSkipVerify: true,
+			})
+			require.NoError(c, err)
+
+			require.Nil(
+				c,
+				conn.
+					ConnectionState().
+					PeerCertificates[0].
+					VerifyHostname("rtmp.example.com"),
+				"expected to verify custom host name",
+			)
+		},
+		waitTime,
+		time.Second,
+		"expected to connect to API using self-signed TLS cert with custom host name",
+	)
+
+	cancel()
+
+	<-done
+}
+
 func TestIntegrationCustomTLSCerts(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
@@ -335,7 +403,6 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 			block, _ := pem.Decode(certPEM)
 			require.NotNil(c, block, "failed to decode PEM block containing certificate")
 			require.True(c, block.Type == "CERTIFICATE", "expected PEM block to be a certificate")
-			certDERBytes := block.Bytes
 
 			rootCAs := x509.NewCertPool()
 			require.True(c, rootCAs.AppendCertsFromPEM(certPEM), "failed to append cert to root CA pool")
@@ -347,64 +414,16 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 			})
 			require.NoError(c, err)
 
-			state := conn.ConnectionState()
-			peerCert := state.PeerCertificates[0]
-
-			expectedCert, err := x509.ParseCertificate(certDERBytes)
+			peerCert := conn.ConnectionState().PeerCertificates[0]
+			wantCert, err := x509.ParseCertificate(block.Bytes)
 			require.NoError(c, err)
-			require.True(c, peerCert.Equal(expectedCert), "expected peer certificate to match the expected certificate")
+			require.True(c, peerCert.Equal(wantCert), "expected peer certificate to match the expected certificate")
 		},
 		waitTime,
 		time.Second,
 	)
 
 	printScreen(t, getContents, "After starting the app with custom TLS certs")
-
-	cancel()
-
-	<-done
-}
-
-func TestIntegrationCustomRTMPURL(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
-	defer cancel()
-
-	logger := testhelpers.NewTestLogger(t).With("component", "integration")
-	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
-	require.NoError(t, err)
-
-	configService := setupConfigService(t, config.Config{
-		Sources: config.Sources{
-			MediaServer: config.MediaServerSource{
-				Host: "rtmp.live.tv",
-				RTMP: config.RTMPSource{Enabled: true},
-			},
-		},
-	})
-	screen, screenCaptureC, getContents := setupSimulationScreen(t)
-
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
-	}()
-
-	time.Sleep(time.Second)
-	sendKey(t, screen, tcell.KeyF1, ' ')
-
-	require.EventuallyWithT(
-		t,
-		func(t *assert.CollectT) {
-			assert.True(t, contentsIncludes(getContents(), "rtmp://rtmp.live.tv:1935/live"), "expected to see custom host name")
-		},
-		waitTime,
-		time.Second,
-		"expected to see custom host name",
-	)
-	printScreen(t, getContents, "Ater opening the app with a custom host name")
 
 	cancel()
 

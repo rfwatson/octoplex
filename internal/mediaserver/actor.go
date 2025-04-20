@@ -98,7 +98,12 @@ type OptionalNetAddr struct {
 //
 // Callers must consume the state channel exposed via [C].
 func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) {
-	keyPairInternal, err := generateTLSCert()
+	dnsNames := []string{"localhost"}
+	if params.Host != "" {
+		dnsNames = append(dnsNames, params.Host)
+	}
+
+	keyPairInternal, err := generateTLSCert(dnsNames...)
 	if err != nil {
 		return nil, fmt.Errorf("generate TLS cert: %w", err)
 	}
