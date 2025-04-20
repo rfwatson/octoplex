@@ -40,3 +40,12 @@ func TestNetAddr(t *testing.T) {
 	addr.Port = 3000
 	assert.False(t, addr.IsZero())
 }
+
+func TestKeyPair(t *testing.T) {
+	var keyPair domain.KeyPair
+	assert.True(t, keyPair.IsZero())
+
+	keyPair.Cert = []byte("cert")
+	keyPair.Key = []byte("key")
+	assert.False(t, keyPair.IsZero())
+}

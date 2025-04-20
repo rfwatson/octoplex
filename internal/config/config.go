@@ -35,12 +35,19 @@ type RTMPSource struct {
 	NetAddr `yaml:",inline"`
 }
 
+// TLS holds the TLS configuration.
+type TLS struct {
+	CertPath string `yaml:"cert,omitempty"`
+	KeyPath  string `yaml:"key,omitempty"`
+}
+
 // MediaServerSource holds the configuration for the media server source.
 type MediaServerSource struct {
 	StreamKey string     `yaml:"streamKey,omitempty"`
 	Host      string     `yaml:"host,omitempty"`
-	RTMP      RTMPSource `yaml:"rtmp,omitempty"`
-	RTMPS     RTMPSource `yaml:"rtmps,omitempty"`
+	TLS       *TLS       `yaml:"tls,omitempty"`
+	RTMP      RTMPSource `yaml:"rtmp"`
+	RTMPS     RTMPSource `yaml:"rtmps"`
 }
 
 // Sources holds the configuration for the sources.

@@ -12,12 +12,12 @@ import (
 )
 
 func TestGenerateTLSCert(t *testing.T) {
-	certPEM, keyPEM, err := generateTLSCert()
+	keyPair, err := generateTLSCert()
 	require.NoError(t, err)
-	require.NotEmpty(t, certPEM)
-	require.NotEmpty(t, keyPEM)
+	require.NotEmpty(t, keyPair.Cert)
+	require.NotEmpty(t, keyPair.Key)
 
-	block, _ := pem.Decode(certPEM)
+	block, _ := pem.Decode(keyPair.Cert)
 	require.NotNil(t, block, "failed to decode certificate PEM")
 
 	cert, err := x509.ParseCertificate(block.Bytes)
@@ -34,7 +34,7 @@ func TestGenerateTLSCert(t *testing.T) {
 	assert.Contains(t, cert.ExtKeyUsage, x509.ExtKeyUsageServerAuth)
 	assert.Contains(t, cert.ExtKeyUsage, x509.ExtKeyUsageClientAuth)
 
-	block, _ = pem.Decode(keyPEM)
+	block, _ = pem.Decode(keyPair.Key)
 	require.NotNil(t, block, "failed to decode private key PEM")
 
 	privKey, err := x509.ParseECPrivateKey(block.Bytes)

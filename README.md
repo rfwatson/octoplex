@@ -7,7 +7,7 @@
 
 Octoplex is a live video restreamer for the terminal.
 
-* Restream RTMP to unlimited destinations
+* Restream RTMP/RTMPS to unlimited destinations
 * Broadcast using OBS and other standard tools
 * Add and remove destinations while streaming
 * Automatic reconnections
@@ -100,6 +100,9 @@ sources:
   mediaServer:
     streamKey: live                    # defaults to "live"
     host: rtmp.example.com             # defaults to "localhost"
+    tls:                               # optional. If RTMPS is enabled, defaults to a
+      cert: /etc/mycert.pem            # self-signed keypair corresponding to the host
+      key: /etc/mykey.pem              # key.
     rtmp:
       enabled: true                    # defaults to false
       ip: 127.0.0.1                    # defaults to 127.0.0.1

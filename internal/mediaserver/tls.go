@@ -10,23 +10,20 @@ import (
 	"encoding/pem"
 	"math/big"
 	"time"
-)
 
-type (
-	tlsCert []byte
-	tlsKey  []byte
+	"git.netflux.io/rob/octoplex/internal/domain"
 )
 
 // generateTLSCert generates a self-signed TLS certificate and private key.
-func generateTLSCert() (tlsCert, tlsKey, error) {
+func generateTLSCert() (domain.KeyPair, error) {
 	privKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
-		return nil, nil, err
+		return domain.KeyPair{}, err
 	}
 
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
-		return nil, nil, err
+		return domain.KeyPair{}, err
 	}
 
 	now := time.Now()
@@ -45,23 +42,26 @@ func generateTLSCert() (tlsCert, tlsKey, error) {
 
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privKey.PublicKey, privKey)
 	if err != nil {
-		return nil, nil, err
+		return domain.KeyPair{}, err
 	}
 
 	var certPEM, keyPEM bytes.Buffer
 
 	if err = pem.Encode(&certPEM, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
-		return nil, nil, err
+		return domain.KeyPair{}, err
 	}
 
 	privKeyDER, err := x509.MarshalECPrivateKey(privKey)
 	if err != nil {
-		return nil, nil, err
+		return domain.KeyPair{}, err
 	}
 
 	if err := pem.Encode(&keyPEM, &pem.Block{Type: "EC PRIVATE KEY", Bytes: privKeyDER}); err != nil {
-		return nil, nil, err
+		return domain.KeyPair{}, err
 	}
 
-	return certPEM.Bytes(), keyPEM.Bytes(), nil
+	return domain.KeyPair{
+		Cert: certPEM.Bytes(),
+		Key:  keyPEM.Bytes(),
+	}, nil
 }

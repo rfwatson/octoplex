@@ -100,6 +100,10 @@ func TestConfigServiceReadConfig(t *testing.T) {
 								MediaServer: config.MediaServerSource{
 									StreamKey: "s3cr3t",
 									Host:      "rtmp.example.com",
+									TLS: &config.TLS{
+										CertPath: "/etc/cert.pem",
+										KeyPath:  "/etc/key.pem",
+									},
 									RTMP: config.RTMPSource{
 										Enabled: true,
 										NetAddr: config.NetAddr{

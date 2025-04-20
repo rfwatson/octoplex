@@ -66,6 +66,16 @@ func (n NetAddr) IsZero() bool {
 	return n.IP == "" && n.Port == 0
 }
 
+// KeyPair holds a TLS key pair.
+type KeyPair struct {
+	Cert, Key []byte
+}
+
+// IsZero returns true if the KeyPair is zero value.
+func (k KeyPair) IsZero() bool {
+	return k.Cert == nil && k.Key == nil
+}
+
 // Container status strings.
 //
 // TODO: refactor to strictly reflect Docker status strings.

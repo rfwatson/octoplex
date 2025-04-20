@@ -5,9 +5,13 @@ package app_test
 import (
 	"cmp"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -286,6 +290,75 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 	// TODO:
 	// - Source error
 	// - Additional features (copy URL, etc.)
+
+	cancel()
+
+	<-done
+}
+
+func TestIntegrationCustomTLSCerts(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
+
+	logger := testhelpers.NewTestLogger(t).With("component", "integration")
+	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	require.NoError(t, err)
+
+	configService := setupConfigService(t, config.Config{
+		Sources: config.Sources{
+			MediaServer: config.MediaServerSource{
+				TLS: &config.TLS{
+					CertPath: "testdata/server.crt",
+					KeyPath:  "testdata/server.key",
+				},
+				RTMPS: config.RTMPSource{Enabled: true},
+			},
+		},
+	})
+	screen, screenCaptureC, getContents := setupSimulationScreen(t)
+
+	done := make(chan struct{})
+	go func() {
+		defer func() {
+			done <- struct{}{}
+		}()
+
+		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+	}()
+
+	require.EventuallyWithT(
+		t,
+		func(c *assert.CollectT) {
+			certPEM, err := os.ReadFile("testdata/server.crt")
+			require.NoError(c, err)
+
+			block, _ := pem.Decode(certPEM)
+			require.NotNil(c, block, "failed to decode PEM block containing certificate")
+			require.True(c, block.Type == "CERTIFICATE", "expected PEM block to be a certificate")
+			certDERBytes := block.Bytes
+
+			rootCAs := x509.NewCertPool()
+			require.True(c, rootCAs.AppendCertsFromPEM(certPEM), "failed to append cert to root CA pool")
+
+			conn, err := tls.Dial("tcp", "localhost:1936", &tls.Config{
+				RootCAs:            rootCAs,
+				ServerName:         "localhost",
+				InsecureSkipVerify: false,
+			})
+			require.NoError(c, err)
+
+			state := conn.ConnectionState()
+			peerCert := state.PeerCertificates[0]
+
+			expectedCert, err := x509.ParseCertificate(certDERBytes)
+			require.NoError(c, err)
+			require.True(c, peerCert.Equal(expectedCert), "expected peer certificate to match the expected certificate")
+		},
+		waitTime,
+		time.Second,
+	)
+
+	printScreen(t, getContents, "After starting the app with custom TLS certs")
 
 	cancel()
 

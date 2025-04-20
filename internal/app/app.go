@@ -88,10 +88,18 @@ func Run(ctx context.Context, params RunParams) error {
 	updateUI := func() { ui.SetState(*state) }
 	updateUI()
 
+	var tlsCertPath, tlsKeyPath string
+	if cfg.Sources.MediaServer.TLS != nil {
+		tlsCertPath = cfg.Sources.MediaServer.TLS.CertPath
+		tlsKeyPath = cfg.Sources.MediaServer.TLS.KeyPath
+	}
+
 	srv, err := mediaserver.NewActor(ctx, mediaserver.NewActorParams{
 		RTMPAddr:        buildNetAddr(cfg.Sources.MediaServer.RTMP),
 		RTMPSAddr:       buildNetAddr(cfg.Sources.MediaServer.RTMPS),
 		Host:            cfg.Sources.MediaServer.Host,
+		TLSCertPath:     tlsCertPath,
+		TLSKeyPath:      tlsKeyPath,
 		StreamKey:       mediaserver.StreamKey(cfg.Sources.MediaServer.StreamKey),
 		ContainerClient: containerClient,
 		Logger:          logger.With("component", "mediaserver"),

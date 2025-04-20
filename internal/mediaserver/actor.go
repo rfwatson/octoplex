@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	typescontainer "github.com/docker/docker/api/types/container"
@@ -37,6 +38,11 @@ const (
 	defaultStreamKey           StreamKey = "live"                                    // Default stream key. See [StreamKey].
 	componentName                        = "mediaserver"                             // component name, mostly used for Docker labels
 	httpClientTimeout                    = time.Second                               // timeout for outgoing HTTP client requests
+	configPath                           = "/mediamtx.yml"                           // path to the media server config file
+	tlsInternalCertPath                  = "/etc/tls-internal.crt"                   // path to the internal TLS cert
+	tlsInternalKeyPath                   = "/etc/tls-internal.key"                   // path to the internal TLS key
+	tlsCertPath                          = "/etc/tls.crt"                            // path to the custom TLS cert
+	tlsKeyPath                           = "/etc/tls.key"                            // path to the custom TLS key
 )
 
 // action is an action to be performed by the actor.
@@ -54,8 +60,9 @@ type Actor struct {
 	host                string
 	streamKey           StreamKey
 	updateStateInterval time.Duration
-	pass                string // password for the media server
-	tlsCert, tlsKey     []byte // TLS cert and key for the media server
+	pass                string         // password for the media server
+	keyPairInternal     domain.KeyPair // TLS key pair for the media server
+	keyPairCustom       domain.KeyPair // TLS key pair for the media server
 	logger              *slog.Logger
 	apiClient           *http.Client
 
@@ -70,6 +77,8 @@ type NewActorParams struct {
 	RTMPSAddr           OptionalNetAddr // defaults to disabled, or 127.0.0.1:1936
 	APIPort             int             // defaults to 9997
 	Host                string          // defaults to "localhost"
+	TLSCertPath         string          // defaults to empty
+	TLSKeyPath          string          // defaults to empty
 	StreamKey           StreamKey       // defaults to "live"
 	ChanSize            int             // defaults to 64
 	UpdateStateInterval time.Duration   // defaults to 5 seconds
@@ -89,11 +98,25 @@ type OptionalNetAddr struct {
 //
 // Callers must consume the state channel exposed via [C].
 func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) {
-	tlsCert, tlsKey, err := generateTLSCert()
+	keyPairInternal, err := generateTLSCert()
 	if err != nil {
 		return nil, fmt.Errorf("generate TLS cert: %w", err)
 	}
-	apiClient, err := buildAPIClient(tlsCert)
+
+	var keyPairCustom domain.KeyPair
+	if params.TLSCertPath != "" {
+		keyPairCustom.Cert, err = os.ReadFile(params.TLSCertPath)
+		if err != nil {
+			return nil, fmt.Errorf("read TLS cert: %w", err)
+		}
+		keyPairCustom.Key, err = os.ReadFile(params.TLSKeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("read TLS key: %w", err)
+		}
+	}
+
+	// TODO: custom cert for API?
+	apiClient, err := buildAPIClient(keyPairInternal.Cert)
 	if err != nil {
 		return nil, fmt.Errorf("build API client: %w", err)
 	}
@@ -106,8 +129,8 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 		host:                cmp.Or(params.Host, defaultHost),
 		streamKey:           cmp.Or(params.StreamKey, defaultStreamKey),
 		updateStateInterval: cmp.Or(params.UpdateStateInterval, defaultUpdateStateInterval),
-		tlsCert:             tlsCert,
-		tlsKey:              tlsKey,
+		keyPairInternal:     keyPairInternal,
+		keyPairCustom:       keyPairCustom,
 		pass:                generatePassword(),
 		actorC:              make(chan action, chanSize),
 		state:               new(domain.Source),
@@ -138,6 +161,45 @@ func (a *Actor) Start(ctx context.Context) error {
 		return fmt.Errorf("build server config: %w", err)
 	}
 
+	copyFiles := []container.CopyFileConfig{
+		{
+			Path:    configPath,
+			Payload: bytes.NewReader(cfg),
+			Mode:    0600,
+		},
+		{
+			Path:    tlsInternalCertPath,
+			Payload: bytes.NewReader(a.keyPairInternal.Cert),
+			Mode:    0600,
+		},
+		{
+			Path:    tlsInternalKeyPath,
+			Payload: bytes.NewReader(a.keyPairInternal.Key),
+			Mode:    0600,
+		},
+		{
+			Path:    "/etc/healthcheckopts.txt",
+			Payload: bytes.NewReader([]byte(fmt.Sprintf("--user api:%s", a.pass))),
+			Mode:    0600,
+		},
+	}
+
+	if !a.keyPairCustom.IsZero() {
+		copyFiles = append(
+			copyFiles,
+			container.CopyFileConfig{
+				Path:    tlsCertPath,
+				Payload: bytes.NewReader(a.keyPairCustom.Cert),
+				Mode:    0600,
+			},
+			container.CopyFileConfig{
+				Path:    tlsKeyPath,
+				Payload: bytes.NewReader(a.keyPairCustom.Key),
+				Mode:    0600,
+			},
+		)
+	}
+
 	args := []any{"host", a.host}
 	if a.rtmpAddr.IsZero() {
 		args = append(args, "rtmp.enabled", false)
@@ -166,7 +228,7 @@ func (a *Actor) Start(ctx context.Context) error {
 						"curl",
 						"--fail",
 						"--silent",
-						"--cacert", "/etc/tls.crt",
+						"--cacert", "/etc/tls-internal.crt",
 						"--config", "/etc/healthcheckopts.txt",
 						a.healthCheckURL(),
 					},
@@ -183,28 +245,7 @@ func (a *Actor) Start(ctx context.Context) error {
 			},
 			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth0", Tx: "eth1"},
 			Logs:               container.LogConfig{Stdout: true},
-			CopyFiles: []container.CopyFileConfig{
-				{
-					Path:    "/mediamtx.yml",
-					Payload: bytes.NewReader(cfg),
-					Mode:    0600,
-				},
-				{
-					Path:    "/etc/tls.crt",
-					Payload: bytes.NewReader(a.tlsCert),
-					Mode:    0600,
-				},
-				{
-					Path:    "/etc/tls.key",
-					Payload: bytes.NewReader(a.tlsKey),
-					Mode:    0600,
-				},
-				{
-					Path:    "/etc/healthcheckopts.txt",
-					Payload: bytes.NewReader([]byte(fmt.Sprintf("--user api:%s", a.pass))),
-					Mode:    0600,
-				},
-			},
+			CopyFiles:          copyFiles,
 		},
 	)
 
@@ -222,6 +263,15 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 		encryptionString = "no"
 	} else {
 		encryptionString = "optional"
+	}
+
+	var certPath, keyPath string
+	if a.keyPairCustom.IsZero() {
+		certPath = tlsInternalCertPath
+		keyPath = tlsInternalKeyPath
+	} else {
+		certPath = tlsCertPath
+		keyPath = tlsKeyPath
 	}
 
 	return yaml.Marshal(
@@ -256,12 +306,12 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 			RTMPEncryption: encryptionString,
 			RTMPAddress:    ":1935",
 			RTMPSAddress:   ":1936",
-			RTMPServerCert: "/etc/tls.crt", // TODO: custom certs
-			RTMPServerKey:  "/etc/tls.key", // TODO: custom certs
+			RTMPServerCert: certPath,
+			RTMPServerKey:  keyPath,
 			API:            true,
 			APIEncryption:  true,
-			APIServerCert:  "/etc/tls.crt",
-			APIServerKey:   "/etc/tls.key",
+			APIServerCert:  tlsInternalCertPath,
+			APIServerKey:   tlsInternalKeyPath,
 			Paths: map[string]Path{
 				string(a.streamKey): {Source: "publisher"},
 			},
