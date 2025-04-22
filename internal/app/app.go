@@ -18,8 +18,19 @@ import (
 	"github.com/docker/docker/client"
 )
 
-// RunParams holds the parameters for running the application.
-type RunParams struct {
+// App is an instance of the app.
+type App struct {
+	configService      *config.Service
+	dockerClient       container.DockerClient
+	screen             *terminal.Screen // Screen may be nil.
+	clipboardAvailable bool
+	configFilePath     string
+	buildInfo          domain.BuildInfo
+	logger             *slog.Logger
+}
+
+// Params holds the parameters for running the application.
+type Params struct {
 	ConfigService      *config.Service
 	DockerClient       container.DockerClient
 	Screen             *terminal.Screen // Screen may be nil.
@@ -29,14 +40,25 @@ type RunParams struct {
 	Logger             *slog.Logger
 }
 
+func New(params Params) *App {
+	return &App{
+		configService:      params.ConfigService,
+		dockerClient:       params.DockerClient,
+		screen:             params.Screen,
+		clipboardAvailable: params.ClipboardAvailable,
+		configFilePath:     params.ConfigFilePath,
+		buildInfo:          params.BuildInfo,
+		logger:             params.Logger,
+	}
+}
+
 // Run starts the application, and blocks until it exits.
-func Run(ctx context.Context, params RunParams) error {
-	logger := params.Logger
-	eventBus := event.NewBus(logger.With("component", "event_bus"))
+func (a *App) Run(ctx context.Context) error {
+	eventBus := event.NewBus(a.logger.With("component", "event_bus"))
 
 	// cfg is the current configuration of the application, as reflected in the
 	// config file.
-	cfg := params.ConfigService.Current()
+	cfg := a.configService.Current()
 
 	// state is the current state of the application, as reflected in the UI.
 	state := new(domain.AppState)
@@ -49,11 +71,11 @@ func Run(ctx context.Context, params RunParams) error {
 
 	ui, err := terminal.StartUI(ctx, terminal.StartParams{
 		EventBus:           eventBus,
-		Screen:             params.Screen,
-		ClipboardAvailable: params.ClipboardAvailable,
-		ConfigFilePath:     params.ConfigFilePath,
-		BuildInfo:          params.BuildInfo,
-		Logger:             logger.With("component", "ui"),
+		Screen:             a.screen,
+		ClipboardAvailable: a.clipboardAvailable,
+		ConfigFilePath:     a.configFilePath,
+		BuildInfo:          a.buildInfo,
+		Logger:             a.logger.With("component", "ui"),
 	})
 	if err != nil {
 		return fmt.Errorf("start terminal user interface: %w", err)
@@ -71,7 +93,7 @@ func Run(ctx context.Context, params RunParams) error {
 	// non-test code is pretty low.
 	emptyUI := func() { ui.SetState(domain.AppState{}) }
 
-	containerClient, err := container.NewClient(ctx, params.DockerClient, logger.With("component", "container_client"))
+	containerClient, err := container.NewClient(ctx, a.dockerClient, a.logger.With("component", "container_client"))
 	if err != nil {
 		err = fmt.Errorf("create container client: %w", err)
 
@@ -106,7 +128,7 @@ func Run(ctx context.Context, params RunParams) error {
 		TLSKeyPath:      tlsKeyPath,
 		StreamKey:       mediaserver.StreamKey(cfg.Sources.MediaServer.StreamKey),
 		ContainerClient: containerClient,
-		Logger:          logger.With("component", "mediaserver"),
+		Logger:          a.logger.With("component", "mediaserver"),
 	})
 	if err != nil {
 		err = fmt.Errorf("create mediaserver: %w", err)
@@ -120,7 +142,7 @@ func Run(ctx context.Context, params RunParams) error {
 	repl := replicator.StartActor(ctx, replicator.StartActorParams{
 		SourceURL:       srv.RTMPInternalURL(),
 		ContainerClient: containerClient,
-		Logger:          logger.With("component", "replicator"),
+		Logger:          a.logger.With("component", "replicator"),
 	})
 	defer repl.Close()
 
@@ -146,16 +168,16 @@ func Run(ctx context.Context, params RunParams) error {
 
 				eventBus.Send(event.MediaServerStartedEvent{RTMPURL: srv.RTMPURL(), RTMPSURL: srv.RTMPSURL()})
 			}
-		case <-params.ConfigService.C():
+		case <-a.configService.C():
 			// No-op, config updates are handled synchronously for now.
 		case cmd, ok := <-ui.C():
 			if !ok {
 				// TODO: keep UI open until all containers have closed
-				logger.Info("UI closed")
+				a.logger.Info("UI closed")
 				return nil
 			}
 
-			logger.Debug("Command received", "cmd", cmd.Name())
+			a.logger.Debug("Command received", "cmd", cmd.Name())
 			switch c := cmd.(type) {
 			case domain.CommandAddDestination:
 				newCfg := cfg
@@ -163,8 +185,8 @@ func Run(ctx context.Context, params RunParams) error {
 					Name: c.DestinationName,
 					URL:  c.URL,
 				})
-				if err := params.ConfigService.SetConfig(newCfg); err != nil {
-					logger.Error("Config update failed", "err", err)
+				if err := a.configService.SetConfig(newCfg); err != nil {
+					a.logger.Error("Config update failed", "err", err)
 					ui.ConfigUpdateFailed(err)
 					continue
 				}
@@ -177,8 +199,8 @@ func Run(ctx context.Context, params RunParams) error {
 				newCfg.Destinations = slices.DeleteFunc(newCfg.Destinations, func(dest config.Destination) bool {
 					return dest.URL == c.URL
 				})
-				if err := params.ConfigService.SetConfig(newCfg); err != nil {
-					logger.Error("Config update failed", "err", err)
+				if err := a.configService.SetConfig(newCfg); err != nil {
+					a.logger.Error("Config update failed", "err", err)
 					ui.ConfigUpdateFailed(err)
 					continue
 				}
@@ -200,11 +222,11 @@ func Run(ctx context.Context, params RunParams) error {
 		case <-uiUpdateT.C:
 			updateUI()
 		case serverState := <-srv.C():
-			logger.Debug("Server state received", "state", serverState)
+			a.logger.Debug("Server state received", "state", serverState)
 			applyServerState(serverState, state)
 			updateUI()
 		case replState := <-repl.C():
-			logger.Debug("Replicator state received", "state", replState)
+			a.logger.Debug("Replicator state received", "state", replState)
 			destErrors := applyReplicatorState(replState, state)
 
 			for _, destError := range destErrors {

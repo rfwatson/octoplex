@@ -97,22 +97,21 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("read build info: %w", err)
 	}
 
-	return app.Run(
-		ctx,
-		app.RunParams{
-			ConfigService:      configService,
-			DockerClient:       dockerClient,
-			ClipboardAvailable: clipboardAvailable,
-			ConfigFilePath:     configService.Path(),
-			BuildInfo: domain.BuildInfo{
-				GoVersion: buildInfo.GoVersion,
-				Version:   version,
-				Commit:    commit,
-				Date:      date,
-			},
-			Logger: logger,
+	app := app.New(app.Params{
+		ConfigService:      configService,
+		DockerClient:       dockerClient,
+		ClipboardAvailable: clipboardAvailable,
+		ConfigFilePath:     configService.Path(),
+		BuildInfo: domain.BuildInfo{
+			GoVersion: buildInfo.GoVersion,
+			Version:   version,
+			Commit:    commit,
+			Date:      date,
 		},
-	)
+		Logger: logger,
+	})
+
+	return app.Run(ctx)
 }
 
 // editConfigFile opens the config file in the user's editor.

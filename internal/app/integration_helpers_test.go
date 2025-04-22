@@ -31,10 +31,10 @@ func buildAppParams(
 	screen tcell.SimulationScreen,
 	screenCaptureC chan<- terminal.ScreenCapture,
 	logger *slog.Logger,
-) app.RunParams {
+) app.Params {
 	t.Helper()
 
-	return app.RunParams{
+	return app.Params{
 		ConfigService: configService,
 		DockerClient:  dockerClient,
 		Screen: &terminal.Screen{

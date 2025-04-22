@@ -132,7 +132,7 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 			done <- struct{}{}
 		}()
 
-		err := app.Run(ctx, app.RunParams{
+		require.NoError(t, app.New(app.Params{
 			ConfigService: configService,
 			DockerClient:  dockerClient,
 			Screen: &terminal.Screen{
@@ -144,8 +144,7 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 			ClipboardAvailable: false,
 			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
 			Logger:             logger,
-		})
-		require.NoError(t, err)
+		}).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -320,7 +319,7 @@ func TestIntegrationCustomHost(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	time.Sleep(time.Second)
@@ -391,7 +390,7 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -472,7 +471,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -609,7 +608,7 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -682,7 +681,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -824,7 +823,7 @@ func TestIntegrationStartupCheck(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -893,7 +892,7 @@ func TestIntegrationMediaServerError(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -934,7 +933,7 @@ func TestIntegrationDockerClientError(t *testing.T) {
 
 		require.EqualError(
 			t,
-			app.Run(ctx, buildAppParams(t, configService, &dockerClient, screen, screenCaptureC, logger)),
+			app.New(buildAppParams(t, configService, &dockerClient, screen, screenCaptureC, logger)).Run(ctx),
 			"create container client: network create: boom",
 		)
 	}()
@@ -974,7 +973,7 @@ func TestIntegrationDockerConnectionError(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		err := app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger))
+		err := app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx)
 		require.ErrorContains(t, err, "dial tcp: lookup docker.example.com")
 		require.ErrorContains(t, err, "no such host")
 	}()
@@ -1070,7 +1069,7 @@ func TestIntegrationCopyURLs(t *testing.T) {
 					done <- struct{}{}
 				}()
 
-				require.NoError(t, app.Run(ctx, buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)))
+				require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 			}()
 
 			time.Sleep(3 * time.Second)
