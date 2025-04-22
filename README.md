@@ -8,11 +8,11 @@
 Octoplex is a live video restreamer for the terminal.
 
 * Restream RTMP/RTMPS to unlimited destinations
-* Broadcast using OBS and other standard tools
-* Add and remove destinations while streaming
-* Automatic reconnections
-* Terminal user interface with real-time container metrics and health status
-* Built on FFmpeg, Docker and other proven free software
+* Broadcast using OBS or any standard tool
+* Add and remove destinations on-the-fly
+* Automatic reconnections on drop
+* Terminal UI with live metrics and health status
+* Powered by FFmpeg, Docker & other open source tools
 
 ## How it works
 
@@ -70,11 +70,43 @@ Launch the `octoplex` binary.
 $ octoplex
 ```
 
-### Connecting with OBS
+### Restreaming with OBS
 
-To connect with OBS, configure it to stream to `rtmp://localhost:1935/live`.
+#### RTMP
 
-![OBS streaming settings](/assets/obs1.png)
+Use the following OBS stream configuration:
+
+![OBS streaming settings for RTMP](/assets/obs1.png)
+
+#### RTMPS
+
+Or to connect with RTMPS:
+
+![OBS streaming settings for RTMPS](/assets/obs2.png)
+
+:warning: Warning: OBS may not accept self‑signed certificates.
+
+If you see the error
+
+> "The RTMP server sent an invalid SSL certificate."
+
+then either install a CA‑signed cert for your RTMPS host, or import your
+self‑signed cert into your OS’s trusted store. See the
+[configuration](#Configuration) section below.
+
+### Restreaming with FFmpeg
+
+#### RTMP
+
+```
+$ ffmpeg -i input.mp4 -c copy -f flv rtmp://localhost:1935/live
+```
+
+#### RTMPS
+
+```
+$ ffmpeg -i input.mp4 -c copy -f flv rtmps://localhost:1936/live
+```
 
 ### Subcommands
 
@@ -86,7 +118,7 @@ None|Launch the terminal user interface
 `version`|Print the version
 `help`|Print help screen
 
-### Configuration file
+### Configuration
 
 Octoplex stores configuration state in a simple YAML file. (See [above](#subcommands) for its location.)
 
@@ -100,9 +132,9 @@ sources:
   mediaServer:
     streamKey: live                    # defaults to "live"
     host: rtmp.example.com             # defaults to "localhost"
-    tls:                               # optional. If RTMPS is enabled, defaults to a
-      cert: /etc/mycert.pem            # self-signed keypair corresponding to the host
-      key: /etc/mykey.pem              # key.
+    tls:                               # optional TLS settings; RTMPS support is automatic.
+      cert: /etc/mycert.pem            # If you omit cert/key, a self-signed keypair will be
+      key: /etc/mykey.pem              # generated using the `host` value above.
     rtmp:
       enabled: true                    # defaults to false
       ip: 127.0.0.1                    # defaults to 127.0.0.1
