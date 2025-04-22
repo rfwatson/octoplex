@@ -181,11 +181,11 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 	// Add a second destination in-app:
 	sendKey(t, screen, tcell.KeyRune, 'a')
 
-	sendBackspaces(t, screen, 30)
+	sendBackspaces(t, screen, 10)
 	sendKeys(t, screen, "Local server 2")
 	sendKey(t, screen, tcell.KeyTab, ' ')
 
-	sendBackspaces(t, screen, 30)
+	sendBackspaces(t, screen, 10)
 	sendKeys(t, screen, destURL2)
 	sendKey(t, screen, tcell.KeyTab, ' ')
 	sendKey(t, screen, tcell.KeyEnter, ' ')

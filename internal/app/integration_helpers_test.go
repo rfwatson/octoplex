@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -150,25 +151,37 @@ func printScreen(t *testing.T, getContents func() []string, label string) {
 func sendKey(t *testing.T, screen tcell.SimulationScreen, key tcell.Key, ch rune) {
 	t.Helper()
 
-	screen.InjectKey(key, ch, tcell.ModNone)
-	time.Sleep(50 * time.Millisecond)
+	const (
+		waitTime = 50 * time.Millisecond
+		maxTries = 50
+	)
+
+	for i := 0; i < maxTries; i++ {
+		if err := screen.PostEvent(tcell.NewEventKey(key, ch, tcell.ModNone)); err != nil {
+			fmt.Printf("Error injecting rune %s, will retry in %s: %s\n", strconv.QuoteRune(ch), waitTime, err)
+			time.Sleep(waitTime)
+		} else {
+			return
+		}
+	}
+
+	t.Fatalf("Failed to send key event after %d tries", maxTries)
 }
 
 func sendKeys(t *testing.T, screen tcell.SimulationScreen, keys string) {
 	t.Helper()
 
-	screen.InjectKeyBytes([]byte(keys))
-	time.Sleep(500 * time.Millisecond)
+	for _, ch := range keys {
+		sendKey(t, screen, tcell.KeyRune, ch)
+	}
 }
 
 func sendBackspaces(t *testing.T, screen tcell.SimulationScreen, n int) {
 	t.Helper()
 
 	for range n {
-		screen.InjectKey(tcell.KeyBackspace, ' ', tcell.ModNone)
-		time.Sleep(50 * time.Millisecond)
+		sendKey(t, screen, tcell.KeyBackspace, 0)
 	}
-	time.Sleep(500 * time.Millisecond)
 }
 
 // kickFirstRTMPConn kicks the first RTMP connection from the mediaMTX server.

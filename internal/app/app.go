@@ -22,6 +22,7 @@ import (
 type App struct {
 	cfg                config.Config
 	configService      *config.Service
+	eventBus           *event.Bus
 	dockerClient       container.DockerClient
 	screen             *terminal.Screen // Screen may be nil.
 	clipboardAvailable bool
@@ -45,6 +46,7 @@ func New(params Params) *App {
 	return &App{
 		cfg:                params.ConfigService.Current(),
 		configService:      params.ConfigService,
+		eventBus:           event.NewBus(params.Logger.With("component", "event_bus")),
 		dockerClient:       params.DockerClient,
 		screen:             params.Screen,
 		clipboardAvailable: params.ClipboardAvailable,
@@ -56,8 +58,6 @@ func New(params Params) *App {
 
 // Run starts the application, and blocks until it exits.
 func (a *App) Run(ctx context.Context) error {
-	eventBus := event.NewBus(a.logger.With("component", "event_bus"))
-
 	// state is the current state of the application, as reflected in the UI.
 	state := new(domain.AppState)
 	applyConfig(a.cfg, state)
@@ -68,7 +68,7 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	ui, err := terminal.StartUI(ctx, terminal.StartParams{
-		EventBus:           eventBus,
+		EventBus:           a.eventBus,
 		Screen:             a.screen,
 		ClipboardAvailable: a.clipboardAvailable,
 		ConfigFilePath:     a.configFilePath,
@@ -95,13 +95,13 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		err = fmt.Errorf("create container client: %w", err)
 
-		var errString string
+		var msg string
 		if client.IsErrConnectionFailed(err) {
-			errString = "Could not connect to Docker. Is Docker installed and running?"
+			msg = "Could not connect to Docker. Is Docker installed and running?"
 		} else {
-			errString = err.Error()
+			msg = err.Error()
 		}
-		ui.ShowFatalErrorModal(errString)
+		a.eventBus.Send(event.FatalErrorOccurredEvent{Message: msg})
 
 		emptyUI()
 		<-ui.C()
@@ -130,7 +130,7 @@ func (a *App) Run(ctx context.Context) error {
 	})
 	if err != nil {
 		err = fmt.Errorf("create mediaserver: %w", err)
-		ui.ShowFatalErrorModal(err.Error())
+		a.eventBus.Send(event.FatalErrorOccurredEvent{Message: err.Error()})
 		emptyUI()
 		<-ui.C()
 		return err
@@ -164,7 +164,7 @@ func (a *App) Run(ctx context.Context) error {
 					return fmt.Errorf("start mediaserver: %w", err)
 				}
 
-				eventBus.Send(event.MediaServerStartedEvent{RTMPURL: srv.RTMPURL(), RTMPSURL: srv.RTMPSURL()})
+				a.eventBus.Send(event.MediaServerStartedEvent{RTMPURL: srv.RTMPURL(), RTMPSURL: srv.RTMPSURL()})
 			}
 		case <-a.configService.C():
 			// No-op, config updates are handled synchronously for now.
@@ -220,7 +220,7 @@ func (a *App) handleCommand(
 		}
 		a.cfg = newCfg
 		handleConfigUpdate(a.cfg, state, ui)
-		ui.DestinationAdded()
+		a.eventBus.Send(event.DestinationAddedEvent{URL: c.URL})
 	case domain.CommandRemoveDestination:
 		repl.StopDestination(c.URL) // no-op if not live
 		newCfg := a.cfg
@@ -234,7 +234,7 @@ func (a *App) handleCommand(
 		}
 		a.cfg = newCfg
 		handleConfigUpdate(a.cfg, state, ui)
-		ui.DestinationRemoved()
+		a.eventBus.Send(event.DestinationRemovedEvent{URL: c.URL})
 	case domain.CommandStartDestination:
 		if !state.Source.Live {
 			ui.ShowSourceNotLiveModal()

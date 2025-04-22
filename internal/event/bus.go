@@ -7,26 +7,6 @@ import (
 
 const defaultChannelSize = 64
 
-type Name string
-
-const (
-	EventNameMediaServerStarted Name = "media_server_started"
-)
-
-type Event interface {
-	name() Name
-}
-
-// MediaServerStartedEvent is emitted when the mediaserver component starts successfully.
-type MediaServerStartedEvent struct {
-	RTMPURL  string
-	RTMPSURL string
-}
-
-func (e MediaServerStartedEvent) name() Name {
-	return "media_server_started"
-}
-
 // Bus is an event bus.
 type Bus struct {
 	consumers map[Name][]chan Event

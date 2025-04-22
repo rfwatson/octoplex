@@ -279,7 +279,10 @@ func (ui *UI) C() <-chan domain.Command {
 func (ui *UI) run(ctx context.Context) {
 	defer close(ui.commandC)
 
+	destinationAddedC := ui.eventBus.Register(event.EventNameDestinationAdded)
+	destinationRemovedC := ui.eventBus.Register(event.EventNameDestinationRemoved)
 	mediaServerStartedC := ui.eventBus.Register(event.EventNameMediaServerStarted)
+	fatalErrorOccurredC := ui.eventBus.Register(event.EventNameFatalErrorOccurred)
 
 	uiDone := make(chan struct{})
 	go func() {
@@ -294,8 +297,14 @@ func (ui *UI) run(ctx context.Context) {
 
 	for {
 		select {
+		case evt := <-destinationAddedC:
+			ui.handleDestinationAdded(evt.(event.DestinationAddedEvent))
+		case evt := <-destinationRemovedC:
+			ui.handleDestinationRemoved(evt.(event.DestinationRemovedEvent))
 		case evt := <-mediaServerStartedC:
 			ui.handleMediaServerStarted(evt.(event.MediaServerStartedEvent))
+		case evt := <-fatalErrorOccurredC:
+			ui.handleFatalErrorOccurred(evt.(event.FatalErrorOccurredEvent))
 		case <-ctx.Done():
 			return
 		case <-uiDone:
@@ -437,15 +446,13 @@ func (ui *UI) ShowDestinationErrorModal(name string, err error) {
 	})
 }
 
-// ShowFatalErrorModal displays the provided error. It sends a CommandQuit to the
-// command channel when the user selects the Quit button.
-func (ui *UI) ShowFatalErrorModal(errString string) {
+func (ui *UI) handleFatalErrorOccurred(evt event.FatalErrorOccurredEvent) {
 	ui.app.QueueUpdateDraw(func() {
 		ui.showModal(
 			pageNameModalFatalError,
 			fmt.Sprintf(
 				"An error occurred:\n\n%s",
-				errString,
+				evt.Message,
 			),
 			[]string{"Quit"},
 			false,
@@ -957,8 +964,7 @@ func (ui *UI) removeDestination() {
 	)
 }
 
-// DestinationAdded should be called when a new destination is added.
-func (ui *UI) DestinationAdded() {
+func (ui *UI) handleDestinationAdded(event.DestinationAddedEvent) {
 	ui.mu.Lock()
 	ui.hasDestinations = true
 	ui.mu.Unlock()
@@ -970,9 +976,8 @@ func (ui *UI) DestinationAdded() {
 	})
 }
 
-// DestinationRemoved should be called when a destination is removed.
-func (ui *UI) DestinationRemoved() {
-	ui.selectPreviousDestination()
+func (ui *UI) handleDestinationRemoved(event.DestinationRemovedEvent) {
+	ui.app.QueueUpdateDraw(ui.selectPreviousDestination)
 }
 
 func (ui *UI) closeAddDestinationForm() {
