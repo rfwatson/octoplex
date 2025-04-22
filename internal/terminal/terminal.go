@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/event"
 	"git.netflux.io/rob/octoplex/internal/shortid"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -40,6 +41,7 @@ const (
 
 // UI is responsible for managing the terminal user interface.
 type UI struct {
+	eventBus           *event.Bus
 	commandC           chan domain.Command
 	clipboardAvailable bool
 	configFilePath     string
@@ -93,6 +95,7 @@ type ScreenCapture struct {
 // StartParams contains the parameters for starting a new terminal user
 // interface.
 type StartParams struct {
+	EventBus           *event.Bus
 	ChanSize           int
 	Logger             *slog.Logger
 	ClipboardAvailable bool
@@ -211,6 +214,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 
 	ui := &UI{
 		commandC:           commandCh,
+		eventBus:           params.EventBus,
 		clipboardAvailable: params.ClipboardAvailable,
 		configFilePath:     params.ConfigFilePath,
 		buildInfo:          params.BuildInfo,
@@ -275,6 +279,8 @@ func (ui *UI) C() <-chan domain.Command {
 func (ui *UI) run(ctx context.Context) {
 	defer close(ui.commandC)
 
+	mediaServerStartedC := ui.eventBus.Register(event.EventNameMediaServerStarted)
+
 	uiDone := make(chan struct{})
 	go func() {
 		defer func() {
@@ -288,6 +294,8 @@ func (ui *UI) run(ctx context.Context) {
 
 	for {
 		select {
+		case evt := <-mediaServerStartedC:
+			ui.handleMediaServerStarted(evt.(event.MediaServerStartedEvent))
 		case <-ctx.Done():
 			return
 		case <-uiDone:
@@ -296,15 +304,13 @@ func (ui *UI) run(ctx context.Context) {
 	}
 }
 
-// SetRTMPURLs sets the RTMP and RTMPS URLs for the user interface, which are
-// unavailable when the UI is first created.
-func (ui *UI) SetRTMPURLs(rtmpURL, rtmpsURL string) {
+func (ui *UI) handleMediaServerStarted(evt event.MediaServerStartedEvent) {
 	ui.mu.Lock()
-	ui.rtmpURL = rtmpURL
-	ui.rtmpsURL = rtmpsURL
+	ui.rtmpURL = evt.RTMPURL
+	ui.rtmpsURL = evt.RTMPSURL
 	ui.mu.Unlock()
 
-	ui.renderAboutView()
+	ui.app.QueueUpdateDraw(ui.renderAboutView)
 }
 
 func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {

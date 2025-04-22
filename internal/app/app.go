@@ -11,6 +11,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/event"
 	"git.netflux.io/rob/octoplex/internal/mediaserver"
 	"git.netflux.io/rob/octoplex/internal/replicator"
 	"git.netflux.io/rob/octoplex/internal/terminal"
@@ -30,6 +31,9 @@ type RunParams struct {
 
 // Run starts the application, and blocks until it exits.
 func Run(ctx context.Context, params RunParams) error {
+	logger := params.Logger
+	eventBus := event.NewBus(logger.With("component", "event_bus"))
+
 	// cfg is the current configuration of the application, as reflected in the
 	// config file.
 	cfg := params.ConfigService.Current()
@@ -43,8 +47,8 @@ func Run(ctx context.Context, params RunParams) error {
 		return errors.New("config: either sources.mediaServer.rtmp.enabled or sources.mediaServer.rtmps.enabled must be set")
 	}
 
-	logger := params.Logger
 	ui, err := terminal.StartUI(ctx, terminal.StartParams{
+		EventBus:           eventBus,
 		Screen:             params.Screen,
 		ClipboardAvailable: params.ClipboardAvailable,
 		ConfigFilePath:     params.ConfigFilePath,
@@ -113,10 +117,6 @@ func Run(ctx context.Context, params RunParams) error {
 	}
 	defer srv.Close()
 
-	// Set the RTMP and RTMPS URLs in the UI, which are only known after the
-	// MediaServer is available.
-	ui.SetRTMPURLs(srv.RTMPURL(), srv.RTMPSURL())
-
 	repl := replicator.StartActor(ctx, replicator.StartActorParams{
 		SourceURL:       srv.RTMPInternalURL(),
 		ContainerClient: containerClient,
@@ -143,6 +143,8 @@ func Run(ctx context.Context, params RunParams) error {
 				if err = srv.Start(ctx); err != nil {
 					return fmt.Errorf("start mediaserver: %w", err)
 				}
+
+				eventBus.Send(event.MediaServerStartedEvent{RTMPURL: srv.RTMPURL(), RTMPSURL: srv.RTMPSURL()})
 			}
 		case <-params.ConfigService.C():
 			// No-op, config updates are handled synchronously for now.
