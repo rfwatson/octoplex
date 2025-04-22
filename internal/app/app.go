@@ -20,6 +20,7 @@ import (
 
 // App is an instance of the app.
 type App struct {
+	cfg                config.Config
 	configService      *config.Service
 	dockerClient       container.DockerClient
 	screen             *terminal.Screen // Screen may be nil.
@@ -42,6 +43,7 @@ type Params struct {
 
 func New(params Params) *App {
 	return &App{
+		cfg:                params.ConfigService.Current(),
 		configService:      params.ConfigService,
 		dockerClient:       params.DockerClient,
 		screen:             params.Screen,
@@ -56,16 +58,12 @@ func New(params Params) *App {
 func (a *App) Run(ctx context.Context) error {
 	eventBus := event.NewBus(a.logger.With("component", "event_bus"))
 
-	// cfg is the current configuration of the application, as reflected in the
-	// config file.
-	cfg := a.configService.Current()
-
 	// state is the current state of the application, as reflected in the UI.
 	state := new(domain.AppState)
-	applyConfig(cfg, state)
+	applyConfig(a.cfg, state)
 
 	// Ensure there is at least one active source.
-	if !cfg.Sources.MediaServer.RTMP.Enabled && !cfg.Sources.MediaServer.RTMPS.Enabled {
+	if !a.cfg.Sources.MediaServer.RTMP.Enabled && !a.cfg.Sources.MediaServer.RTMPS.Enabled {
 		return errors.New("config: either sources.mediaServer.rtmp.enabled or sources.mediaServer.rtmps.enabled must be set")
 	}
 
@@ -115,18 +113,18 @@ func (a *App) Run(ctx context.Context) error {
 	updateUI()
 
 	var tlsCertPath, tlsKeyPath string
-	if cfg.Sources.MediaServer.TLS != nil {
-		tlsCertPath = cfg.Sources.MediaServer.TLS.CertPath
-		tlsKeyPath = cfg.Sources.MediaServer.TLS.KeyPath
+	if a.cfg.Sources.MediaServer.TLS != nil {
+		tlsCertPath = a.cfg.Sources.MediaServer.TLS.CertPath
+		tlsKeyPath = a.cfg.Sources.MediaServer.TLS.KeyPath
 	}
 
 	srv, err := mediaserver.NewActor(ctx, mediaserver.NewActorParams{
-		RTMPAddr:        buildNetAddr(cfg.Sources.MediaServer.RTMP),
-		RTMPSAddr:       buildNetAddr(cfg.Sources.MediaServer.RTMPS),
-		Host:            cfg.Sources.MediaServer.Host,
+		RTMPAddr:        buildNetAddr(a.cfg.Sources.MediaServer.RTMP),
+		RTMPSAddr:       buildNetAddr(a.cfg.Sources.MediaServer.RTMPS),
+		Host:            a.cfg.Sources.MediaServer.Host,
 		TLSCertPath:     tlsCertPath,
 		TLSKeyPath:      tlsKeyPath,
-		StreamKey:       mediaserver.StreamKey(cfg.Sources.MediaServer.StreamKey),
+		StreamKey:       mediaserver.StreamKey(a.cfg.Sources.MediaServer.StreamKey),
 		ContainerClient: containerClient,
 		Logger:          a.logger.With("component", "mediaserver"),
 	})
@@ -177,46 +175,7 @@ func (a *App) Run(ctx context.Context) error {
 				return nil
 			}
 
-			a.logger.Debug("Command received", "cmd", cmd.Name())
-			switch c := cmd.(type) {
-			case domain.CommandAddDestination:
-				newCfg := cfg
-				newCfg.Destinations = append(newCfg.Destinations, config.Destination{
-					Name: c.DestinationName,
-					URL:  c.URL,
-				})
-				if err := a.configService.SetConfig(newCfg); err != nil {
-					a.logger.Error("Config update failed", "err", err)
-					ui.ConfigUpdateFailed(err)
-					continue
-				}
-				cfg = newCfg
-				handleConfigUpdate(cfg, state, ui)
-				ui.DestinationAdded()
-			case domain.CommandRemoveDestination:
-				repl.StopDestination(c.URL) // no-op if not live
-				newCfg := cfg
-				newCfg.Destinations = slices.DeleteFunc(newCfg.Destinations, func(dest config.Destination) bool {
-					return dest.URL == c.URL
-				})
-				if err := a.configService.SetConfig(newCfg); err != nil {
-					a.logger.Error("Config update failed", "err", err)
-					ui.ConfigUpdateFailed(err)
-					continue
-				}
-				cfg = newCfg
-				handleConfigUpdate(cfg, state, ui)
-				ui.DestinationRemoved()
-			case domain.CommandStartDestination:
-				if !state.Source.Live {
-					ui.ShowSourceNotLiveModal()
-					continue
-				}
-
-				repl.StartDestination(c.URL)
-			case domain.CommandStopDestination:
-				repl.StopDestination(c.URL)
-			case domain.CommandQuit:
+			if !a.handleCommand(cmd, state, repl, ui) {
 				return nil
 			}
 		case <-uiUpdateT.C:
@@ -236,6 +195,60 @@ func (a *App) Run(ctx context.Context) error {
 			updateUI()
 		}
 	}
+}
+
+// handleCommand handles an incoming command. It returns false if the app
+// should not continue, i.e. quit.
+func (a *App) handleCommand(
+	cmd domain.Command,
+	state *domain.AppState,
+	repl *replicator.Actor,
+	ui *terminal.UI,
+) bool {
+	a.logger.Debug("Command received", "cmd", cmd.Name())
+	switch c := cmd.(type) {
+	case domain.CommandAddDestination:
+		newCfg := a.cfg
+		newCfg.Destinations = append(newCfg.Destinations, config.Destination{
+			Name: c.DestinationName,
+			URL:  c.URL,
+		})
+		if err := a.configService.SetConfig(newCfg); err != nil {
+			a.logger.Error("Config update failed", "err", err)
+			ui.ConfigUpdateFailed(err)
+			break
+		}
+		a.cfg = newCfg
+		handleConfigUpdate(a.cfg, state, ui)
+		ui.DestinationAdded()
+	case domain.CommandRemoveDestination:
+		repl.StopDestination(c.URL) // no-op if not live
+		newCfg := a.cfg
+		newCfg.Destinations = slices.DeleteFunc(newCfg.Destinations, func(dest config.Destination) bool {
+			return dest.URL == c.URL
+		})
+		if err := a.configService.SetConfig(newCfg); err != nil {
+			a.logger.Error("Config update failed", "err", err)
+			ui.ConfigUpdateFailed(err)
+			break
+		}
+		a.cfg = newCfg
+		handleConfigUpdate(a.cfg, state, ui)
+		ui.DestinationRemoved()
+	case domain.CommandStartDestination:
+		if !state.Source.Live {
+			ui.ShowSourceNotLiveModal()
+			break
+		}
+
+		repl.StartDestination(c.URL)
+	case domain.CommandStopDestination:
+		repl.StopDestination(c.URL)
+	case domain.CommandQuit:
+		return false
+	}
+
+	return true
 }
 
 // handleConfigUpdate applies the config to the app state, and updates the UI.
