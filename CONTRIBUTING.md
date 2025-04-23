@@ -33,11 +33,12 @@ broadcast to localhost:1935 or localhost:1936.
 
 ## Opening a pull request
 
-Pull requests are welcome, but please propose significant changes in a
+Pull requests are welcome, please propose significant changes in a
 [discussion](https://github.com/rfwatson/octoplex/discussions) first.
 
 1. Fork the repo
-2. Make your changes, including test coverage
-3. Push the changes to a branch
-4. Ensure the branch is passing
-5. Open a pull request
+1. Make your changes, including test coverage
+1. Run the formatter (`mise run format`)
+1. Push the changes to a branch
+1. Ensure the branch is passing
+1. Open a pull request

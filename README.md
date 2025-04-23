@@ -5,7 +5,7 @@
 ![GitHub Release](https://img.shields.io/github/v/release/rfwatson/octoplex)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-Octoplex is a live video restreamer for the terminal.
+Octoplex is a Docker-native live video restreamer.
 
 * Restream RTMP/RTMPS to unlimited destinations
 * Broadcast using OBS or any standard tool
@@ -38,8 +38,7 @@ Octoplex is a live video restreamer for the terminal.
 
 ### Docker Engine
 
-First, make sure Docker Engine is installed. Octoplex uses Docker to manage
-FFmpeg and other streaming tools.
+First, ensure that Docker Engine is installed.
 
 Linux: See https://docs.docker.com/engine/install/.
 
@@ -160,13 +159,11 @@ localhost (`127.0.0.1`) or use `0.0.0.0` to bind to all network interfaces.
 
 ## Contributing
 
+See [CONTRIBUTING.md](/CONTRIBUTING.md).
+
 ### Bug reports
 
 Open bug reports [on GitHub](https://github.com/rfwatson/octoplex/issues/new).
-
-### Pull requests
-
-Pull requests are welcome.
 
 ## Acknowledgements
 
