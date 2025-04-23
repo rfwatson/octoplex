@@ -220,8 +220,8 @@ func (a *App) handleCommand(
 			URL:  c.URL,
 		})
 		if err := a.configService.SetConfig(newCfg); err != nil {
-			a.logger.Error("Config update failed", "err", err)
-			ui.ConfigUpdateFailed(err)
+			a.logger.Error("Add destination failed", "err", err)
+			a.eventBus.Send(event.AddDestinationFailedEvent{Err: err})
 			break
 		}
 		a.cfg = newCfg
@@ -234,8 +234,8 @@ func (a *App) handleCommand(
 			return dest.URL == c.URL
 		})
 		if err := a.configService.SetConfig(newCfg); err != nil {
-			a.logger.Error("Config update failed", "err", err)
-			ui.ConfigUpdateFailed(err)
+			a.logger.Error("Remove destination failed", "err", err)
+			a.eventBus.Send(event.RemoveDestinationFailedEvent{Err: err})
 			break
 		}
 		a.cfg = newCfg

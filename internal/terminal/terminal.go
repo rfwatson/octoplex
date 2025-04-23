@@ -281,7 +281,9 @@ func (ui *UI) run(ctx context.Context) {
 
 	appStateChangedC := ui.eventBus.Register(event.EventNameAppStateChanged)
 	destinationAddedC := ui.eventBus.Register(event.EventNameDestinationAdded)
+	addDestinationFailedC := ui.eventBus.Register(event.EventNameAddDestinationFailed)
 	destinationRemovedC := ui.eventBus.Register(event.EventNameDestinationRemoved)
+	removeDestinationFailedC := ui.eventBus.Register(event.EventNameRemoveDestinationFailed)
 	mediaServerStartedC := ui.eventBus.Register(event.EventNameMediaServerStarted)
 	fatalErrorOccurredC := ui.eventBus.Register(event.EventNameFatalErrorOccurred)
 
@@ -306,9 +308,17 @@ func (ui *UI) run(ctx context.Context) {
 			ui.app.QueueUpdateDraw(func() {
 				ui.handleDestinationAdded(evt.(event.DestinationAddedEvent))
 			})
+		case evt := <-addDestinationFailedC:
+			ui.app.QueueUpdateDraw(func() {
+				ui.handleDestinationEventError(evt.(event.AddDestinationFailedEvent).Err)
+			})
 		case evt := <-destinationRemovedC:
 			ui.app.QueueUpdateDraw(func() {
 				ui.handleDestinationRemoved(evt.(event.DestinationRemovedEvent))
+			})
+		case evt := <-removeDestinationFailedC:
+			ui.app.QueueUpdateDraw(func() {
+				ui.handleDestinationEventError(evt.(event.RemoveDestinationFailedEvent).Err)
 			})
 		case evt := <-mediaServerStartedC:
 			ui.app.QueueUpdateDraw(func() {
@@ -866,24 +876,6 @@ func (ui *UI) Close() {
 	ui.app.Stop()
 }
 
-func (ui *UI) ConfigUpdateFailed(err error) {
-	ui.app.QueueUpdateDraw(func() {
-		ui.showModal(
-			pageNameConfigUpdateFailed,
-			"Configuration update failed:\n\n"+err.Error(),
-			[]string{"Ok"},
-			false,
-			func(int, string) {
-				pageName, frontPage := ui.pages.GetFrontPage()
-				if pageName != pageNameAddDestination {
-					ui.logger.Warn("Unexpected page when configuration form closed", "page", pageName)
-				}
-				ui.app.SetFocus(frontPage)
-			},
-		)
-	})
-}
-
 func (ui *UI) addDestination() {
 	const (
 		inputLen        = 60
@@ -979,6 +971,22 @@ func (ui *UI) handleDestinationAdded(event.DestinationAddedEvent) {
 
 func (ui *UI) handleDestinationRemoved(event.DestinationRemovedEvent) {
 	ui.selectPreviousDestination()
+}
+
+func (ui *UI) handleDestinationEventError(err error) {
+	ui.showModal(
+		pageNameConfigUpdateFailed,
+		"Configuration update failed:\n\n"+err.Error(),
+		[]string{"Ok"},
+		false,
+		func(int, string) {
+			pageName, frontPage := ui.pages.GetFrontPage()
+			if pageName != pageNameAddDestination {
+				ui.logger.Warn("Unexpected page when configuration form closed", "page", pageName)
+			}
+			ui.app.SetFocus(frontPage)
+		},
+	)
 }
 
 func (ui *UI) closeAddDestinationForm() {
