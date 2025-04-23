@@ -1,16 +1,29 @@
 package event
 
+import "git.netflux.io/rob/octoplex/internal/domain"
+
 type Name string
 
 const (
+	EventNameAppStateChanged    Name = "app_state_changed"
 	EventNameDestinationAdded   Name = "destination_added"
 	EventNameDestinationRemoved Name = "destination_removed"
 	EventNameMediaServerStarted Name = "media_server_started"
 	EventNameFatalErrorOccurred Name = "fatal_error_occurred"
 )
 
+// Event represents something which happened in the appllication.
 type Event interface {
 	name() Name
+}
+
+// AppStateChangedEvent is emitted when the application state changes.
+type AppStateChangedEvent struct {
+	State domain.AppState
+}
+
+func (e AppStateChangedEvent) name() Name {
+	return EventNameAppStateChanged
 }
 
 // DestinationAddedEvent is emitted when a destination is successfully added.

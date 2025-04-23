@@ -89,7 +89,9 @@ func (a *App) Run(ctx context.Context) error {
 	// It is only needed for integration tests when rendering modals before the
 	// main loop starts. It would be nice to remove this but the risk/impact on
 	// non-test code is pretty low.
-	emptyUI := func() { ui.SetState(domain.AppState{}) }
+	emptyUI := func() {
+		a.eventBus.Send(event.AppStateChangedEvent{State: domain.AppState{}})
+	}
 
 	containerClient, err := container.NewClient(ctx, a.dockerClient, a.logger.With("component", "container_client"))
 	if err != nil {
@@ -109,7 +111,11 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	defer containerClient.Close()
 
-	updateUI := func() { ui.SetState(*state) }
+	updateUI := func() {
+		// The state is mutable so can't be passed into another goroutine
+		// without cloning it first.
+		a.eventBus.Send(event.AppStateChangedEvent{State: state.Clone()})
+	}
 	updateUI()
 
 	var tlsCertPath, tlsKeyPath string
@@ -219,7 +225,7 @@ func (a *App) handleCommand(
 			break
 		}
 		a.cfg = newCfg
-		handleConfigUpdate(a.cfg, state, ui)
+		a.handleConfigUpdate(state)
 		a.eventBus.Send(event.DestinationAddedEvent{URL: c.URL})
 	case domain.CommandRemoveDestination:
 		repl.StopDestination(c.URL) // no-op if not live
@@ -233,7 +239,7 @@ func (a *App) handleCommand(
 			break
 		}
 		a.cfg = newCfg
-		handleConfigUpdate(a.cfg, state, ui)
+		a.handleConfigUpdate(state)
 		a.eventBus.Send(event.DestinationRemovedEvent{URL: c.URL})
 	case domain.CommandStartDestination:
 		if !state.Source.Live {
@@ -251,10 +257,10 @@ func (a *App) handleCommand(
 	return true
 }
 
-// handleConfigUpdate applies the config to the app state, and updates the UI.
-func handleConfigUpdate(cfg config.Config, appState *domain.AppState, ui *terminal.UI) {
-	applyConfig(cfg, appState)
-	ui.SetState(*appState)
+// handleConfigUpdate applies the config to the app state, and sends an AppStateChangedEvent.
+func (a *App) handleConfigUpdate(appState *domain.AppState) {
+	applyConfig(a.cfg, appState)
+	a.eventBus.Send(event.AppStateChangedEvent{State: appState.Clone()})
 }
 
 // applyServerState applies the current server state to the app state.

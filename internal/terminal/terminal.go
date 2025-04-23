@@ -279,6 +279,7 @@ func (ui *UI) C() <-chan domain.Command {
 func (ui *UI) run(ctx context.Context) {
 	defer close(ui.commandC)
 
+	appStateChangedC := ui.eventBus.Register(event.EventNameAppStateChanged)
 	destinationAddedC := ui.eventBus.Register(event.EventNameDestinationAdded)
 	destinationRemovedC := ui.eventBus.Register(event.EventNameDestinationRemoved)
 	mediaServerStartedC := ui.eventBus.Register(event.EventNameMediaServerStarted)
@@ -297,14 +298,26 @@ func (ui *UI) run(ctx context.Context) {
 
 	for {
 		select {
+		case evt := <-appStateChangedC:
+			ui.app.QueueUpdateDraw(func() {
+				ui.handleAppStateChanged(evt.(event.AppStateChangedEvent))
+			})
 		case evt := <-destinationAddedC:
-			ui.handleDestinationAdded(evt.(event.DestinationAddedEvent))
+			ui.app.QueueUpdateDraw(func() {
+				ui.handleDestinationAdded(evt.(event.DestinationAddedEvent))
+			})
 		case evt := <-destinationRemovedC:
-			ui.handleDestinationRemoved(evt.(event.DestinationRemovedEvent))
+			ui.app.QueueUpdateDraw(func() {
+				ui.handleDestinationRemoved(evt.(event.DestinationRemovedEvent))
+			})
 		case evt := <-mediaServerStartedC:
-			ui.handleMediaServerStarted(evt.(event.MediaServerStartedEvent))
+			ui.app.QueueUpdateDraw(func() {
+				ui.handleMediaServerStarted(evt.(event.MediaServerStartedEvent))
+			})
 		case evt := <-fatalErrorOccurredC:
-			ui.handleFatalErrorOccurred(evt.(event.FatalErrorOccurredEvent))
+			ui.app.QueueUpdateDraw(func() {
+				ui.handleFatalErrorOccurred(evt.(event.FatalErrorOccurredEvent))
+			})
 		case <-ctx.Done():
 			return
 		case <-uiDone:
@@ -319,7 +332,7 @@ func (ui *UI) handleMediaServerStarted(evt event.MediaServerStartedEvent) {
 	ui.rtmpsURL = evt.RTMPSURL
 	ui.mu.Unlock()
 
-	ui.app.QueueUpdateDraw(ui.renderAboutView)
+	ui.renderAboutView()
 }
 
 func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
@@ -447,20 +460,18 @@ func (ui *UI) ShowDestinationErrorModal(name string, err error) {
 }
 
 func (ui *UI) handleFatalErrorOccurred(evt event.FatalErrorOccurredEvent) {
-	ui.app.QueueUpdateDraw(func() {
-		ui.showModal(
-			pageNameModalFatalError,
-			fmt.Sprintf(
-				"An error occurred:\n\n%s",
-				evt.Message,
-			),
-			[]string{"Quit"},
-			false,
-			func(int, string) {
-				ui.commandC <- domain.CommandQuit{}
-			},
-		)
-	})
+	ui.showModal(
+		pageNameModalFatalError,
+		fmt.Sprintf(
+			"An error occurred:\n\n%s",
+			evt.Message,
+		),
+		[]string{"Quit"},
+		false,
+		func(int, string) {
+			ui.commandC <- domain.CommandQuit{}
+		},
+	)
 }
 
 func (ui *UI) afterDrawHandler(screen tcell.Screen) {
@@ -491,8 +502,9 @@ func (ui *UI) captureScreen(screen tcell.Screen) {
 	}
 }
 
-// SetState sets the state of the terminal user interface.
-func (ui *UI) SetState(state domain.AppState) {
+func (ui *UI) handleAppStateChanged(evt event.AppStateChangedEvent) {
+	state := evt.State
+
 	if state.Source.ExitReason != "" {
 		ui.handleMediaServerClosed(state.Source.ExitReason)
 	}
@@ -507,10 +519,7 @@ func (ui *UI) SetState(state domain.AppState) {
 	ui.hasDestinations = len(state.Destinations) > 0
 	ui.mu.Unlock()
 
-	// The state is mutable so can't be passed into QueueUpdateDraw, which
-	// passes it to another goroutine, without cloning it first.
-	stateClone := state.Clone()
-	ui.app.QueueUpdateDraw(func() { ui.redrawFromState(stateClone) })
+	ui.redrawFromState(state)
 }
 
 func (ui *UI) updatePullProgress(state domain.AppState) {
@@ -531,9 +540,7 @@ func (ui *UI) updatePullProgress(state domain.AppState) {
 	}
 
 	if len(pullingContainers) == 0 {
-		ui.app.QueueUpdateDraw(func() {
-			ui.hideModal(pageNameModalPullProgress)
-		})
+		ui.hideModal(pageNameModalPullProgress)
 		return
 	}
 
@@ -547,29 +554,27 @@ func (ui *UI) updatePullProgress(state domain.AppState) {
 }
 
 func (ui *UI) updateProgressModal(container domain.Container) {
-	ui.app.QueueUpdateDraw(func() {
-		modalName := string(pageNameModalPullProgress)
+	modalName := string(pageNameModalPullProgress)
 
-		var status string
-		// Avoid showing the long Docker pull status in the modal content.
-		if len(container.PullStatus) < 30 {
-			status = container.PullStatus
-		}
+	var status string
+	// Avoid showing the long Docker pull status in the modal content.
+	if len(container.PullStatus) < 30 {
+		status = container.PullStatus
+	}
 
-		modalContent := fmt.Sprintf(
-			"Pulling %s:\n%s (%d%%)\n\n%s",
-			container.ImageName,
-			status,
-			container.PullPercent,
-			container.PullProgress,
-		)
+	modalContent := fmt.Sprintf(
+		"Pulling %s:\n%s (%d%%)\n\n%s",
+		container.ImageName,
+		status,
+		container.PullPercent,
+		container.PullProgress,
+	)
 
-		if ui.pages.HasPage(modalName) {
-			ui.pullProgressModal.SetText(modalContent)
-		} else {
-			ui.pages.AddPage(modalName, ui.pullProgressModal, true, true)
-		}
-	})
+	if ui.pages.HasPage(modalName) {
+		ui.pullProgressModal.SetText(modalContent)
+	} else {
+		ui.pages.AddPage(modalName, ui.pullProgressModal, true, true)
+	}
 }
 
 // page names represent a specific page in the terminal user interface.
@@ -699,23 +704,21 @@ func (ui *UI) hideModal(pageName string) {
 }
 
 func (ui *UI) handleMediaServerClosed(exitReason string) {
-	ui.app.QueueUpdateDraw(func() {
-		if ui.pages.HasPage(pageNameModalSourceError) {
-			return
-		}
+	if ui.pages.HasPage(pageNameModalSourceError) {
+		return
+	}
 
-		modal := tview.NewModal()
-		modal.SetText("Mediaserver error: " + exitReason).
-			AddButtons([]string{"Quit"}).
-			SetBackgroundColor(tcell.ColorBlack).
-			SetTextColor(tcell.ColorWhite).
-			SetDoneFunc(func(int, string) {
-				ui.commandC <- domain.CommandQuit{}
-			})
-		modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
+	modal := tview.NewModal()
+	modal.SetText("Mediaserver error: " + exitReason).
+		AddButtons([]string{"Quit"}).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetTextColor(tcell.ColorWhite).
+		SetDoneFunc(func(int, string) {
+			ui.commandC <- domain.CommandQuit{}
+		})
+	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
-		ui.pages.AddPage(pageNameModalSourceError, modal, true, true)
-	})
+	ui.pages.AddPage(pageNameModalSourceError, modal, true, true)
 }
 
 const dash = "—"
@@ -969,15 +972,13 @@ func (ui *UI) handleDestinationAdded(event.DestinationAddedEvent) {
 	ui.hasDestinations = true
 	ui.mu.Unlock()
 
-	ui.app.QueueUpdateDraw(func() {
-		ui.pages.HidePage(pageNameNoDestinations)
-		ui.closeAddDestinationForm()
-		ui.selectLastDestination()
-	})
+	ui.pages.HidePage(pageNameNoDestinations)
+	ui.closeAddDestinationForm()
+	ui.selectLastDestination()
 }
 
 func (ui *UI) handleDestinationRemoved(event.DestinationRemovedEvent) {
-	ui.app.QueueUpdateDraw(ui.selectPreviousDestination)
+	ui.selectPreviousDestination()
 }
 
 func (ui *UI) closeAddDestinationForm() {
