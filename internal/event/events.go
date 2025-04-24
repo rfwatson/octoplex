@@ -8,6 +8,7 @@ const (
 	EventNameAppStateChanged         Name = "app_state_changed"
 	EventNameDestinationAdded        Name = "destination_added"
 	EventNameAddDestinationFailed    Name = "add_destination_failed"
+	EventNameStartDestinationFailed  Name = "start_destination_failed"
 	EventNameDestinationRemoved      Name = "destination_removed"
 	EventNameRemoveDestinationFailed Name = "remove_destination_failed"
 	EventNameFatalErrorOccurred      Name = "fatal_error_occurred"
@@ -44,6 +45,13 @@ type AddDestinationFailedEvent struct {
 
 func (e AddDestinationFailedEvent) name() Name {
 	return EventNameAddDestinationFailed
+}
+
+// StartDestinationFailedEvent is emitted when a destination fails to start.
+type StartDestinationFailedEvent struct{}
+
+func (e StartDestinationFailedEvent) name() Name {
+	return EventNameStartDestinationFailed
 }
 
 // DestinationRemovedEvent is emitted when a destination is successfully

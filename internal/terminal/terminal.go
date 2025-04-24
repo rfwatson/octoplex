@@ -282,6 +282,7 @@ func (ui *UI) run(ctx context.Context) {
 	appStateChangedC := ui.eventBus.Register(event.EventNameAppStateChanged)
 	destinationAddedC := ui.eventBus.Register(event.EventNameDestinationAdded)
 	addDestinationFailedC := ui.eventBus.Register(event.EventNameAddDestinationFailed)
+	startDestinationFailedC := ui.eventBus.Register(event.EventNameStartDestinationFailed)
 	destinationRemovedC := ui.eventBus.Register(event.EventNameDestinationRemoved)
 	removeDestinationFailedC := ui.eventBus.Register(event.EventNameRemoveDestinationFailed)
 	mediaServerStartedC := ui.eventBus.Register(event.EventNameMediaServerStarted)
@@ -307,6 +308,10 @@ func (ui *UI) run(ctx context.Context) {
 		case evt := <-destinationAddedC:
 			ui.app.QueueUpdateDraw(func() {
 				ui.handleDestinationAdded(evt.(event.DestinationAddedEvent))
+			})
+		case evt := <-startDestinationFailedC:
+			ui.app.QueueUpdateDraw(func() {
+				ui.handleStartDestinationFailed(evt.(event.StartDestinationFailedEvent))
 			})
 		case evt := <-addDestinationFailedC:
 			ui.app.QueueUpdateDraw(func() {
@@ -413,16 +418,14 @@ func (ui *UI) fkeyHandler(key tcell.Key) {
 	}
 }
 
-func (ui *UI) ShowSourceNotLiveModal() {
-	ui.app.QueueUpdateDraw(func() {
-		ui.showModal(
-			pageNameModalNotLive,
-			"Waiting for stream.\n\nStart streaming to a source URL then try again.",
-			[]string{"Ok"},
-			false,
-			nil,
-		)
-	})
+func (ui *UI) handleStartDestinationFailed(event.StartDestinationFailedEvent) {
+	ui.showModal(
+		pageNameModalStartDestinationFailed,
+		"Waiting for stream.\n\nStart streaming to a source URL then try again.",
+		[]string{"Ok"},
+		false,
+		nil,
+	)
 }
 
 // ShowStartupCheckModal shows a modal dialog to the user, asking if they want
@@ -592,21 +595,21 @@ func (ui *UI) updateProgressModal(container domain.Container) {
 // Modals should generally have a unique name, which allows them to be stacked
 // on top of other modals.
 const (
-	pageNameMain                   = "main"
-	pageNameAddDestination         = "add-destination"
-	pageNameViewURLs               = "view-urls"
-	pageNameConfigUpdateFailed     = "modal-config-update-failed"
-	pageNameNoDestinations         = "no-destinations"
-	pageNameModalAbout             = "modal-about"
-	pageNameModalClipboard         = "modal-clipboard"
-	pageNameModalDestinationError  = "modal-destination-error"
-	pageNameModalFatalError        = "modal-fatal-error"
-	pageNameModalPullProgress      = "modal-pull-progress"
-	pageNameModalQuit              = "modal-quit"
-	pageNameModalRemoveDestination = "modal-remove-destination"
-	pageNameModalSourceError       = "modal-source-error"
-	pageNameModalStartupCheck      = "modal-startup-check"
-	pageNameModalNotLive           = "modal-not-live"
+	pageNameMain                        = "main"
+	pageNameAddDestination              = "add-destination"
+	pageNameViewURLs                    = "view-urls"
+	pageNameConfigUpdateFailed          = "modal-config-update-failed"
+	pageNameNoDestinations              = "no-destinations"
+	pageNameModalAbout                  = "modal-about"
+	pageNameModalClipboard              = "modal-clipboard"
+	pageNameModalDestinationError       = "modal-destination-error"
+	pageNameModalFatalError             = "modal-fatal-error"
+	pageNameModalPullProgress           = "modal-pull-progress"
+	pageNameModalQuit                   = "modal-quit"
+	pageNameModalRemoveDestination      = "modal-remove-destination"
+	pageNameModalSourceError            = "modal-source-error"
+	pageNameModalStartDestinationFailed = "modal-start-destination-failed"
+	pageNameModalStartupCheck           = "modal-startup-check"
 )
 
 // modalVisible returns true if any modal, including the add destination form,

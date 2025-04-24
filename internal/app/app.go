@@ -181,7 +181,7 @@ func (a *App) Run(ctx context.Context) error {
 				return nil
 			}
 
-			if !a.handleCommand(cmd, state, repl, ui) {
+			if !a.handleCommand(cmd, state, repl) {
 				return nil
 			}
 		case <-uiUpdateT.C:
@@ -209,7 +209,6 @@ func (a *App) handleCommand(
 	cmd domain.Command,
 	state *domain.AppState,
 	repl *replicator.Actor,
-	ui *terminal.UI,
 ) bool {
 	a.logger.Debug("Command received", "cmd", cmd.Name())
 	switch c := cmd.(type) {
@@ -243,7 +242,7 @@ func (a *App) handleCommand(
 		a.eventBus.Send(event.DestinationRemovedEvent{URL: c.URL})
 	case domain.CommandStartDestination:
 		if !state.Source.Live {
-			ui.ShowSourceNotLiveModal()
+			a.eventBus.Send(event.StartDestinationFailedEvent{})
 			break
 		}
 
