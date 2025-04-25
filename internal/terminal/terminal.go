@@ -305,6 +305,8 @@ func (ui *UI) run(ctx context.Context) {
 					ui.handleStartDestinationFailed(evt)
 				case event.AddDestinationFailedEvent:
 					ui.handleDestinationEventError(evt.Err)
+				case event.DestinationStreamExitedEvent:
+					ui.handleDestinationStreamExited(evt)
 				case event.DestinationRemovedEvent:
 					ui.handleDestinationRemoved(evt)
 				case event.RemoveDestinationFailedEvent:
@@ -431,20 +433,18 @@ func (ui *UI) handleOtherInstanceDetected(event.OtherInstanceDetectedEvent) {
 	)
 }
 
-func (ui *UI) ShowDestinationErrorModal(name string, err error) {
-	ui.app.QueueUpdateDraw(func() {
-		ui.showModal(
-			pageNameModalDestinationError,
-			fmt.Sprintf(
-				"Streaming to %s failed:\n\n%s",
-				cmp.Or(name, "this destination"),
-				err,
-			),
-			[]string{"Ok"},
-			true,
-			nil,
-		)
-	})
+func (ui *UI) handleDestinationStreamExited(evt event.DestinationStreamExitedEvent) {
+	ui.showModal(
+		pageNameModalDestinationError,
+		fmt.Sprintf(
+			"Streaming to %s failed:\n\n%s",
+			cmp.Or(evt.Name, "this destination"),
+			evt.Err,
+		),
+		[]string{"Ok"},
+		true,
+		nil,
+	)
 }
 
 func (ui *UI) handleFatalErrorOccurred(evt event.FatalErrorOccurredEvent) {

@@ -197,7 +197,8 @@ func (a *App) Run(ctx context.Context) error {
 			destErrors := applyReplicatorState(replState, state)
 
 			for _, destError := range destErrors {
-				handleDestError(destError, repl, ui)
+				a.eventBus.Send(event.DestinationStreamExitedEvent{Name: destError.name, Err: destError.err})
+				repl.StopDestination(destError.url)
 			}
 
 			updateUI()
@@ -314,13 +315,6 @@ func applyReplicatorState(replState replicator.State, appState *domain.AppState)
 	}
 
 	return errorsToDisplay
-}
-
-// handleDestError displays a modal to the user, and stops the destination.
-func handleDestError(destError destinationError, repl *replicator.Actor, ui *terminal.UI) {
-	ui.ShowDestinationErrorModal(destError.name, destError.err)
-
-	repl.StopDestination(destError.url)
 }
 
 // applyConfig applies the config to the app state. For now we only set the
