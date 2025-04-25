@@ -42,6 +42,7 @@ type Params struct {
 	Logger             *slog.Logger
 }
 
+// New creates a new application instance.
 func New(params Params) *App {
 	return &App{
 		cfg:                params.ConfigService.Current(),
