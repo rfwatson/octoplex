@@ -285,6 +285,7 @@ func (ui *UI) run(ctx context.Context) {
 	startDestinationFailedC := ui.eventBus.Register(event.EventNameStartDestinationFailed)
 	destinationRemovedC := ui.eventBus.Register(event.EventNameDestinationRemoved)
 	removeDestinationFailedC := ui.eventBus.Register(event.EventNameRemoveDestinationFailed)
+	existingAppDetectedC := ui.eventBus.Register(event.EventNameOtherInstanceDetected)
 	mediaServerStartedC := ui.eventBus.Register(event.EventNameMediaServerStarted)
 	fatalErrorOccurredC := ui.eventBus.Register(event.EventNameFatalErrorOccurred)
 
@@ -324,6 +325,10 @@ func (ui *UI) run(ctx context.Context) {
 		case evt := <-removeDestinationFailedC:
 			ui.app.QueueUpdateDraw(func() {
 				ui.handleDestinationEventError(evt.(event.RemoveDestinationFailedEvent).Err)
+			})
+		case evt := <-existingAppDetectedC:
+			ui.app.QueueUpdateDraw(func() {
+				ui.handleOtherInstanceDetected(evt.(event.OtherInstanceDetectedEvent))
 			})
 		case evt := <-mediaServerStartedC:
 			ui.app.QueueUpdateDraw(func() {
@@ -428,32 +433,20 @@ func (ui *UI) handleStartDestinationFailed(event.StartDestinationFailedEvent) {
 	)
 }
 
-// ShowStartupCheckModal shows a modal dialog to the user, asking if they want
-// to kill a running instance of Octoplex.
-//
-// The method will block until the user has made a choice, after which the
-// channel will receive true if the user wants to quit the other instance, or
-// false to quit this instance.
-func (ui *UI) ShowStartupCheckModal() bool {
-	done := make(chan bool)
-
-	ui.app.QueueUpdateDraw(func() {
-		ui.showModal(
-			pageNameModalStartupCheck,
-			"Another instance of Octoplex may already be running.\n\nPressing continue will close that instance. Continue?",
-			[]string{"Continue", "Exit"},
-			false,
-			func(buttonIndex int, _ string) {
-				if buttonIndex == 0 {
-					done <- true
-				} else {
-					done <- false
-				}
-			},
-		)
-	})
-
-	return <-done
+func (ui *UI) handleOtherInstanceDetected(event.OtherInstanceDetectedEvent) {
+	ui.showModal(
+		pageNameModalStartupCheck,
+		"Another instance of Octoplex may already be running.\n\nPressing continue will close that instance. Continue?",
+		[]string{"Continue", "Exit"},
+		false,
+		func(buttonIndex int, _ string) {
+			if buttonIndex == 0 {
+				ui.commandC <- domain.CommandCloseOtherInstance{}
+			} else {
+				ui.commandC <- domain.CommandQuit{}
+			}
+		},
+	)
 }
 
 func (ui *UI) ShowDestinationErrorModal(name string, err error) {

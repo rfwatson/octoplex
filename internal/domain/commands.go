@@ -41,6 +41,14 @@ func (c CommandStopDestination) Name() string {
 	return "stop_destination"
 }
 
+// CommandCloseOtherInstance closes the other instance of the application.
+type CommandCloseOtherInstance struct{}
+
+// Name implements the Command interface.
+func (c CommandCloseOtherInstance) Name() string {
+	return "close_other_instance"
+}
+
 // CommandQuit quits the app.
 type CommandQuit struct{}
 

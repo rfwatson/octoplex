@@ -154,24 +154,24 @@ func (a *App) Run(ctx context.Context) error {
 	uiUpdateT := time.NewTicker(uiUpdateInterval)
 	defer uiUpdateT.Stop()
 
-	startupCheckC := doStartupCheck(ctx, containerClient, ui.ShowStartupCheckModal)
+	startMediaServerC := make(chan struct{}, 1)
+	if ok, startupErr := doStartupCheck(ctx, containerClient, a.eventBus); startupErr != nil {
+		startupErr = fmt.Errorf("startup check: %w", startupErr)
+		a.eventBus.Send(event.FatalErrorOccurredEvent{Message: startupErr.Error()})
+		<-ui.C()
+		return startupErr
+	} else if ok {
+		startMediaServerC <- struct{}{}
+	}
 
 	for {
 		select {
-		case err := <-startupCheckC:
-			if errors.Is(err, errStartupCheckUserQuit) {
-				return nil
-			} else if err != nil {
-				return fmt.Errorf("startup check: %w", err)
-			} else {
-				startupCheckC = nil
-
-				if err = srv.Start(ctx); err != nil {
-					return fmt.Errorf("start mediaserver: %w", err)
-				}
-
-				a.eventBus.Send(event.MediaServerStartedEvent{RTMPURL: srv.RTMPURL(), RTMPSURL: srv.RTMPSURL()})
+		case <-startMediaServerC:
+			if err = srv.Start(ctx); err != nil {
+				return fmt.Errorf("start mediaserver: %w", err)
 			}
+
+			a.eventBus.Send(event.MediaServerStartedEvent{RTMPURL: srv.RTMPURL(), RTMPSURL: srv.RTMPSURL()})
 		case <-a.configService.C():
 			// No-op, config updates are handled synchronously for now.
 		case cmd, ok := <-ui.C():
@@ -181,7 +181,9 @@ func (a *App) Run(ctx context.Context) error {
 				return nil
 			}
 
-			if !a.handleCommand(cmd, state, repl) {
+			if ok, err := a.handleCommand(ctx, cmd, state, repl, containerClient, startMediaServerC); err != nil {
+				return fmt.Errorf("handle command: %w", err)
+			} else if !ok {
 				return nil
 			}
 		case <-uiUpdateT.C:
@@ -206,10 +208,13 @@ func (a *App) Run(ctx context.Context) error {
 // handleCommand handles an incoming command. It returns false if the app
 // should not continue, i.e. quit.
 func (a *App) handleCommand(
+	ctx context.Context,
 	cmd domain.Command,
 	state *domain.AppState,
 	repl *replicator.Actor,
-) bool {
+	containerClient *container.Client,
+	startMediaServerC chan struct{},
+) (bool, error) {
 	a.logger.Debug("Command received", "cmd", cmd.Name())
 	switch c := cmd.(type) {
 	case domain.CommandAddDestination:
@@ -249,11 +254,17 @@ func (a *App) handleCommand(
 		repl.StartDestination(c.URL)
 	case domain.CommandStopDestination:
 		repl.StopDestination(c.URL)
+	case domain.CommandCloseOtherInstance:
+		if err := closeOtherInstances(ctx, containerClient); err != nil {
+			return false, fmt.Errorf("close other instances: %w", err)
+		}
+
+		startMediaServerC <- struct{}{}
 	case domain.CommandQuit:
-		return false
+		return false, nil
 	}
 
-	return true
+	return true, nil
 }
 
 // handleConfigUpdate applies the config to the app state, and sends an AppStateChangedEvent.
@@ -341,40 +352,34 @@ func resolveDestinations(destinations []domain.Destination, inDestinations []con
 	return destinations[:len(inDestinations)]
 }
 
-var errStartupCheckUserQuit = errors.New("user quit startup check modal")
-
 // doStartupCheck performs a startup check to see if there are any existing app
 // containers.
 //
-// It returns a channel that will be closed, possibly after receiving an error.
-// If the error is non-nil the app must not be started. If the error is
-// [errStartupCheckUserQuit], the user voluntarily quit the startup check
-// modal.
-func doStartupCheck(ctx context.Context, containerClient *container.Client, showModal func() bool) <-chan error {
-	ch := make(chan error, 1)
+// It returns a bool if the check is clear. If the bool is false, then
+// startup should be paused until the choice selected by the user is received
+// via a command.
+func doStartupCheck(ctx context.Context, containerClient *container.Client, eventBus *event.Bus) (bool, error) {
+	if exists, err := containerClient.ContainerRunning(ctx, container.AllContainers()); err != nil {
+		return false, fmt.Errorf("check existing containers: %w", err)
+	} else if exists {
+		eventBus.Send(event.OtherInstanceDetectedEvent{})
 
-	go func() {
-		defer close(ch)
+		return false, nil
+	}
 
-		if exists, err := containerClient.ContainerRunning(ctx, container.AllContainers()); err != nil {
-			ch <- fmt.Errorf("check existing containers: %w", err)
-		} else if exists {
-			if showModal() {
-				if err = containerClient.RemoveContainers(ctx, container.AllContainers()); err != nil {
-					ch <- fmt.Errorf("remove existing containers: %w", err)
-					return
-				}
-				if err = containerClient.RemoveUnusedNetworks(ctx); err != nil {
-					ch <- fmt.Errorf("remove unused networks: %w", err)
-					return
-				}
-			} else {
-				ch <- errStartupCheckUserQuit
-			}
-		}
-	}()
+	return true, nil
+}
 
-	return ch
+func closeOtherInstances(ctx context.Context, containerClient *container.Client) error {
+	if err := containerClient.RemoveContainers(ctx, container.AllContainers()); err != nil {
+		return fmt.Errorf("remove existing containers: %w", err)
+	}
+
+	if err := containerClient.RemoveUnusedNetworks(ctx); err != nil {
+		return fmt.Errorf("remove unused networks: %w", err)
+	}
+
+	return nil
 }
 
 // buildNetAddr builds a [mediaserver.OptionalNetAddr] from the config.

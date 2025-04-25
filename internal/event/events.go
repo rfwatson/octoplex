@@ -12,6 +12,7 @@ const (
 	EventNameDestinationRemoved      Name = "destination_removed"
 	EventNameRemoveDestinationFailed Name = "remove_destination_failed"
 	EventNameFatalErrorOccurred      Name = "fatal_error_occurred"
+	EventNameOtherInstanceDetected   Name = "other_instance_detected"
 	EventNameMediaServerStarted      Name = "media_server_started"
 )
 
@@ -78,6 +79,13 @@ func (e RemoveDestinationFailedEvent) name() Name {
 // error occurs.
 type FatalErrorOccurredEvent struct {
 	Message string
+}
+
+// OtherInstanceDetectedEvent is emitted when the app launches and detects another instance.
+type OtherInstanceDetectedEvent struct{}
+
+func (e OtherInstanceDetectedEvent) name() Name {
+	return EventNameOtherInstanceDetected
 }
 
 func (e FatalErrorOccurredEvent) name() Name {
