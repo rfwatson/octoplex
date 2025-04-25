@@ -11,8 +11,8 @@ import (
 func TestBus(t *testing.T) {
 	bus := event.NewBus(testhelpers.NewTestLogger(t))
 
-	ch1 := bus.Register(event.EventNameMediaServerStarted)
-	ch2 := bus.Register(event.EventNameMediaServerStarted)
+	ch1 := bus.Register()
+	ch2 := bus.Register()
 
 	evt := event.MediaServerStartedEvent{
 		RTMPURL:  "rtmp://rtmp.example.com/live",

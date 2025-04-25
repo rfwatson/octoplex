@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -158,7 +157,6 @@ func sendKey(t *testing.T, screen tcell.SimulationScreen, key tcell.Key, ch rune
 
 	for i := 0; i < maxTries; i++ {
 		if err := screen.PostEvent(tcell.NewEventKey(key, ch, tcell.ModNone)); err != nil {
-			fmt.Printf("Error injecting rune %s, will retry in %s: %s\n", strconv.QuoteRune(ch), waitTime, err)
 			time.Sleep(waitTime)
 		} else {
 			return

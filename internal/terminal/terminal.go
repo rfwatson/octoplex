@@ -279,15 +279,7 @@ func (ui *UI) C() <-chan domain.Command {
 func (ui *UI) run(ctx context.Context) {
 	defer close(ui.commandC)
 
-	appStateChangedC := ui.eventBus.Register(event.EventNameAppStateChanged)
-	destinationAddedC := ui.eventBus.Register(event.EventNameDestinationAdded)
-	addDestinationFailedC := ui.eventBus.Register(event.EventNameAddDestinationFailed)
-	startDestinationFailedC := ui.eventBus.Register(event.EventNameStartDestinationFailed)
-	destinationRemovedC := ui.eventBus.Register(event.EventNameDestinationRemoved)
-	removeDestinationFailedC := ui.eventBus.Register(event.EventNameRemoveDestinationFailed)
-	existingAppDetectedC := ui.eventBus.Register(event.EventNameOtherInstanceDetected)
-	mediaServerStartedC := ui.eventBus.Register(event.EventNameMediaServerStarted)
-	fatalErrorOccurredC := ui.eventBus.Register(event.EventNameFatalErrorOccurred)
+	eventC := ui.eventBus.Register()
 
 	uiDone := make(chan struct{})
 	go func() {
@@ -302,41 +294,31 @@ func (ui *UI) run(ctx context.Context) {
 
 	for {
 		select {
-		case evt := <-appStateChangedC:
+		case evt := <-eventC:
 			ui.app.QueueUpdateDraw(func() {
-				ui.handleAppStateChanged(evt.(event.AppStateChangedEvent))
-			})
-		case evt := <-destinationAddedC:
-			ui.app.QueueUpdateDraw(func() {
-				ui.handleDestinationAdded(evt.(event.DestinationAddedEvent))
-			})
-		case evt := <-startDestinationFailedC:
-			ui.app.QueueUpdateDraw(func() {
-				ui.handleStartDestinationFailed(evt.(event.StartDestinationFailedEvent))
-			})
-		case evt := <-addDestinationFailedC:
-			ui.app.QueueUpdateDraw(func() {
-				ui.handleDestinationEventError(evt.(event.AddDestinationFailedEvent).Err)
-			})
-		case evt := <-destinationRemovedC:
-			ui.app.QueueUpdateDraw(func() {
-				ui.handleDestinationRemoved(evt.(event.DestinationRemovedEvent))
-			})
-		case evt := <-removeDestinationFailedC:
-			ui.app.QueueUpdateDraw(func() {
-				ui.handleDestinationEventError(evt.(event.RemoveDestinationFailedEvent).Err)
-			})
-		case evt := <-existingAppDetectedC:
-			ui.app.QueueUpdateDraw(func() {
-				ui.handleOtherInstanceDetected(evt.(event.OtherInstanceDetectedEvent))
-			})
-		case evt := <-mediaServerStartedC:
-			ui.app.QueueUpdateDraw(func() {
-				ui.handleMediaServerStarted(evt.(event.MediaServerStartedEvent))
-			})
-		case evt := <-fatalErrorOccurredC:
-			ui.app.QueueUpdateDraw(func() {
-				ui.handleFatalErrorOccurred(evt.(event.FatalErrorOccurredEvent))
+				switch evt := evt.(type) {
+				case event.AppStateChangedEvent:
+					ui.handleAppStateChanged(evt)
+				case event.DestinationAddedEvent:
+					ui.handleDestinationAdded(evt)
+				case event.StartDestinationFailedEvent:
+					ui.handleStartDestinationFailed(evt)
+				case event.AddDestinationFailedEvent:
+					ui.handleDestinationEventError(evt.Err)
+				case event.DestinationRemovedEvent:
+					ui.handleDestinationRemoved(evt)
+				case event.RemoveDestinationFailedEvent:
+					ui.handleDestinationEventError(evt.Err)
+				case event.OtherInstanceDetectedEvent:
+					ui.handleOtherInstanceDetected(evt)
+				case event.MediaServerStartedEvent:
+					ui.handleMediaServerStarted(evt)
+				case event.FatalErrorOccurredEvent:
+					ui.handleFatalErrorOccurred(evt)
+				default:
+					ui.logger.Warn("unhandled event", "event", evt)
+				}
+
 			})
 		case <-ctx.Done():
 			return
