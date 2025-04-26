@@ -1,4 +1,4 @@
-package domain
+package event
 
 // CommandAddDestination adds a destination.
 type CommandAddDestination struct {

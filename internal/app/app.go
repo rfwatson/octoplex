@@ -211,7 +211,7 @@ func (a *App) Run(ctx context.Context) error {
 // should not continue, i.e. quit.
 func (a *App) handleCommand(
 	ctx context.Context,
-	cmd domain.Command,
+	cmd event.Command,
 	state *domain.AppState,
 	repl *replicator.Actor,
 	containerClient *container.Client,
@@ -219,7 +219,7 @@ func (a *App) handleCommand(
 ) (bool, error) {
 	a.logger.Debug("Command received", "cmd", cmd.Name())
 	switch c := cmd.(type) {
-	case domain.CommandAddDestination:
+	case event.CommandAddDestination:
 		newCfg := a.cfg
 		newCfg.Destinations = append(newCfg.Destinations, config.Destination{
 			Name: c.DestinationName,
@@ -233,7 +233,7 @@ func (a *App) handleCommand(
 		a.cfg = newCfg
 		a.handleConfigUpdate(state)
 		a.eventBus.Send(event.DestinationAddedEvent{URL: c.URL})
-	case domain.CommandRemoveDestination:
+	case event.CommandRemoveDestination:
 		repl.StopDestination(c.URL) // no-op if not live
 		newCfg := a.cfg
 		newCfg.Destinations = slices.DeleteFunc(newCfg.Destinations, func(dest config.Destination) bool {
@@ -247,22 +247,22 @@ func (a *App) handleCommand(
 		a.cfg = newCfg
 		a.handleConfigUpdate(state)
 		a.eventBus.Send(event.DestinationRemovedEvent{URL: c.URL})
-	case domain.CommandStartDestination:
+	case event.CommandStartDestination:
 		if !state.Source.Live {
 			a.eventBus.Send(event.StartDestinationFailedEvent{})
 			break
 		}
 
 		repl.StartDestination(c.URL)
-	case domain.CommandStopDestination:
+	case event.CommandStopDestination:
 		repl.StopDestination(c.URL)
-	case domain.CommandCloseOtherInstance:
+	case event.CommandCloseOtherInstance:
 		if err := closeOtherInstances(ctx, containerClient); err != nil {
 			return false, fmt.Errorf("close other instances: %w", err)
 		}
 
 		startMediaServerC <- struct{}{}
-	case domain.CommandQuit:
+	case event.CommandQuit:
 		return false, nil
 	}
 
