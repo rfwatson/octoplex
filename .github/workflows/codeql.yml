@@ -1,4 +1,4 @@
-name: ci-scan
+name: codeql
 
 on:
   push:

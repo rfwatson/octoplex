@@ -1,8 +1,9 @@
 # Octoplex :octopus:
 
-![build status](https://github.com/rfwatson/octoplex/actions/workflows/build.yml/badge.svg)
-![scan status](https://github.com/rfwatson/octoplex/actions/workflows/codeql.yml/badge.svg)
+[![build status](https://github.com/rfwatson/octoplex/actions/workflows/build.yml/badge.svg)](https://github.com/rfwatson/octoplex/actions/workflows/build.yml)
+[![scan status](https://github.com/rfwatson/octoplex/actions/workflows/codeql.yml/badge.svg)](https://github.com/rfwatson/octoplex/actions/workflows/codeql.yml)
 ![GitHub Release](https://img.shields.io/github/v/release/rfwatson/octoplex)
+[![Go Report Card](https://goreportcard.com/badge/git.netflux.io/rob/octoplex)](https://goreportcard.com/report/git.netflux.io/rob/octoplex)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 Octoplex is a Docker-native live video restreamer.

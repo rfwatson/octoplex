@@ -1,4 +1,4 @@
-name: ci-build
+name: build
 run-name: Building ${{ github.ref_name }}
 on:
   push:
