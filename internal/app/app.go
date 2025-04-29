@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ type App struct {
 	cfg                config.Config
 	configService      *config.Service
 	eventBus           *event.Bus
+	dispatchC          chan event.Command
 	dockerClient       container.DockerClient
 	screen             *terminal.Screen // Screen may be nil.
 	clipboardAvailable bool
@@ -35,6 +37,7 @@ type App struct {
 type Params struct {
 	ConfigService      *config.Service
 	DockerClient       container.DockerClient
+	ChanSize           int
 	Screen             *terminal.Screen // Screen may be nil.
 	ClipboardAvailable bool
 	ConfigFilePath     string
@@ -42,12 +45,16 @@ type Params struct {
 	Logger             *slog.Logger
 }
 
+// defaultChanSize is the default size of the dispatch channel.
+const defaultChanSize = 64
+
 // New creates a new application instance.
 func New(params Params) *App {
 	return &App{
 		cfg:                params.ConfigService.Current(),
 		configService:      params.ConfigService,
 		eventBus:           event.NewBus(params.Logger.With("component", "event_bus")),
+		dispatchC:          make(chan event.Command, cmp.Or(params.ChanSize, defaultChanSize)),
 		dockerClient:       params.DockerClient,
 		screen:             params.Screen,
 		clipboardAvailable: params.ClipboardAvailable,
@@ -70,6 +77,7 @@ func (a *App) Run(ctx context.Context) error {
 
 	ui, err := terminal.StartUI(ctx, terminal.StartParams{
 		EventBus:           a.eventBus,
+		Dispatcher:         func(cmd event.Command) { a.dispatchC <- cmd },
 		Screen:             a.screen,
 		ClipboardAvailable: a.clipboardAvailable,
 		ConfigFilePath:     a.configFilePath,
@@ -107,7 +115,7 @@ func (a *App) Run(ctx context.Context) error {
 		a.eventBus.Send(event.FatalErrorOccurredEvent{Message: msg})
 
 		emptyUI()
-		<-ui.C()
+		<-a.dispatchC
 		return err
 	}
 	defer containerClient.Close()
@@ -139,7 +147,7 @@ func (a *App) Run(ctx context.Context) error {
 		err = fmt.Errorf("create mediaserver: %w", err)
 		a.eventBus.Send(event.FatalErrorOccurredEvent{Message: err.Error()})
 		emptyUI()
-		<-ui.C()
+		<-a.dispatchC
 		return err
 	}
 	defer srv.Close()
@@ -159,7 +167,7 @@ func (a *App) Run(ctx context.Context) error {
 	if ok, startupErr := doStartupCheck(ctx, containerClient, a.eventBus); startupErr != nil {
 		startupErr = fmt.Errorf("startup check: %w", startupErr)
 		a.eventBus.Send(event.FatalErrorOccurredEvent{Message: startupErr.Error()})
-		<-ui.C()
+		<-a.dispatchC
 		return startupErr
 	} else if ok {
 		startMediaServerC <- struct{}{}
@@ -175,13 +183,7 @@ func (a *App) Run(ctx context.Context) error {
 			a.eventBus.Send(event.MediaServerStartedEvent{RTMPURL: srv.RTMPURL(), RTMPSURL: srv.RTMPSURL()})
 		case <-a.configService.C():
 			// No-op, config updates are handled synchronously for now.
-		case cmd, ok := <-ui.C():
-			if !ok {
-				// TODO: keep UI open until all containers have closed
-				a.logger.Info("UI closed")
-				return nil
-			}
-
+		case cmd := <-a.dispatchC:
 			if ok, err := a.handleCommand(ctx, cmd, state, repl, containerClient, startMediaServerC); err != nil {
 				return fmt.Errorf("handle command: %w", err)
 			} else if !ok {
@@ -246,7 +248,7 @@ func (a *App) handleCommand(
 		}
 		a.cfg = newCfg
 		a.handleConfigUpdate(state)
-		a.eventBus.Send(event.DestinationRemovedEvent{URL: c.URL})
+		a.eventBus.Send(event.DestinationRemovedEvent{URL: c.URL}) //nolint:gosimple
 	case event.CommandStartDestination:
 		if !state.Source.Live {
 			a.eventBus.Send(event.StartDestinationFailedEvent{})

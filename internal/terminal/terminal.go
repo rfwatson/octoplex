@@ -42,7 +42,7 @@ const (
 // UI is responsible for managing the terminal user interface.
 type UI struct {
 	eventBus           *event.Bus
-	commandC           chan event.Command
+	dispatch           func(event.Command)
 	clipboardAvailable bool
 	configFilePath     string
 	rtmpURL, rtmpsURL  string
@@ -96,7 +96,7 @@ type ScreenCapture struct {
 // interface.
 type StartParams struct {
 	EventBus           *event.Bus
-	ChanSize           int
+	Dispatcher         func(event.Command)
 	Logger             *slog.Logger
 	ClipboardAvailable bool
 	ConfigFilePath     string
@@ -104,13 +104,8 @@ type StartParams struct {
 	Screen             *Screen // Screen may be nil.
 }
 
-const defaultChanSize = 64
-
 // StartUI starts the terminal user interface.
 func StartUI(ctx context.Context, params StartParams) (*UI, error) {
-	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
-	commandCh := make(chan event.Command, chanSize)
-
 	app := tview.NewApplication()
 
 	var screen tcell.Screen
@@ -213,8 +208,8 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	app.EnableMouse(false)
 
 	ui := &UI{
-		commandC:           commandCh,
 		eventBus:           params.EventBus,
+		dispatch:           params.Dispatcher,
 		clipboardAvailable: params.ClipboardAvailable,
 		configFilePath:     params.ConfigFilePath,
 		buildInfo:          params.BuildInfo,
@@ -271,13 +266,11 @@ func (ui *UI) renderAboutView() {
 	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]?[-]        About"), 1, 0, false)
 }
 
-// C returns a channel that receives commands from the user interface.
-func (ui *UI) C() <-chan event.Command {
-	return ui.commandC
-}
-
 func (ui *UI) run(ctx context.Context) {
-	defer close(ui.commandC)
+	defer func() {
+		// Ensure the application is stopped when the UI is closed.
+		ui.dispatch(event.CommandQuit{})
+	}()
 
 	eventC := ui.eventBus.Register()
 
@@ -425,9 +418,9 @@ func (ui *UI) handleOtherInstanceDetected(event.OtherInstanceDetectedEvent) {
 		false,
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.commandC <- event.CommandCloseOtherInstance{}
+				ui.dispatch(event.CommandCloseOtherInstance{})
 			} else {
-				ui.commandC <- event.CommandQuit{}
+				ui.dispatch(event.CommandQuit{})
 			}
 		},
 	)
@@ -457,7 +450,7 @@ func (ui *UI) handleFatalErrorOccurred(evt event.FatalErrorOccurredEvent) {
 		[]string{"Quit"},
 		false,
 		func(int, string) {
-			ui.commandC <- event.CommandQuit{}
+			ui.dispatch(event.CommandQuit{})
 		},
 	)
 }
@@ -702,7 +695,7 @@ func (ui *UI) handleMediaServerClosed(exitReason string) {
 		SetBackgroundColor(tcell.ColorBlack).
 		SetTextColor(tcell.ColorWhite).
 		SetDoneFunc(func(int, string) {
-			ui.commandC <- event.CommandQuit{}
+			ui.dispatch(event.CommandQuit{})
 		})
 	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
 
@@ -873,10 +866,10 @@ func (ui *UI) addDestination() {
 		AddInputField(inputLabelName, "My stream", inputLen, nil, nil).
 		AddInputField(inputLabelURL, "rtmp://", inputLen, nil, nil).
 		AddButton("Add", func() {
-			ui.commandC <- event.CommandAddDestination{
+			ui.dispatch(event.CommandAddDestination{
 				DestinationName: form.GetFormItemByLabel(inputLabelName).(*tview.InputField).GetText(),
 				URL:             form.GetFormItemByLabel(inputLabelURL).(*tview.InputField).GetText(),
-			}
+			})
 		}).
 		AddButton("Cancel", func() {
 			ui.closeAddDestinationForm()
@@ -931,7 +924,7 @@ func (ui *UI) removeDestination() {
 		false,
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.commandC <- event.CommandRemoveDestination{URL: url}
+				ui.dispatch(event.CommandRemoveDestination{URL: url})
 			}
 		},
 	)
@@ -1007,12 +1000,12 @@ func (ui *UI) toggleDestination() {
 	switch ss {
 	case startStateNotStarted:
 		ui.urlsToStartState[url] = startStateStarting
-		ui.commandC <- event.CommandStartDestination{URL: url}
+		ui.dispatch(event.CommandStartDestination{URL: url})
 	case startStateStarting:
 		// do nothing
 		return
 	case startStateStarted:
-		ui.commandC <- event.CommandStopDestination{URL: url}
+		ui.dispatch(event.CommandStopDestination{URL: url})
 	}
 }
 
@@ -1065,7 +1058,7 @@ func (ui *UI) confirmQuit() {
 		false,
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.commandC <- event.CommandQuit{}
+				ui.dispatch(event.CommandQuit{})
 			}
 		},
 	)
