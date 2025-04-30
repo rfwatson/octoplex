@@ -486,10 +486,6 @@ func (ui *UI) captureScreen(screen tcell.Screen) {
 func (ui *UI) handleAppStateChanged(evt event.AppStateChangedEvent) {
 	state := evt.State
 
-	if state.Source.ExitReason != "" {
-		ui.handleMediaServerClosed(state.Source.ExitReason)
-	}
-
 	ui.updatePullProgress(state)
 
 	ui.mu.Lock()
@@ -682,24 +678,6 @@ func (ui *UI) hideModal(pageName string) {
 
 	ui.pages.RemovePage(pageName)
 	ui.app.SetFocus(ui.destView)
-}
-
-func (ui *UI) handleMediaServerClosed(exitReason string) {
-	if ui.pages.HasPage(pageNameModalSourceError) {
-		return
-	}
-
-	modal := tview.NewModal()
-	modal.SetText("Mediaserver error: " + exitReason).
-		AddButtons([]string{"Quit"}).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetTextColor(tcell.ColorWhite).
-		SetDoneFunc(func(int, string) {
-			ui.dispatch(event.CommandQuit{})
-		})
-	modal.SetBorderStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorWhite))
-
-	ui.pages.AddPage(pageNameModalSourceError, modal, true, true)
 }
 
 const dash = "—"
