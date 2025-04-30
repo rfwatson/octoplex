@@ -27,6 +27,7 @@ type App struct {
 	dispatchC          chan event.Command
 	dockerClient       container.DockerClient
 	screen             *terminal.Screen // Screen may be nil.
+	headless           bool
 	clipboardAvailable bool
 	configFilePath     string
 	buildInfo          domain.BuildInfo
@@ -39,6 +40,7 @@ type Params struct {
 	DockerClient       container.DockerClient
 	ChanSize           int
 	Screen             *terminal.Screen // Screen may be nil.
+	Headless           bool
 	ClipboardAvailable bool
 	ConfigFilePath     string
 	BuildInfo          domain.BuildInfo
@@ -57,6 +59,7 @@ func New(params Params) *App {
 		dispatchC:          make(chan event.Command, cmp.Or(params.ChanSize, defaultChanSize)),
 		dockerClient:       params.DockerClient,
 		screen:             params.Screen,
+		headless:           params.Headless,
 		clipboardAvailable: params.ClipboardAvailable,
 		configFilePath:     params.ConfigFilePath,
 		buildInfo:          params.BuildInfo,
@@ -75,19 +78,21 @@ func (a *App) Run(ctx context.Context) error {
 		return errors.New("config: either sources.mediaServer.rtmp.enabled or sources.mediaServer.rtmps.enabled must be set")
 	}
 
-	ui, err := terminal.StartUI(ctx, terminal.StartParams{
-		EventBus:           a.eventBus,
-		Dispatcher:         func(cmd event.Command) { a.dispatchC <- cmd },
-		Screen:             a.screen,
-		ClipboardAvailable: a.clipboardAvailable,
-		ConfigFilePath:     a.configFilePath,
-		BuildInfo:          a.buildInfo,
-		Logger:             a.logger.With("component", "ui"),
-	})
-	if err != nil {
-		return fmt.Errorf("start terminal user interface: %w", err)
+	if !a.headless {
+		ui, err := terminal.StartUI(ctx, terminal.StartParams{
+			EventBus:           a.eventBus,
+			Dispatcher:         func(cmd event.Command) { a.dispatchC <- cmd },
+			Screen:             a.screen,
+			ClipboardAvailable: a.clipboardAvailable,
+			ConfigFilePath:     a.configFilePath,
+			BuildInfo:          a.buildInfo,
+			Logger:             a.logger.With("component", "ui"),
+		})
+		if err != nil {
+			return fmt.Errorf("start terminal user interface: %w", err)
+		}
+		defer ui.Close()
 	}
-	defer ui.Close()
 
 	// emptyUI is a dummy function that sets the UI state to an empty state, and
 	// re-renders the screen.
@@ -102,6 +107,19 @@ func (a *App) Run(ctx context.Context) error {
 		a.eventBus.Send(event.AppStateChangedEvent{State: domain.AppState{}})
 	}
 
+	// doFatalError publishes a fatal error to the event bus, waiting for the
+	// user to acknowledge it if not in headless mode.
+	doFatalError := func(msg string) {
+		a.eventBus.Send(event.FatalErrorOccurredEvent{Message: msg})
+
+		if a.headless {
+			return
+		}
+
+		emptyUI()
+		<-a.dispatchC
+	}
+
 	containerClient, err := container.NewClient(ctx, a.dockerClient, a.logger.With("component", "container_client"))
 	if err != nil {
 		err = fmt.Errorf("create container client: %w", err)
@@ -112,10 +130,7 @@ func (a *App) Run(ctx context.Context) error {
 		} else {
 			msg = err.Error()
 		}
-		a.eventBus.Send(event.FatalErrorOccurredEvent{Message: msg})
-
-		emptyUI()
-		<-a.dispatchC
+		doFatalError(msg)
 		return err
 	}
 	defer containerClient.Close()
@@ -145,9 +160,7 @@ func (a *App) Run(ctx context.Context) error {
 	})
 	if err != nil {
 		err = fmt.Errorf("create mediaserver: %w", err)
-		a.eventBus.Send(event.FatalErrorOccurredEvent{Message: err.Error()})
-		emptyUI()
-		<-a.dispatchC
+		doFatalError(err.Error())
 		return err
 	}
 	defer srv.Close()
@@ -164,17 +177,21 @@ func (a *App) Run(ctx context.Context) error {
 	defer uiUpdateT.Stop()
 
 	startMediaServerC := make(chan struct{}, 1)
-	if ok, startupErr := doStartupCheck(ctx, containerClient, a.eventBus); startupErr != nil {
-		startupErr = fmt.Errorf("startup check: %w", startupErr)
-		a.eventBus.Send(event.FatalErrorOccurredEvent{Message: startupErr.Error()})
-		<-a.dispatchC
-		return startupErr
-	} else if ok {
+	if a.headless { // disable startup check in headless mode for now
 		startMediaServerC <- struct{}{}
+	} else {
+		if ok, startupErr := doStartupCheck(ctx, containerClient, a.eventBus); startupErr != nil {
+			doFatalError(startupErr.Error())
+			return startupErr
+		} else if ok {
+			startMediaServerC <- struct{}{}
+		}
 	}
 
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-startMediaServerC:
 			if err = srv.Start(ctx); err != nil {
 				return fmt.Errorf("start mediaserver: %w", err)
@@ -193,6 +210,12 @@ func (a *App) Run(ctx context.Context) error {
 			updateUI()
 		case serverState := <-srv.C():
 			a.logger.Debug("Server state received", "state", serverState)
+
+			if serverState.ExitReason != "" {
+				doFatalError(serverState.ExitReason)
+				return errors.New("media server exited")
+			}
+
 			applyServerState(serverState, state)
 			updateUI()
 		case replState := <-repl.C():

@@ -3,11 +3,14 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
+	"os/signal"
 	"runtime/debug"
 	"syscall"
 
@@ -27,16 +30,25 @@ var (
 	date string
 )
 
-func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+var errShutdown = errors.New("shutdown")
 
-	if err := run(ctx); err != nil {
+func main() {
+	var exitStatus int
+
+	if err := run(); errors.Is(err, errShutdown) {
+		exitStatus = 130
+	} else if err != nil {
+		exitStatus = 1
 		_, _ = os.Stderr.WriteString("Error: " + err.Error() + "\n")
 	}
+
+	os.Exit(exitStatus)
 }
 
-func run(ctx context.Context) error {
+func run() error {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
 	configService, err := config.NewDefaultService()
 	if err != nil {
 		return fmt.Errorf("build config service: %w", err)
@@ -72,9 +84,24 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("read or create config: %w", err)
 	}
-	logger, err := buildLogger(cfg.LogFile)
+
+	headless := os.Getenv("OCTO_HEADLESS") != ""
+	logger, err := buildLogger(cfg.LogFile, headless)
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
+	}
+
+	if headless {
+		// When running in headless mode tview doesn't handle SIGINT for us.
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+
+		go func() {
+			<-ch
+			logger.Info("Received interrupt signal, exiting")
+			signal.Stop(ch)
+			cancel(errShutdown)
+		}()
 	}
 
 	var clipboardAvailable bool
@@ -100,6 +127,7 @@ func run(ctx context.Context) error {
 	app := app.New(app.Params{
 		ConfigService:      configService,
 		DockerClient:       dockerClient,
+		Headless:           headless,
 		ClipboardAvailable: clipboardAvailable,
 		ConfigFilePath:     configService.Path(),
 		BuildInfo: domain.BuildInfo{
@@ -161,10 +189,24 @@ func printUsage() {
 	os.Stderr.WriteString("\n")
 	os.Stderr.WriteString("Additionally, Octoplex can be configured with the following environment variables:\n\n")
 	os.Stderr.WriteString("  OCTO_DEBUG    Enables debug logging if set\n")
+	os.Stderr.WriteString("  OCTO_HEADLESS Enables headless mode if set (experimental)\n\n")
 }
 
 // buildLogger builds the logger, which may be a no-op logger.
-func buildLogger(cfg config.LogFile) (*slog.Logger, error) {
+func buildLogger(cfg config.LogFile, headless bool) (*slog.Logger, error) {
+	build := func(w io.Writer) *slog.Logger {
+		var handlerOpts slog.HandlerOptions
+		if os.Getenv("OCTO_DEBUG") != "" {
+			handlerOpts.Level = slog.LevelDebug
+		}
+		return slog.New(slog.NewTextHandler(w, &handlerOpts))
+	}
+
+	// In headless mode, always log to stderr.
+	if headless {
+		return build(os.Stderr), nil
+	}
+
 	if !cfg.Enabled {
 		return slog.New(slog.DiscardHandler), nil
 	}
@@ -174,9 +216,5 @@ func buildLogger(cfg config.LogFile) (*slog.Logger, error) {
 		return nil, fmt.Errorf("error opening log file: %w", err)
 	}
 
-	var handlerOpts slog.HandlerOptions
-	if os.Getenv("OCTO_DEBUG") != "" {
-		handlerOpts.Level = slog.LevelDebug
-	}
-	return slog.New(slog.NewTextHandler(fptr, &handlerOpts)), nil
+	return build(fptr), nil
 }

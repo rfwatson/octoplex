@@ -132,7 +132,7 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.New(app.Params{
+		require.Equal(t, context.Canceled, app.New(app.Params{
 			ConfigService: configService,
 			DockerClient:  dockerClient,
 			Screen: &terminal.Screen{
@@ -319,7 +319,7 @@ func TestIntegrationCustomHost(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
+		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	time.Sleep(time.Second)
@@ -390,7 +390,7 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
+		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -471,7 +471,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
+		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -608,7 +608,7 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
+		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -681,7 +681,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
+		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -823,7 +823,7 @@ func TestIntegrationStartupCheck(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
+		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 	}()
 
 	require.EventuallyWithT(
@@ -892,13 +892,17 @@ func TestIntegrationMediaServerError(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
+		require.EqualError(
+			t,
+			app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx),
+			"media server exited",
+		)
 	}()
 
 	require.EventuallyWithT(
 		t,
 		func(c *assert.CollectT) {
-			assert.True(c, contentsIncludes(getContents(), "Mediaserver error: Server process exited unexpectedly."), "expected to see title")
+			assert.True(c, contentsIncludes(getContents(), "Server process exited unexpectedly."), "expected to see title")
 			assert.True(c, contentsIncludes(getContents(), "address already in use"), "expected to see message")
 		},
 		waitTime,
@@ -1069,7 +1073,7 @@ func TestIntegrationCopyURLs(t *testing.T) {
 					done <- struct{}{}
 				}()
 
-				require.NoError(t, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
+				require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
 			}()
 
 			time.Sleep(3 * time.Second)
