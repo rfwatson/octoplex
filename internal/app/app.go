@@ -184,10 +184,10 @@ func (a *App) Run(ctx context.Context) error {
 		case <-a.configService.C():
 			// No-op, config updates are handled synchronously for now.
 		case cmd := <-a.dispatchC:
-			if ok, err := a.handleCommand(ctx, cmd, state, repl, containerClient, startMediaServerC); err != nil {
-				return fmt.Errorf("handle command: %w", err)
-			} else if !ok {
+			if _, err := a.handleCommand(ctx, cmd, state, repl, containerClient, startMediaServerC); errors.Is(err, errExit) {
 				return nil
+			} else if err != nil {
+				return fmt.Errorf("handle command: %w", err)
 			}
 		case <-uiUpdateT.C:
 			updateUI()
@@ -209,8 +209,28 @@ func (a *App) Run(ctx context.Context) error {
 	}
 }
 
-// handleCommand handles an incoming command. It returns false if the app
-// should not continue, i.e. quit.
+type syncCommand struct {
+	event.Command
+
+	done chan<- event.Event
+}
+
+// Dispatch dispatches a command to be executed synchronously.
+func (a *App) Dispatch(cmd event.Command) event.Event {
+	ch := make(chan event.Event, 1)
+	a.dispatchC <- syncCommand{Command: cmd, done: ch}
+	return <-ch
+}
+
+// errExit is an error that indicates the app should exit.
+var errExit = errors.New("exit")
+
+// handleCommand handles an incoming command. It may return an Event which will
+// already have been published to the event bus, but which is returned for the
+// benefit of synchronous callers. The event may be nil. It may also publish
+// other events to the event bus which are not returned. Currently the only
+// error that may be returned is [errExit], which indicates to the main event
+// loop that the app should exit.
 func (a *App) handleCommand(
 	ctx context.Context,
 	cmd event.Command,
@@ -218,8 +238,17 @@ func (a *App) handleCommand(
 	repl *replicator.Actor,
 	containerClient *container.Client,
 	startMediaServerC chan struct{},
-) (bool, error) {
+) (evt event.Event, _ error) {
 	a.logger.Debug("Command received", "cmd", cmd.Name())
+	defer func() {
+		if evt != nil {
+			a.eventBus.Send(evt)
+		}
+		if c, ok := cmd.(syncCommand); ok {
+			c.done <- evt
+		}
+	}()
+
 	switch c := cmd.(type) {
 	case event.CommandAddDestination:
 		newCfg := a.cfg
@@ -229,8 +258,7 @@ func (a *App) handleCommand(
 		})
 		if err := a.configService.SetConfig(newCfg); err != nil {
 			a.logger.Error("Add destination failed", "err", err)
-			a.eventBus.Send(event.AddDestinationFailedEvent{Err: err})
-			break
+			return event.AddDestinationFailedEvent{Err: err}, nil
 		}
 		a.cfg = newCfg
 		a.handleConfigUpdate(state)
@@ -260,15 +288,15 @@ func (a *App) handleCommand(
 		repl.StopDestination(c.URL)
 	case event.CommandCloseOtherInstance:
 		if err := closeOtherInstances(ctx, containerClient); err != nil {
-			return false, fmt.Errorf("close other instances: %w", err)
+			return nil, fmt.Errorf("close other instances: %w", err)
 		}
 
 		startMediaServerC <- struct{}{}
 	case event.CommandQuit:
-		return false, nil
+		return nil, errExit
 	}
 
-	return true, nil
+	return nil, nil
 }
 
 // handleConfigUpdate applies the config to the app state, and sends an AppStateChangedEvent.
