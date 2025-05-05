@@ -40,12 +40,25 @@ brews:
       system "#{bin}/octoplex -h"
 
 release:
+  draft: true
   github:
     owner: rfwatson
     name: octoplex
 
 changelog:
   use: github
+  groups:
+    - title: New Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "Bug fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: "Refactorings"
+      regexp: '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
   filters:
     exclude:
       - "^doc:"
