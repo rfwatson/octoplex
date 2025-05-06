@@ -6,6 +6,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/event"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBus(t *testing.T) {
@@ -25,5 +26,19 @@ func TestBus(t *testing.T) {
 	}()
 
 	assert.Equal(t, evt, (<-ch1).(event.MediaServerStartedEvent))
+	assert.Equal(t, evt, (<-ch1).(event.MediaServerStartedEvent))
+
 	assert.Equal(t, evt, (<-ch2).(event.MediaServerStartedEvent))
+	assert.Equal(t, evt, (<-ch2).(event.MediaServerStartedEvent))
+
+	bus.Deregister(ch1)
+
+	_, ok := <-ch1
+	assert.False(t, ok)
+
+	select {
+	case <-ch2:
+		require.Fail(t, "ch2 should be blocking")
+	default:
+	}
 }

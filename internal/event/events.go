@@ -19,7 +19,7 @@ const (
 
 // Event represents something which happened in the appllication.
 type Event interface {
-	name() Name
+	EventName() Name
 }
 
 // AppStateChangedEvent is emitted when the application state changes.
@@ -27,7 +27,7 @@ type AppStateChangedEvent struct {
 	State domain.AppState
 }
 
-func (e AppStateChangedEvent) name() Name {
+func (e AppStateChangedEvent) EventName() Name {
 	return EventNameAppStateChanged
 }
 
@@ -36,16 +36,17 @@ type DestinationAddedEvent struct {
 	URL string
 }
 
-func (e DestinationAddedEvent) name() Name {
+func (e DestinationAddedEvent) EventName() Name {
 	return EventNameDestinationAdded
 }
 
 // AddDestinationFailedEvent is emitted when a destination fails to be added.
 type AddDestinationFailedEvent struct {
+	URL string
 	Err error
 }
 
-func (e AddDestinationFailedEvent) name() Name {
+func (e AddDestinationFailedEvent) EventName() Name {
 	return EventNameAddDestinationFailed
 }
 
@@ -55,14 +56,17 @@ type DestinationStreamExitedEvent struct {
 	Err  error
 }
 
-func (e DestinationStreamExitedEvent) name() Name {
+func (e DestinationStreamExitedEvent) EventName() Name {
 	return EventNameDestinationStreamExited
 }
 
 // StartDestinationFailedEvent is emitted when a destination fails to start.
-type StartDestinationFailedEvent struct{}
+type StartDestinationFailedEvent struct {
+	URL     string
+	Message string
+}
 
-func (e StartDestinationFailedEvent) name() Name {
+func (e StartDestinationFailedEvent) EventName() Name {
 	return EventNameStartDestinationFailed
 }
 
@@ -72,17 +76,18 @@ type DestinationRemovedEvent struct {
 	URL string
 }
 
-func (e DestinationRemovedEvent) name() Name {
+func (e DestinationRemovedEvent) EventName() Name {
 	return EventNameDestinationRemoved
 }
 
 // RemoveDestinationFailedEvent is emitted when a destination fails to be
 // removed.
 type RemoveDestinationFailedEvent struct {
+	URL string
 	Err error
 }
 
-func (e RemoveDestinationFailedEvent) name() Name {
+func (e RemoveDestinationFailedEvent) EventName() Name {
 	return EventNameRemoveDestinationFailed
 }
 
@@ -95,11 +100,11 @@ type FatalErrorOccurredEvent struct {
 // OtherInstanceDetectedEvent is emitted when the app launches and detects another instance.
 type OtherInstanceDetectedEvent struct{}
 
-func (e OtherInstanceDetectedEvent) name() Name {
+func (e OtherInstanceDetectedEvent) EventName() Name {
 	return EventNameOtherInstanceDetected
 }
 
-func (e FatalErrorOccurredEvent) name() Name {
+func (e FatalErrorOccurredEvent) EventName() Name {
 	return "fatal_error_occurred"
 }
 
@@ -109,6 +114,6 @@ type MediaServerStartedEvent struct {
 	RTMPSURL string
 }
 
-func (e MediaServerStartedEvent) name() Name {
+func (e MediaServerStartedEvent) EventName() Name {
 	return "media_server_started"
 }

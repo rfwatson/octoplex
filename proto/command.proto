@@ -1,0 +1,33 @@
+syntax = "proto3";
+package api;
+
+option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc";
+
+message Command {
+  oneof command_type {
+    AddDestinationCommand add_destination = 1;
+    RemoveDestinationCommand remove_destination = 2;
+    StartDestinationCommand start_destination = 3;
+    StopDestinationCommand stop_destination = 4;
+    CloseOtherInstancesCommand close_other_instances = 5;
+    KillServerCommand kill_server = 6;
+    StartHandshakeCommand start_handshake = 7;
+  }
+}
+
+message AddDestinationCommand {
+  string name = 1;
+  string url = 2;
+}
+
+message RemoveDestinationCommand { string url = 1; }
+
+message StartDestinationCommand { string url = 1; }
+
+message StopDestinationCommand { string url = 1; }
+
+message CloseOtherInstancesCommand {}
+
+message KillServerCommand {}
+
+message StartHandshakeCommand {};

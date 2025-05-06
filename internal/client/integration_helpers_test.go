@@ -1,9 +1,11 @@
 //go:build integration
 
-package app_test
+package client_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,39 +16,79 @@ import (
 	"testing"
 	"time"
 
-	"git.netflux.io/rob/octoplex/internal/app"
+	"git.netflux.io/rob/octoplex/internal/client"
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/server"
 	"git.netflux.io/rob/octoplex/internal/terminal"
 	"github.com/gdamore/tcell/v2"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"golang.org/x/sync/errgroup"
 )
 
-func buildAppParams(
-	t *testing.T,
+func buildClientServer(
 	configService *config.Service,
 	dockerClient container.DockerClient,
 	screen tcell.SimulationScreen,
 	screenCaptureC chan<- terminal.ScreenCapture,
 	logger *slog.Logger,
-) app.Params {
-	t.Helper()
-
-	return app.Params{
-		ConfigService: configService,
-		DockerClient:  dockerClient,
+) (*client.App, *server.App) {
+	client := client.New(client.NewParams{
+		BuildInfo: domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
 		Screen: &terminal.Screen{
 			Screen:   screen,
 			Width:    180,
 			Height:   25,
 			CaptureC: screenCaptureC,
 		},
-		ClipboardAvailable: false,
-		BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
-		Logger:             logger,
-	}
+		Logger: logger,
+	})
+
+	server := server.New(server.Params{
+		ConfigService: configService,
+		DockerClient:  dockerClient,
+		WaitForClient: true,
+		Logger:        logger,
+	})
+
+	return client, server
+}
+
+type clientServerResult struct {
+	errClient error
+	errServer error
+}
+
+func runClientServer(
+	ctx context.Context,
+	_ *testing.T,
+	clientApp *client.App,
+	serverApp *server.App,
+) <-chan clientServerResult {
+	ch := make(chan clientServerResult, 1)
+
+	g, ctx := errgroup.WithContext(ctx)
+	var clientErr, srvErr error
+
+	g.Go(func() error {
+		srvErr = serverApp.Run(ctx)
+		return errors.New("server closed")
+	})
+
+	g.Go(func() error {
+		clientErr = clientApp.Run(ctx)
+		return errors.New("client closed")
+	})
+
+	go func() {
+		_ = g.Wait()
+
+		ch <- clientServerResult{errClient: clientErr, errServer: srvErr}
+	}()
+
+	return ch
 }
 
 func setupSimulationScreen(t *testing.T) (tcell.SimulationScreen, chan<- terminal.ScreenCapture, func() []string) {

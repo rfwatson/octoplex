@@ -2,6 +2,7 @@ package event
 
 import (
 	"log/slog"
+	"slices"
 	"sync"
 )
 
@@ -31,6 +32,21 @@ func (b *Bus) Register() <-chan Event {
 	return ch
 }
 
+// Deregister deregisters a consumer for all events.
+func (b *Bus) Deregister(ch <-chan Event) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.consumers = slices.DeleteFunc(b.consumers, func(other chan Event) bool {
+		if ch == other {
+			close(other)
+			return true
+		}
+
+		return false
+	})
+}
+
 // Send sends an event to all registered consumers.
 func (b *Bus) Send(evt Event) {
 	// The mutex is needed to ensure the backing array of b.consumers cannot be
@@ -43,7 +59,7 @@ func (b *Bus) Send(evt Event) {
 		select {
 		case ch <- evt:
 		default:
-			b.logger.Warn("Event dropped", "name", evt.name())
+			b.logger.Warn("Event dropped", "name", evt.EventName())
 		}
 	}
 }

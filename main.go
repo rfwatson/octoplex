@@ -4,21 +4,23 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
 	"syscall"
 
-	"git.netflux.io/rob/octoplex/internal/app"
+	"git.netflux.io/rob/octoplex/internal/client"
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/server"
 	dockerclient "github.com/docker/docker/client"
+	"github.com/urfave/cli/v2"
 	"golang.design/x/clipboard"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -30,23 +32,108 @@ var (
 	date string
 )
 
-var errShutdown = errors.New("shutdown")
+// errInterrupt is an error type that indicates an interrupt signal was
+// received.
+type errInterrupt struct{}
 
-func main() {
-	var exitStatus int
-
-	if err := run(); errors.Is(err, errShutdown) {
-		exitStatus = 130
-	} else if err != nil {
-		exitStatus = 1
-		_, _ = os.Stderr.WriteString("Error: " + err.Error() + "\n")
-	}
-
-	os.Exit(exitStatus)
+// Error implements the error interface.
+func (e errInterrupt) Error() string {
+	return "interrupt signal received"
 }
 
-func run() error {
-	ctx, cancel := context.WithCancelCause(context.Background())
+// ExitCode implements the ExitCoder interface.
+func (e errInterrupt) ExitCode() int {
+	return 130
+}
+
+func main() {
+	app := &cli.App{
+		Name:  "Octoplex",
+		Usage: "Octoplex is a live video restreamer for Docker.",
+		Commands: []*cli.Command{
+			{
+				Name:  "client",
+				Usage: "Run the client",
+				Action: func(c *cli.Context) error {
+					return runClient(c.Context, c)
+				},
+			},
+			{
+				Name:  "server",
+				Usage: "Run the server",
+				Action: func(c *cli.Context) error {
+					return runServer(c.Context, c, serverConfig{
+						stderrAvailable: true,
+						handleSigInt:    true,
+						waitForClient:   false,
+					})
+				},
+			},
+			{
+				Name:  "run",
+				Usage: "Run server and client together (testing)",
+				Action: func(c *cli.Context) error {
+					return runClientAndServer(c)
+				},
+			},
+		},
+	}
+
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runClient(ctx context.Context, _ *cli.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// TODO: logger from config
+	fptr, err := os.OpenFile("octoplex.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		return fmt.Errorf("open log file: %w", err)
+	}
+	logger := slog.New(slog.NewTextHandler(fptr, nil))
+	logger.Info("Starting client", "version", cmp.Or(version, "devel"), "commit", cmp.Or(commit, "unknown"), "date", cmp.Or(date, "unknown"), "go_version", runtime.Version())
+
+	var clipboardAvailable bool
+	if err = clipboard.Init(); err != nil {
+		logger.Warn("Clipboard not available", "err", err)
+	} else {
+		clipboardAvailable = true
+	}
+
+	buildInfo, ok := debug.ReadBuildInfo()
+	if !ok {
+		return fmt.Errorf("read build info: %w", err)
+	}
+
+	app := client.New(client.NewParams{
+		ClipboardAvailable: clipboardAvailable,
+		BuildInfo: domain.BuildInfo{
+			GoVersion: buildInfo.GoVersion,
+			Version:   version,
+			Commit:    commit,
+			Date:      date,
+		},
+		Logger: logger,
+	})
+	if err := app.Run(ctx); err != nil {
+		return fmt.Errorf("run app: %w", err)
+	}
+
+	return nil
+}
+
+type serverConfig struct {
+	stderrAvailable bool
+	handleSigInt    bool
+	waitForClient   bool
+}
+
+func runServer(ctx context.Context, _ *cli.Context, serverCfg serverConfig) error {
+	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 
 	configService, err := config.NewDefaultService()
@@ -54,45 +141,35 @@ func run() error {
 		return fmt.Errorf("build config service: %w", err)
 	}
 
-	help := flag.Bool("h", false, "Show help")
-
-	flag.Parse()
-
-	if *help {
-		printUsage()
-		return nil
-	}
-
-	if narg := flag.NArg(); narg > 1 {
-		printUsage()
-		return fmt.Errorf("too many arguments")
-	} else if narg == 1 {
-		switch flag.Arg(0) {
-		case "edit-config":
-			return editConfigFile(configService)
-		case "print-config":
-			return printConfigPath(configService.Path())
-		case "version":
-			return printVersion()
-		case "help":
-			printUsage()
-			return nil
-		}
-	}
-
 	cfg, err := configService.ReadOrCreateConfig()
 	if err != nil {
 		return fmt.Errorf("read or create config: %w", err)
 	}
 
-	headless := os.Getenv("OCTO_HEADLESS") != ""
-	logger, err := buildLogger(cfg.LogFile, headless)
-	if err != nil {
-		return fmt.Errorf("build logger: %w", err)
+	// TODO: improve logger API
+	// Currently it's a bit complicated because we can only use stdout - the
+	// preferred destination - if the client is not running. Otherwise we
+	// fallback to the legacy configuration but this should be bought more
+	// in-line with the client/server split.
+	var w io.Writer
+	if serverCfg.stderrAvailable {
+		w = os.Stdout
+	} else if !cfg.LogFile.Enabled {
+		w = io.Discard
+	} else {
+		w, err = os.OpenFile(cfg.LogFile.GetPath(), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			return fmt.Errorf("error opening log file: %w", err)
+		}
 	}
 
-	if headless {
-		// When running in headless mode tview doesn't handle SIGINT for us.
+	var handlerOpts slog.HandlerOptions
+	if os.Getenv("OCTO_DEBUG") != "" {
+		handlerOpts.Level = slog.LevelDebug
+	}
+	logger := slog.New(slog.NewTextHandler(w, &handlerOpts))
+
+	if serverCfg.handleSigInt {
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 
@@ -100,15 +177,8 @@ func run() error {
 			<-ch
 			logger.Info("Received interrupt signal, exiting")
 			signal.Stop(ch)
-			cancel(errShutdown)
+			cancel(errInterrupt{})
 		}()
-	}
-
-	var clipboardAvailable bool
-	if err = clipboard.Init(); err != nil {
-		logger.Warn("Clipboard not available", "err", err)
-	} else {
-		clipboardAvailable = true
 	}
 
 	dockerClient, err := dockerclient.NewClientWithOpts(
@@ -119,102 +189,64 @@ func run() error {
 		return fmt.Errorf("new docker client: %w", err)
 	}
 
-	buildInfo, ok := debug.ReadBuildInfo()
-	if !ok {
-		return fmt.Errorf("read build info: %w", err)
-	}
-
-	app := app.New(app.Params{
-		ConfigService:      configService,
-		DockerClient:       dockerClient,
-		Headless:           headless,
-		ClipboardAvailable: clipboardAvailable,
-		ConfigFilePath:     configService.Path(),
-		BuildInfo: domain.BuildInfo{
-			GoVersion: buildInfo.GoVersion,
-			Version:   version,
-			Commit:    commit,
-			Date:      date,
-		},
-		Logger: logger,
+	app := server.New(server.Params{
+		ConfigService:  configService,
+		DockerClient:   dockerClient,
+		ConfigFilePath: configService.Path(),
+		WaitForClient:  serverCfg.waitForClient,
+		Logger:         logger,
 	})
 
-	return app.Run(ctx)
-}
+	logger.Info(
+		"Starting server",
+		"version",
+		cmp.Or(version, "devel"),
+		"commit",
+		cmp.Or(commit, "unknown"),
+		"date",
+		cmp.Or(date, "unknown"),
+		"go_version",
+		runtime.Version(),
+	)
 
-// editConfigFile opens the config file in the user's editor.
-func editConfigFile(configService *config.Service) error {
-	if _, err := configService.ReadOrCreateConfig(); err != nil {
-		return fmt.Errorf("read or create config: %w", err)
-	}
-
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "vi"
-	}
-	binary, err := exec.LookPath(editor)
-	if err != nil {
-		return fmt.Errorf("look path: %w", err)
-	}
-
-	fmt.Fprintf(os.Stderr, "Editing config file: %s\n", configService.Path())
-	fmt.Println(binary)
-
-	if err := syscall.Exec(binary, []string{"--", configService.Path()}, os.Environ()); err != nil {
-		return fmt.Errorf("exec: %w", err)
-	}
-
-	return nil
-}
-
-// printConfigPath prints the path to the config file to stderr.
-func printConfigPath(configPath string) error {
-	fmt.Fprintln(os.Stderr, configPath)
-	return nil
-}
-
-// printVersion prints the version of the application to stderr.
-func printVersion() error {
-	fmt.Fprintf(os.Stderr, "%s version %s\n", domain.AppName, cmp.Or(version, "0.0.0-dev"))
-	return nil
-}
-
-func printUsage() {
-	os.Stderr.WriteString("Usage: octoplex [command]\n\n")
-	os.Stderr.WriteString("Commands:\n\n")
-	os.Stderr.WriteString("  edit-config   Edit the config file\n")
-	os.Stderr.WriteString("  print-config  Print the path to the config file\n")
-	os.Stderr.WriteString("  version       Print the version of the application\n")
-	os.Stderr.WriteString("  help          Print this help message\n")
-	os.Stderr.WriteString("\n")
-	os.Stderr.WriteString("Additionally, Octoplex can be configured with the following environment variables:\n\n")
-	os.Stderr.WriteString("  OCTO_DEBUG    Enables debug logging if set\n")
-	os.Stderr.WriteString("  OCTO_HEADLESS Enables headless mode if set (experimental)\n\n")
-}
-
-// buildLogger builds the logger, which may be a no-op logger.
-func buildLogger(cfg config.LogFile, headless bool) (*slog.Logger, error) {
-	build := func(w io.Writer) *slog.Logger {
-		var handlerOpts slog.HandlerOptions
-		if os.Getenv("OCTO_DEBUG") != "" {
-			handlerOpts.Level = slog.LevelDebug
+	if err := app.Run(ctx); err != nil {
+		if errors.Is(err, context.Canceled) && errors.Is(context.Cause(ctx), errInterrupt{}) {
+			return context.Cause(ctx)
 		}
-		return slog.New(slog.NewTextHandler(w, &handlerOpts))
+		return err
 	}
 
-	// In headless mode, always log to stderr.
-	if headless {
-		return build(os.Stderr), nil
-	}
+	return nil
+}
 
-	if !cfg.Enabled {
-		return slog.New(slog.DiscardHandler), nil
-	}
+func runClientAndServer(c *cli.Context) error {
+	errNoErr := errors.New("no error")
 
-	fptr, err := os.OpenFile(cfg.GetPath(), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		return nil, fmt.Errorf("error opening log file: %w", err)
-	}
+	g, ctx := errgroup.WithContext(c.Context)
 
-	return build(fptr), nil
+	g.Go(func() error {
+		if err := runClient(ctx, c); err != nil {
+			return err
+		}
+
+		return errNoErr
+	})
+
+	g.Go(func() error {
+		if err := runServer(ctx, c, serverConfig{
+			stderrAvailable: false,
+			handleSigInt:    false,
+			waitForClient:   true,
+		}); err != nil {
+			return err
+		}
+
+		return errNoErr
+	})
+
+	if err := g.Wait(); err == errNoErr {
+		return nil
+	} else {
+		return err
+	}
 }

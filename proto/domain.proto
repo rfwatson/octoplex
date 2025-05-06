@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package api;
+option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc";
+
+import "google/protobuf/timestamp.proto";
+
+message Container {
+  string id = 1;
+  string status = 2;
+  string health_state = 3;
+  double cpu_percent = 4;
+  uint64 memory_usage_bytes = 5;
+  int32 rx_rate = 6;
+  int32 tx_rate = 7;
+  google.protobuf.Timestamp rx_since = 8;
+  string image_name = 9;
+  string pull_status = 10;
+  string pull_progress = 11;
+  int32 pull_percent = 12;
+  int32 restart_count = 13;
+  optional int32 exit_code = 14;
+  string err = 15;
+}
+
+message Source {
+  Container container = 1;
+  bool live = 2;
+  google.protobuf.Timestamp live_changed_at = 3;
+  repeated string tracks = 4;
+  string exit_reason = 5;
+}
+
+message Destination {
+  enum Status {
+    STATUS_OFF_AIR = 0;
+    STATUS_STARTING = 1;
+    STATUS_LIVE = 2;
+  }
+
+  Container container = 1;
+  Status status = 2;
+  string name = 3;
+  string url = 4;
+}
+
+message BuildInfo {
+  string go_version = 1;
+  string version = 2;
+  string commit = 3;
+  string date = 4;
+}
+
+message AppState {
+  Source source = 1;
+  repeated Destination destinations = 2;
+  BuildInfo build_info = 3;
+}
