@@ -49,12 +49,12 @@ func (c CommandCloseOtherInstance) Name() string {
 	return "close_other_instance"
 }
 
-// CommandQuit quits the app.
-type CommandQuit struct{}
+// CommandKillServer kills the server.
+type CommandKillServer struct{}
 
 // Name implements the Command interface.
-func (c CommandQuit) Name() string {
-	return "quit"
+func (c CommandKillServer) Name() string {
+	return "kill_server"
 }
 
 // Command is an interface for commands that can be triggered by the terminal

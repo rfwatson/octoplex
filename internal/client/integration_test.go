@@ -1,6 +1,6 @@
 //go:build integration
 
-package app_test
+package client_test
 
 import (
 	"cmp"
@@ -15,12 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"git.netflux.io/rob/octoplex/internal/app"
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/container/mocks"
 	"git.netflux.io/rob/octoplex/internal/domain"
-	"git.netflux.io/rob/octoplex/internal/terminal"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"github.com/docker/docker/api/types/network"
 	dockerclient "github.com/docker/docker/client"
@@ -126,26 +124,8 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 		Destinations: []config.Destination{{Name: "Local server 1", URL: destURL1}},
 	})
 
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		require.Equal(t, context.Canceled, app.New(app.Params{
-			ConfigService: configService,
-			DockerClient:  dockerClient,
-			Screen: &terminal.Screen{
-				Screen:   screen,
-				Width:    160,
-				Height:   25,
-				CaptureC: screenCaptureC,
-			},
-			ClipboardAvailable: false,
-			BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
-			Logger:             logger,
-		}).Run(ctx))
-	}()
+	client, server := buildClientServer(configService, dockerClient, screen, screenCaptureC, logger)
+	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
 		t,
@@ -286,13 +266,12 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 
 	printScreen(t, getContents, "After stopping the first destination")
 
-	// TODO:
-	// - Source error
-	// - Additional features (copy URL, etc.)
-
 	cancel()
 
-	<-done
+	result := <-ch
+	// May be a gRPC error, not context.Canceled:
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorIs(t, result.errServer, context.Canceled)
 }
 
 func TestIntegrationCustomHost(t *testing.T) {
@@ -313,14 +292,8 @@ func TestIntegrationCustomHost(t *testing.T) {
 	})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
-	}()
+	client, server := buildClientServer(configService, dockerClient, screen, screenCaptureC, logger)
+	ch := runClientServer(ctx, t, client, server)
 
 	time.Sleep(time.Second)
 	sendKey(t, screen, tcell.KeyF1, ' ')
@@ -360,7 +333,10 @@ func TestIntegrationCustomHost(t *testing.T) {
 
 	cancel()
 
-	<-done
+	result := <-ch
+	// May be a gRPC error, not context.Canceled:
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorIs(t, result.errServer, context.Canceled)
 }
 
 func TestIntegrationCustomTLSCerts(t *testing.T) {
@@ -384,14 +360,8 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 	})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
-	}()
+	client, server := buildClientServer(configService, dockerClient, screen, screenCaptureC, logger)
+	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
 		t,
@@ -426,7 +396,9 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 
 	cancel()
 
-	<-done
+	result := <-ch
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorIs(t, result.errServer, context.Canceled)
 }
 
 func TestIntegrationRestartDestination(t *testing.T) {
@@ -465,14 +437,8 @@ func TestIntegrationRestartDestination(t *testing.T) {
 		}},
 	})
 
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
-	}()
+	client, server := buildClientServer(configService, dockerClient, screen, screenCaptureC, logger)
+	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
 		t,
@@ -584,7 +550,9 @@ func TestIntegrationRestartDestination(t *testing.T) {
 
 	cancel()
 
-	<-done
+	result := <-ch
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorIs(t, result.errServer, context.Canceled)
 }
 
 func TestIntegrationStartDestinationFailed(t *testing.T) {
@@ -602,14 +570,8 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 		Destinations: []config.Destination{{Name: "Example server", URL: "rtmp://rtmp.example.com/live"}},
 	})
 
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
-	}()
+	client, server := buildClientServer(configService, dockerClient, screen, screenCaptureC, logger)
+	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
 		t,
@@ -658,7 +620,9 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 
 	cancel()
 
-	<-done
+	result := <-ch
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorIs(t, result.errServer, context.Canceled)
 }
 
 func TestIntegrationDestinationValidations(t *testing.T) {
@@ -675,14 +639,8 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 		Sources: config.Sources{MediaServer: config.MediaServerSource{StreamKey: "live", RTMP: config.RTMPSource{Enabled: true}}},
 	})
 
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
-	}()
+	client, server := buildClientServer(configService, dockerClient, screen, screenCaptureC, logger)
+	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
 		t,
@@ -786,7 +744,9 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 	printScreen(t, getContents, "After entering a duplicate destination URL")
 	cancel()
 
-	<-done
+	result := <-ch
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorIs(t, result.errServer, context.Canceled)
 }
 
 func TestIntegrationStartupCheck(t *testing.T) {
@@ -817,14 +777,8 @@ func TestIntegrationStartupCheck(t *testing.T) {
 	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
-	}()
+	client, server := buildClientServer(configService, dockerClient, screen, screenCaptureC, logger)
+	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
 		t,
@@ -868,7 +822,9 @@ func TestIntegrationStartupCheck(t *testing.T) {
 	printScreen(t, getContents, "After starting the mediaserver")
 	cancel()
 
-	<-done
+	result := <-ch
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorIs(t, result.errServer, context.Canceled)
 }
 
 func TestIntegrationMediaServerError(t *testing.T) {
@@ -886,18 +842,8 @@ func TestIntegrationMediaServerError(t *testing.T) {
 	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		require.EqualError(
-			t,
-			app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx),
-			"media server exited",
-		)
-	}()
+	client, server := buildClientServer(configService, dockerClient, screen, screenCaptureC, logger)
+	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
 		t,
@@ -911,10 +857,12 @@ func TestIntegrationMediaServerError(t *testing.T) {
 	)
 	printScreen(t, getContents, "Ater displaying the media server error modal")
 
-	// Quit the app, this should cause the done channel to receive.
+	// Quit the app:
 	sendKey(t, screen, tcell.KeyEnter, ' ')
 
-	<-done
+	result := <-ch
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorContains(t, result.errServer, "media server exited")
 }
 
 func TestIntegrationDockerClientError(t *testing.T) {
@@ -929,18 +877,8 @@ func TestIntegrationDockerClientError(t *testing.T) {
 	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		require.EqualError(
-			t,
-			app.New(buildAppParams(t, configService, &dockerClient, screen, screenCaptureC, logger)).Run(ctx),
-			"create container client: network create: boom",
-		)
-	}()
+	client, server := buildClientServer(configService, &dockerClient, screen, screenCaptureC, logger)
+	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
 		t,
@@ -954,10 +892,12 @@ func TestIntegrationDockerClientError(t *testing.T) {
 	)
 	printScreen(t, getContents, "Ater displaying the fatal error modal")
 
-	// Quit the app, this should cause the done channel to receive.
+	// Quit the app:
 	sendKey(t, screen, tcell.KeyEnter, ' ')
 
-	<-done
+	result := <-ch
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.EqualError(t, result.errServer, "create container client: network create: boom")
 }
 
 func TestIntegrationDockerConnectionError(t *testing.T) {
@@ -971,16 +911,8 @@ func TestIntegrationDockerConnectionError(t *testing.T) {
 	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		err := app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx)
-		require.ErrorContains(t, err, "dial tcp: lookup docker.example.com")
-		require.ErrorContains(t, err, "no such host")
-	}()
+	client, server := buildClientServer(configService, dockerClient, screen, screenCaptureC, logger)
+	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
 		t,
@@ -994,10 +926,13 @@ func TestIntegrationDockerConnectionError(t *testing.T) {
 	)
 	printScreen(t, getContents, "Ater displaying the fatal error modal")
 
-	// Quit the app, this should cause the done channel to receive.
+	// Quit the app:
 	sendKey(t, screen, tcell.KeyEnter, ' ')
 
-	<-done
+	result := <-ch
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorContains(t, result.errServer, "dial tcp: lookup docker.example.com")
+	assert.ErrorContains(t, result.errServer, "no such host")
 }
 
 func TestIntegrationCopyURLs(t *testing.T) {
@@ -1067,14 +1002,8 @@ func TestIntegrationCopyURLs(t *testing.T) {
 			configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: tc.mediaServerConfig}})
 			screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-			done := make(chan struct{})
-			go func() {
-				defer func() {
-					done <- struct{}{}
-				}()
-
-				require.Equal(t, context.Canceled, app.New(buildAppParams(t, configService, dockerClient, screen, screenCaptureC, logger)).Run(ctx))
-			}()
+			client, server := buildClientServer(configService, dockerClient, screen, screenCaptureC, logger)
+			ch := runClientServer(ctx, t, client, server)
 
 			time.Sleep(3 * time.Second)
 			printScreen(t, getContents, "Ater loading the app")
@@ -1095,7 +1024,9 @@ func TestIntegrationCopyURLs(t *testing.T) {
 
 			cancel()
 
-			<-done
+			result := <-ch
+			assert.ErrorContains(t, result.errClient, "context canceled")
+			assert.ErrorIs(t, result.errServer, context.Canceled)
 		})
 	}
 }

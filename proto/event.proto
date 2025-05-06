@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package api;
+option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc";
+
+import "domain.proto";
+
+message Event {
+  oneof event_type {
+    AppStateChangedEvent app_state_changed = 1;
+    DestinationStreamExitedEvent destination_stream_exited = 2;
+    DestinationAddedEvent destination_added = 3;
+    AddDestinationFailedEvent add_destination_failed = 4;
+    DestinationRemovedEvent destination_removed = 5;
+    RemoveDestinationFailedEvent remove_destination_failed = 6;
+    StartDestinationFailedEvent start_destination_failed = 7;
+    MediaServerStartedEvent media_server_started = 8;
+    OtherInstanceDetectedEvent other_instance_detected = 9;
+    FatalErrorEvent fatal_error = 10;
+    HandshakeCompletedEvent handshake_completed = 11;
+  }
+}
+
+message AppStateChangedEvent { AppState app_state = 1; }
+
+message DestinationStreamExitedEvent {
+  string name = 1;
+  string error = 2;
+}
+
+message DestinationAddedEvent { string url = 1; }
+
+message AddDestinationFailedEvent {
+  string url = 1;
+  string error = 2;
+}
+
+message DestinationRemovedEvent { string url = 1; }
+
+message RemoveDestinationFailedEvent {
+  string url = 1;
+  string error = 2;
+}
+
+message StartDestinationFailedEvent {
+  string url = 1;
+  string message = 2;
+}
+
+message MediaServerStartedEvent {
+  string rtmp_url = 1;
+  string rtmps_url = 2;
+}
+
+message OtherInstanceDetectedEvent {}
+
+message FatalErrorEvent { string message = 1; }
+
+message HandshakeCompletedEvent {}

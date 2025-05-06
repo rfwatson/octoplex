@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc";
+package api;
+
+import "event.proto";
+import "command.proto";
+
+service InternalAPI {
+  rpc Communicate(stream Envelope) returns (stream Envelope);
+}
+
+message Envelope {
+  oneof payload {
+    Command command = 1;
+    Event event = 2;
+  }
+}

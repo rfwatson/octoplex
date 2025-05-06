@@ -1,4 +1,4 @@
-package app
+package server
 
 import (
 	"cmp"
@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"slices"
 	"time"
 
@@ -13,38 +14,32 @@ import (
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/event"
+	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
 	"git.netflux.io/rob/octoplex/internal/mediaserver"
 	"git.netflux.io/rob/octoplex/internal/replicator"
-	"git.netflux.io/rob/octoplex/internal/terminal"
 	"github.com/docker/docker/client"
+	"google.golang.org/grpc"
 )
 
 // App is an instance of the app.
 type App struct {
-	cfg                config.Config
-	configService      *config.Service
-	eventBus           *event.Bus
-	dispatchC          chan event.Command
-	dockerClient       container.DockerClient
-	screen             *terminal.Screen // Screen may be nil.
-	headless           bool
-	clipboardAvailable bool
-	configFilePath     string
-	buildInfo          domain.BuildInfo
-	logger             *slog.Logger
+	cfg           config.Config
+	configService *config.Service
+	eventBus      *event.Bus
+	dispatchC     chan event.Command
+	dockerClient  container.DockerClient
+	waitForClient bool
+	logger        *slog.Logger
 }
 
 // Params holds the parameters for running the application.
 type Params struct {
-	ConfigService      *config.Service
-	DockerClient       container.DockerClient
-	ChanSize           int
-	Screen             *terminal.Screen // Screen may be nil.
-	Headless           bool
-	ClipboardAvailable bool
-	ConfigFilePath     string
-	BuildInfo          domain.BuildInfo
-	Logger             *slog.Logger
+	ConfigService  *config.Service
+	DockerClient   container.DockerClient
+	ChanSize       int
+	ConfigFilePath string
+	WaitForClient  bool
+	Logger         *slog.Logger
 }
 
 // defaultChanSize is the default size of the dispatch channel.
@@ -53,17 +48,13 @@ const defaultChanSize = 64
 // New creates a new application instance.
 func New(params Params) *App {
 	return &App{
-		cfg:                params.ConfigService.Current(),
-		configService:      params.ConfigService,
-		eventBus:           event.NewBus(params.Logger.With("component", "event_bus")),
-		dispatchC:          make(chan event.Command, cmp.Or(params.ChanSize, defaultChanSize)),
-		dockerClient:       params.DockerClient,
-		screen:             params.Screen,
-		headless:           params.Headless,
-		clipboardAvailable: params.ClipboardAvailable,
-		configFilePath:     params.ConfigFilePath,
-		buildInfo:          params.BuildInfo,
-		logger:             params.Logger,
+		cfg:           params.ConfigService.Current(),
+		configService: params.ConfigService,
+		eventBus:      event.NewBus(params.Logger.With("component", "event_bus")),
+		dispatchC:     make(chan event.Command, cmp.Or(params.ChanSize, defaultChanSize)),
+		dockerClient:  params.DockerClient,
+		waitForClient: params.WaitForClient,
+		logger:        params.Logger,
 	}
 }
 
@@ -78,20 +69,26 @@ func (a *App) Run(ctx context.Context) error {
 		return errors.New("config: either sources.mediaServer.rtmp.enabled or sources.mediaServer.rtmps.enabled must be set")
 	}
 
-	if !a.headless {
-		ui, err := terminal.StartUI(ctx, terminal.StartParams{
-			EventBus:           a.eventBus,
-			Dispatcher:         func(cmd event.Command) { a.dispatchC <- cmd },
-			Screen:             a.screen,
-			ClipboardAvailable: a.clipboardAvailable,
-			ConfigFilePath:     a.configFilePath,
-			BuildInfo:          a.buildInfo,
-			Logger:             a.logger.With("component", "ui"),
-		})
-		if err != nil {
-			return fmt.Errorf("start terminal user interface: %w", err)
+	const grpcAddr = ":50051"
+	lis, err := net.Listen("tcp", grpcAddr)
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+	defer lis.Close()
+
+	grpcServer := grpc.NewServer()
+	grpcDone := make(chan error, 1)
+	internalAPI := newServer(a.DispatchAsync, a.eventBus, a.logger)
+	pb.RegisterInternalAPIServer(grpcServer, internalAPI)
+	go func() {
+		a.logger.Info("gRPC server started", "addr", grpcAddr)
+		grpcDone <- grpcServer.Serve(lis)
+	}()
+
+	if a.waitForClient {
+		if err = internalAPI.WaitForClient(ctx); err != nil {
+			return fmt.Errorf("wait for client: %w", err)
 		}
-		defer ui.Close()
 	}
 
 	// emptyUI is a dummy function that sets the UI state to an empty state, and
@@ -107,12 +104,13 @@ func (a *App) Run(ctx context.Context) error {
 		a.eventBus.Send(event.AppStateChangedEvent{State: domain.AppState{}})
 	}
 
-	// doFatalError publishes a fatal error to the event bus, waiting for the
-	// user to acknowledge it if not in headless mode.
+	// doFatalError publishes a fatal error to the event bus. It will block until
+	// the user acknowledges it if there is 1 or more clients connected to the
+	// internal API.
 	doFatalError := func(msg string) {
 		a.eventBus.Send(event.FatalErrorOccurredEvent{Message: msg})
 
-		if a.headless {
+		if internalAPI.GetClientCount() == 0 {
 			return
 		}
 
@@ -177,21 +175,20 @@ func (a *App) Run(ctx context.Context) error {
 	defer uiUpdateT.Stop()
 
 	startMediaServerC := make(chan struct{}, 1)
-	if a.headless { // disable startup check in headless mode for now
+	if ok, startupErr := doStartupCheck(ctx, containerClient, a.eventBus); startupErr != nil {
+		doFatalError(startupErr.Error())
+		return startupErr
+	} else if ok {
 		startMediaServerC <- struct{}{}
-	} else {
-		if ok, startupErr := doStartupCheck(ctx, containerClient, a.eventBus); startupErr != nil {
-			doFatalError(startupErr.Error())
-			return startupErr
-		} else if ok {
-			startMediaServerC <- struct{}{}
-		}
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case grpcErr := <-grpcDone:
+			a.logger.Error("gRPC server exited", "err", grpcErr)
+			return grpcErr
 		case <-startMediaServerC:
 			if err = srv.Start(ctx); err != nil {
 				return fmt.Errorf("start mediaserver: %w", err)
@@ -245,7 +242,12 @@ func (a *App) Dispatch(cmd event.Command) event.Event {
 	return <-ch
 }
 
-// errExit is an error that indicates the app should exit.
+// DispatchAsync dispatches a command to be executed synchronously.
+func (a *App) DispatchAsync(cmd event.Command) {
+	a.dispatchC <- cmd
+}
+
+// errExit is an error that indicates the server should exit.
 var errExit = errors.New("exit")
 
 // handleCommand handles an incoming command. It may return an Event which will
@@ -253,7 +255,7 @@ var errExit = errors.New("exit")
 // benefit of synchronous callers. The event may be nil. It may also publish
 // other events to the event bus which are not returned. Currently the only
 // error that may be returned is [errExit], which indicates to the main event
-// loop that the app should exit.
+// loop that the server should exit.
 func (a *App) handleCommand(
 	ctx context.Context,
 	cmd event.Command,
@@ -262,7 +264,7 @@ func (a *App) handleCommand(
 	containerClient *container.Client,
 	startMediaServerC chan struct{},
 ) (evt event.Event, _ error) {
-	a.logger.Debug("Command received", "cmd", cmd.Name())
+	a.logger.Debug("Command received in handler", "cmd", cmd.Name())
 	defer func() {
 		if evt != nil {
 			a.eventBus.Send(evt)
@@ -271,6 +273,12 @@ func (a *App) handleCommand(
 			c.done <- evt
 		}
 	}()
+
+	// If the command is a syncCommand, we need to extract the command from it so
+	// it can be type-switched against.
+	if c, ok := cmd.(syncCommand); ok {
+		cmd = c.Command
+	}
 
 	switch c := cmd.(type) {
 	case event.CommandAddDestination:
@@ -281,10 +289,11 @@ func (a *App) handleCommand(
 		})
 		if err := a.configService.SetConfig(newCfg); err != nil {
 			a.logger.Error("Add destination failed", "err", err)
-			return event.AddDestinationFailedEvent{Err: err}, nil
+			return event.AddDestinationFailedEvent{URL: c.URL, Err: err}, nil
 		}
 		a.cfg = newCfg
 		a.handleConfigUpdate(state)
+		a.logger.Info("Destination added", "url", c.URL)
 		a.eventBus.Send(event.DestinationAddedEvent{URL: c.URL})
 	case event.CommandRemoveDestination:
 		repl.StopDestination(c.URL) // no-op if not live
@@ -294,7 +303,7 @@ func (a *App) handleCommand(
 		})
 		if err := a.configService.SetConfig(newCfg); err != nil {
 			a.logger.Error("Remove destination failed", "err", err)
-			a.eventBus.Send(event.RemoveDestinationFailedEvent{Err: err})
+			a.eventBus.Send(event.RemoveDestinationFailedEvent{URL: c.URL, Err: err})
 			break
 		}
 		a.cfg = newCfg
@@ -302,7 +311,7 @@ func (a *App) handleCommand(
 		a.eventBus.Send(event.DestinationRemovedEvent{URL: c.URL}) //nolint:gosimple
 	case event.CommandStartDestination:
 		if !state.Source.Live {
-			a.eventBus.Send(event.StartDestinationFailedEvent{})
+			a.eventBus.Send(event.StartDestinationFailedEvent{URL: c.URL, Message: "source not live"})
 			break
 		}
 
@@ -315,7 +324,7 @@ func (a *App) handleCommand(
 		}
 
 		startMediaServerC <- struct{}{}
-	case event.CommandQuit:
+	case event.CommandKillServer:
 		return nil, errExit
 	}
 

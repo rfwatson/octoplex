@@ -3,6 +3,7 @@ package terminal
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -44,9 +45,9 @@ type UI struct {
 	eventBus           *event.Bus
 	dispatch           func(event.Command)
 	clipboardAvailable bool
-	configFilePath     string
 	rtmpURL, rtmpsURL  string
 	buildInfo          domain.BuildInfo
+	appExitC           chan error
 	logger             *slog.Logger
 
 	// tview state
@@ -92,20 +93,20 @@ type ScreenCapture struct {
 	Width, Height int
 }
 
-// StartParams contains the parameters for starting a new terminal user
+// Params contains the parameters for starting a new terminal user
 // interface.
-type StartParams struct {
+type Params struct {
 	EventBus           *event.Bus
 	Dispatcher         func(event.Command)
 	Logger             *slog.Logger
 	ClipboardAvailable bool
-	ConfigFilePath     string
 	BuildInfo          domain.BuildInfo
 	Screen             *Screen // Screen may be nil.
 }
 
-// StartUI starts the terminal user interface.
-func StartUI(ctx context.Context, params StartParams) (*UI, error) {
+// NewUI creates the user interface. Call [Run] on the *UI instance to block
+// until it is completed.
+func NewUI(ctx context.Context, params Params) (*UI, error) {
 	app := tview.NewApplication()
 
 	var screen tcell.Screen
@@ -211,7 +212,7 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 		eventBus:           params.EventBus,
 		dispatch:           params.Dispatcher,
 		clipboardAvailable: params.ClipboardAvailable,
-		configFilePath:     params.ConfigFilePath,
+		appExitC:           make(chan error, 1),
 		buildInfo:          params.BuildInfo,
 		logger:             params.Logger,
 		app:                app,
@@ -237,8 +238,6 @@ func StartUI(ctx context.Context, params StartParams) (*UI, error) {
 	app.SetInputCapture(ui.inputCaptureHandler)
 	app.SetAfterDrawFunc(ui.afterDrawHandler)
 
-	go ui.run(ctx)
-
 	return ui, nil
 }
 
@@ -262,32 +261,32 @@ func (ui *UI) renderAboutView() {
 		ui.aboutView.AddItem(rtmpsURLView, 1, 0, false)
 	}
 
-	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]c[-]        Copy config file path"), 1, 0, false)
 	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]?[-]        About"), 1, 0, false)
 }
 
-func (ui *UI) run(ctx context.Context) {
-	defer func() {
-		// Ensure the application is stopped when the UI is closed.
-		ui.dispatch(event.CommandQuit{})
-	}()
+var ErrUserClosed = errors.New("user closed UI")
 
+// Run runs the user interface. It always returns a non-nil error, which will
+// be [ErrUserClosed] if the user voluntarily closed the UI.
+func (ui *UI) Run(ctx context.Context) error {
 	eventC := ui.eventBus.Register()
+	defer ui.eventBus.Deregister(eventC)
 
-	uiDone := make(chan struct{})
 	go func() {
-		defer func() {
-			uiDone <- struct{}{}
-		}()
-
-		if err := ui.app.Run(); err != nil {
-			ui.logger.Error("tui application error", "err", err)
+		err := ui.app.Run()
+		if err != nil {
+			ui.logger.Error("Error in UI run loop, exiting", "err", err)
 		}
+		ui.appExitC <- err
 	}()
 
 	for {
 		select {
-		case evt := <-eventC:
+		case evt, ok := <-eventC:
+			if !ok {
+				// should never happen
+				return errors.New("event channel closed")
+			}
 			ui.app.QueueUpdateDraw(func() {
 				switch evt := evt.(type) {
 				case event.AppStateChangedEvent:
@@ -313,12 +312,11 @@ func (ui *UI) run(ctx context.Context) {
 				default:
 					ui.logger.Warn("unhandled event", "event", evt)
 				}
-
 			})
 		case <-ctx.Done():
-			return
-		case <-uiDone:
-			return
+			return ctx.Err()
+		case err := <-ui.appExitC:
+			return cmp.Or(err, ErrUserClosed)
 		}
 	}
 }
@@ -358,8 +356,6 @@ func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
 			return nil
 		case ' ':
 			ui.toggleDestination()
-		case 'c', 'C':
-			ui.copyConfigFilePathToClipboard(ui.clipboardAvailable, ui.configFilePath)
 		case '?':
 			ui.showAbout()
 		case 'k': // tview vim bindings
@@ -420,7 +416,7 @@ func (ui *UI) handleOtherInstanceDetected(event.OtherInstanceDetectedEvent) {
 			if buttonIndex == 0 {
 				ui.dispatch(event.CommandCloseOtherInstance{})
 			} else {
-				ui.dispatch(event.CommandQuit{})
+				ui.dispatch(event.CommandKillServer{})
 			}
 		},
 	)
@@ -450,7 +446,7 @@ func (ui *UI) handleFatalErrorOccurred(evt event.FatalErrorOccurredEvent) {
 		[]string{"Quit"},
 		false,
 		func(int, string) {
-			ui.dispatch(event.CommandQuit{})
+			ui.dispatch(event.CommandKillServer{})
 		},
 	)
 }
@@ -825,6 +821,11 @@ func (ui *UI) Close() {
 	ui.app.Stop()
 }
 
+// Wait waits for the terminal user interface to finish.
+func (ui *UI) Wait() {
+	<-ui.appExitC
+}
+
 func (ui *UI) addDestination() {
 	const (
 		inputLen        = 60
@@ -1006,28 +1007,6 @@ func (ui *UI) copySourceURLToClipboard(url string) {
 	)
 }
 
-func (ui *UI) copyConfigFilePathToClipboard(clipboardAvailable bool, configFilePath string) {
-	var text string
-	if clipboardAvailable {
-		if configFilePath != "" {
-			clipboard.Write(clipboard.FmtText, []byte(configFilePath))
-			text = "Configuration file path copied to clipboard:\n\n" + configFilePath
-		} else {
-			text = "Configuration file path not set"
-		}
-	} else {
-		text = "Copy to clipboard not available"
-	}
-
-	ui.showModal(
-		pageNameModalClipboard,
-		text,
-		[]string{"Ok"},
-		false,
-		nil,
-	)
-}
-
 func (ui *UI) confirmQuit() {
 	ui.showModal(
 		pageNameModalQuit,
@@ -1036,7 +1015,7 @@ func (ui *UI) confirmQuit() {
 		false,
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.dispatch(event.CommandQuit{})
+				ui.app.Stop()
 			}
 		},
 	)
