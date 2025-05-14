@@ -1005,15 +1005,28 @@ func TestIntegrationCopyURLs(t *testing.T) {
 			client, server := buildClientServer(configService, dockerClient, screen, screenCaptureC, logger)
 			ch := runClientServer(ctx, t, client, server)
 
-			time.Sleep(3 * time.Second)
-			printScreen(t, getContents, "Ater loading the app")
-
 			for _, want := range tc.wantBindings {
-				assert.True(t, contentsIncludes(getContents(), want.content), "expected to see %q", want)
+				require.EventuallyWithT(
+					t,
+					func(c *assert.CollectT) {
+						assert.True(c, contentsIncludes(getContents(), want.content), "expected to see %q", want)
+					},
+					3*time.Second,
+					100*time.Millisecond,
+				)
 
 				sendKey(t, screen, want.key, ' ')
-				time.Sleep(3 * time.Second)
-				assert.True(t, contentsIncludes(getContents(), want.url), "expected to see copied message")
+
+				require.EventuallyWithT(
+					t,
+					func(c *assert.CollectT) {
+						assert.True(c, contentsIncludes(getContents(), want.url), "expected to see copied message")
+					},
+					3*time.Second,
+					100*time.Millisecond,
+				)
+
+				printScreen(t, getContents, "After pressing the copy key")
 
 				sendKey(t, screen, tcell.KeyEscape, ' ')
 			}
