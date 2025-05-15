@@ -1,6 +1,7 @@
 package client
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -15,9 +16,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// DefaultServerAddr is the default address for the client to connect to.
+const DefaultServerAddr = "localhost:50051"
+
 // App is the client application.
 type App struct {
 	bus                *event.Bus
+	serverAddr         string
 	clipboardAvailable bool
 	buildInfo          domain.BuildInfo
 	screen             *terminal.Screen
@@ -27,6 +32,7 @@ type App struct {
 // NewParams contains the parameters for the App.
 type NewParams struct {
 	ClipboardAvailable bool
+	ServerAddr         string
 	BuildInfo          domain.BuildInfo
 	Screen             *terminal.Screen
 	Logger             *slog.Logger
@@ -36,6 +42,7 @@ type NewParams struct {
 func New(params NewParams) *App {
 	return &App{
 		bus:                event.NewBus(params.Logger),
+		serverAddr:         cmp.Or(params.ServerAddr, DefaultServerAddr),
 		clipboardAvailable: params.ClipboardAvailable,
 		buildInfo:          params.BuildInfo,
 		screen:             params.Screen,
@@ -50,7 +57,7 @@ func New(params NewParams) *App {
 func (a *App) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
-	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(a.serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("connect to gRPC server: %w", err)
 	}

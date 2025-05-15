@@ -63,6 +63,13 @@ func main() {
 			{
 				Name:  "client",
 				Usage: "Run the client",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "host",
+						Usage: "The remote host to connect to",
+						Value: client.DefaultServerAddr,
+					},
+				},
 				Action: func(c *cli.Context) error {
 					return runClient(c.Context, c)
 				},
@@ -130,7 +137,7 @@ func main() {
 	}
 }
 
-func runClient(ctx context.Context, _ *cli.Context) error {
+func runClient(ctx context.Context, c *cli.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -155,6 +162,7 @@ func runClient(ctx context.Context, _ *cli.Context) error {
 	}
 
 	app := client.New(client.NewParams{
+		ServerAddr:         c.String("host"),
 		ClipboardAvailable: clipboardAvailable,
 		BuildInfo: domain.BuildInfo{
 			GoVersion: buildInfo.GoVersion,
