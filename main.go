@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
 	"runtime"
 	"runtime/debug"
@@ -47,6 +48,23 @@ func (e errInterrupt) ExitCode() int {
 }
 
 func main() {
+	serverSubcommands := []*cli.Command{
+		{
+			Name:  "print-config",
+			Usage: "Print the config file path",
+			Action: func(*cli.Context) error {
+				return printConfig()
+			},
+		},
+		{
+			Name:  "edit-config",
+			Usage: "Edit the config file",
+			Action: func(*cli.Context) error {
+				return editConfig()
+			},
+		},
+	}
+
 	app := &cli.App{
 		Name:  "Octoplex",
 		Usage: "Octoplex is a live video restreamer for Docker.",
@@ -68,12 +86,21 @@ func main() {
 						waitForClient:   false,
 					})
 				},
+				Subcommands: serverSubcommands,
 			},
 			{
 				Name:  "run",
-				Usage: "Run server and client together (testing)",
+				Usage: "Run server and client in the same process",
 				Action: func(c *cli.Context) error {
 					return runClientAndServer(c)
+				},
+				Subcommands: serverSubcommands,
+			},
+			{
+				Name:  "version",
+				Usage: "Print the version",
+				Action: func(*cli.Context) error {
+					return printVersion()
 				},
 			},
 		},
@@ -249,4 +276,50 @@ func runClientAndServer(c *cli.Context) error {
 	} else {
 		return err
 	}
+}
+
+// printConfig prints the path to the config file to stderr.
+func printConfig() error {
+	configService, err := config.NewDefaultService()
+	if err != nil {
+		return fmt.Errorf("build config service: %w", err)
+	}
+
+	fmt.Fprintln(os.Stderr, configService.Path())
+	return nil
+}
+
+// editConfig opens the config file in the user's editor.
+func editConfig() error {
+	configService, err := config.NewDefaultService()
+	if err != nil {
+		return fmt.Errorf("build config service: %w", err)
+	}
+
+	if _, err = configService.ReadOrCreateConfig(); err != nil {
+		return fmt.Errorf("read or create config: %w", err)
+	}
+
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+	binary, err := exec.LookPath(editor)
+	if err != nil {
+		return fmt.Errorf("look path: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Editing config file: %s\n", configService.Path())
+
+	if err := syscall.Exec(binary, []string{"--", configService.Path()}, os.Environ()); err != nil {
+		return fmt.Errorf("exec: %w", err)
+	}
+
+	return nil
+}
+
+// printVersion prints the version of the application to stderr.
+func printVersion() error {
+	fmt.Fprintf(os.Stderr, "%s version %s\n", domain.AppName, cmp.Or(version, "0.0.0-dev"))
+	return nil
 }
