@@ -45,6 +45,10 @@ type Params struct {
 // defaultChanSize is the default size of the dispatch channel.
 const defaultChanSize = 64
 
+// ErrOtherInstanceDetected is returned when another instance of the app is
+// detected on startup.
+var ErrOtherInstanceDetected = errors.New("another instance is currently running")
+
 // New creates a new application instance.
 func New(params Params) *App {
 	return &App{
@@ -180,6 +184,10 @@ func (a *App) Run(ctx context.Context) error {
 		return startupErr
 	} else if ok {
 		startMediaServerC <- struct{}{}
+	} else if internalAPI.GetClientCount() == 0 {
+		// startup check failed, and there are no clients connected to the API so
+		// probably in server-only mode. In this case, we just bail out.
+		return ErrOtherInstanceDetected
 	}
 
 	for {
@@ -446,4 +454,15 @@ func buildNetAddr(src config.RTMPSource) mediaserver.OptionalNetAddr {
 	}
 
 	return mediaserver.OptionalNetAddr{Enabled: true, NetAddr: domain.NetAddr(src.NetAddr)}
+}
+
+// Stop stops all containers and networks created by any instance of the app.
+func (a *App) Stop(ctx context.Context) error {
+	containerClient, err := container.NewClient(ctx, a.dockerClient, a.logger.With("component", "container_client"))
+	if err != nil {
+		return fmt.Errorf("create container client: %w", err)
+	}
+	defer containerClient.Close()
+
+	return closeOtherInstances(ctx, containerClient)
 }

@@ -48,23 +48,6 @@ func (e errInterrupt) ExitCode() int {
 }
 
 func main() {
-	serverSubcommands := []*cli.Command{
-		{
-			Name:  "print-config",
-			Usage: "Print the config file path",
-			Action: func(*cli.Context) error {
-				return printConfig()
-			},
-		},
-		{
-			Name:  "edit-config",
-			Usage: "Edit the config file",
-			Action: func(*cli.Context) error {
-				return editConfig()
-			},
-		},
-	}
-
 	app := &cli.App{
 		Name:  "Octoplex",
 		Usage: "Octoplex is a live video restreamer for Docker.",
@@ -78,23 +61,58 @@ func main() {
 			},
 			{
 				Name:  "server",
-				Usage: "Run the server",
+				Usage: "Manage the standalone server.",
 				Action: func(c *cli.Context) error {
-					return runServer(c.Context, c, serverConfig{
-						stderrAvailable: true,
-						handleSigInt:    true,
-						waitForClient:   false,
-					})
+					return c.App.Command("server").Subcommands[0].Action(c)
 				},
-				Subcommands: serverSubcommands,
+				Subcommands: []*cli.Command{
+					{
+						Name:        "start",
+						Usage:       "Start the server",
+						Description: "Start the standalone server, without a CLI client attached.",
+						Action: func(c *cli.Context) error {
+							return runServer(c.Context, c, serverConfig{
+								stderrAvailable: true,
+								handleSigInt:    true,
+								waitForClient:   false,
+							})
+						},
+					},
+					{
+						Name:        "stop",
+						Usage:       "Stop the server",
+						Description: "Stop all containers and networks created by Octoplex, and exit.",
+						Action: func(c *cli.Context) error {
+							return runServer(c.Context, c, serverConfig{
+								stderrAvailable: true,
+								handleSigInt:    false,
+								waitForClient:   false,
+							})
+						},
+					},
+					{
+						Name:  "print-config",
+						Usage: "Print the config file path",
+						Action: func(*cli.Context) error {
+							return printConfig()
+						},
+					},
+					{
+						Name:  "edit-config",
+						Usage: "Edit the config file",
+						Action: func(*cli.Context) error {
+							return editConfig()
+						},
+					},
+				},
 			},
 			{
-				Name:  "run",
-				Usage: "Run server and client in the same process",
+				Name:        "run",
+				Usage:       "Run server and client in the same process",
+				Description: "Run the server and client in the same process. This is useful for testing, debugging or running for a single user.",
 				Action: func(c *cli.Context) error {
 					return runClientAndServer(c)
 				},
-				Subcommands: serverSubcommands,
 			},
 			{
 				Name:  "version",
@@ -159,7 +177,7 @@ type serverConfig struct {
 	waitForClient   bool
 }
 
-func runServer(ctx context.Context, _ *cli.Context, serverCfg serverConfig) error {
+func runServer(ctx context.Context, c *cli.Context, serverCfg serverConfig) error {
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 
@@ -224,6 +242,10 @@ func runServer(ctx context.Context, _ *cli.Context, serverCfg serverConfig) erro
 		Logger:         logger,
 	})
 
+	if c.Command.Name == "stop" {
+		return app.Stop(ctx)
+	}
+
 	logger.Info(
 		"Starting server",
 		"version",
@@ -239,6 +261,11 @@ func runServer(ctx context.Context, _ *cli.Context, serverCfg serverConfig) erro
 	if err := app.Run(ctx); err != nil {
 		if errors.Is(err, context.Canceled) && errors.Is(context.Cause(ctx), errInterrupt{}) {
 			return context.Cause(ctx)
+		}
+		if errors.Is(err, server.ErrOtherInstanceDetected) {
+			msg := "Another instance of the server may be running.\n" +
+				"To stop the server, run `octoplex server stop`."
+			return cli.Exit(msg, 1)
 		}
 		return err
 	}
