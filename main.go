@@ -53,6 +53,14 @@ func main() {
 		Usage: "Octoplex is a live video restreamer for Docker.",
 		Commands: []*cli.Command{
 			{
+				Name:        "run",
+				Usage:       "Run server and client in the same process",
+				Description: "Run the server and client in the same process. This is useful for testing, debugging or running for a single user.",
+				Action: func(c *cli.Context) error {
+					return runClientAndServer(c)
+				},
+			},
+			{
 				Name:  "client",
 				Usage: "Run the client",
 				Action: func(c *cli.Context) error {
@@ -61,7 +69,7 @@ func main() {
 			},
 			{
 				Name:  "server",
-				Usage: "Manage the standalone server.",
+				Usage: "Control the standalone server",
 				Action: func(c *cli.Context) error {
 					return c.App.Command("server").Subcommands[0].Action(c)
 				},
@@ -104,14 +112,6 @@ func main() {
 							return editConfig()
 						},
 					},
-				},
-			},
-			{
-				Name:        "run",
-				Usage:       "Run server and client in the same process",
-				Description: "Run the server and client in the same process. This is useful for testing, debugging or running for a single user.",
-				Action: func(c *cli.Context) error {
-					return runClientAndServer(c)
 				},
 			},
 			{

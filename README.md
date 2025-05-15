@@ -31,44 +31,86 @@ Octoplex is a Docker-native live video restreamer.
                                                                        +--------------+
 ```
 
-## Asciicast :video_camera:
-
-[![asciicast](https://asciinema.org/a/Es8hpa6rq82ov7cDM6bZTVyCT.svg)](https://asciinema.org/a/Es8hpa6rq82ov7cDM6bZTVyCT)
-
 ## Installation
 
-### Docker Engine
-
-First, ensure that Docker Engine is installed.
+### Docker Engine (only if you'll run Octoplex locally)
 
 Linux: See https://docs.docker.com/engine/install/.
 
-MacOS: https://docs.docker.com/desktop/setup/install/mac-install/
+macOS: https://docs.docker.com/desktop/setup/install/mac-install/
 
 ### Octoplex
 
 #### Homebrew
 
-Octoplex can be installed using Homebrew on MacOS or Linux.
+Octoplex can be installed using Homebrew on macOS or Linux.
 
 ```
 $ brew tap rfwatson/octoplex
 $ brew install octoplex
 ```
 
-#### From Github
+#### From GitHub
 
 Alternatively, grab the latest build for your platform from the [releases page](https://github.com/rfwatson/octoplex/releases).
 
 Unarchive the `octoplex` binary and copy it somewhere in your $PATH.
 
+## Starting Octoplex
+
+Octoplex can run as a single process (all-in-one), or in a client/server pair.
+
+Mode|Pick this when you...
+---|---
+[All-in-one](#all-in-one)|Are testing locally, debugging, or streaming from the same machine that runs Docker.
+[Client/server](#clientserver)|Want the server on a remote host (e.g., cloud VM) for long-running or unattended streams.
+
+### All-in-one
+
+```bash
+$ octoplex run
+```
+
+Starts the Octoplex server **and** the terminal UI in one process.
+
+_Docker must be running on the same machine._
+
+### Client/server
+
+1. **Start the server** (on the host that has Docker):
+
+```bash
+$ octoplex server start
+```
+
+2. **Connect the client** (from your laptop or any host):
+
+```bash
+$ octoplex client start # --host my.remotehost.com if on a different host
+```
+
+`client start` is a lightweight TUI and **does not need Docker to be installed**.
+
+3. **Stop the server** (and clean up any Docker resources) on the remote host:
+
+```bash
+$ octoplex server stop
+```
+
+### Subcommand reference
+
+Subcommand|Description
+---|---
+`run`|Run Octoplex in all-in-one mode
+`server start`|Start the Octoplex server
+`server stop`|Stop the Octoplex server
+`client start`|Start the Octoplex TUI client
+`server print-config`|Echo the path to the configuration file to STDOUT
+`server edit-config`|Edit the configuration file in $EDITOR
+`version`|Print the version
+`help`|Print help screen
+
 ## Usage
-
-Launch the `octoplex` binary.
-
-```
-$ octoplex
-```
 
 ### Restreaming with OBS
 
@@ -107,16 +149,6 @@ $ ffmpeg -i input.mp4 -c copy -f flv rtmp://localhost:1935/live
 ```
 $ ffmpeg -i input.mp4 -c copy -f flv rtmps://localhost:1936/live
 ```
-
-### Subcommands
-
-Subcommand|Description
----|---
-None|Launch the terminal user interface
-`print-config`|Echo the path to the configuration file to STDOUT
-`edit-config`|Edit the configuration file in $EDITOR
-`version`|Print the version
-`help`|Print help screen
 
 ### Configuration
 
