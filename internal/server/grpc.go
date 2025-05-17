@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
 	"git.netflux.io/rob/octoplex/internal/protocol"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/peer"
 )
 
 // Server is the gRPC server that handles incoming commands and outgoing
@@ -45,6 +47,14 @@ func newServer(
 
 func (s *Server) Communicate(stream pb.InternalAPI_CommunicateServer) error {
 	g, ctx := errgroup.WithContext(stream.Context())
+
+	var remoteAddr string
+	peer, ok := peer.FromContext(ctx)
+	if ok {
+		remoteAddr = peer.Addr.String()
+	}
+
+	s.logger.Info("Client connected", "remote_addr", cmp.Or(remoteAddr, "unknown"))
 
 	// perform handshake:
 	startHandshakeCmd, err := stream.Recv()

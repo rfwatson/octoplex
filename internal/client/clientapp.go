@@ -105,7 +105,7 @@ func (a *App) Run(ctx context.Context) error {
 		for {
 			envelope, recErr := stream.Recv()
 			if recErr != nil {
-				return fmt.Errorf("receive envelope: %w", recErr)
+				return fmt.Errorf("recv: %w", recErr)
 			}
 
 			pbEvt := envelope.GetEvent()
