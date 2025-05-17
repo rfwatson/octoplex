@@ -29,6 +29,7 @@ import (
 )
 
 func buildClientServer(
+	t *testing.T,
 	configService *config.Service,
 	dockerClient container.DockerClient,
 	screen tcell.SimulationScreen,
@@ -46,12 +47,13 @@ func buildClientServer(
 		Logger: logger,
 	})
 
-	server := server.New(server.Params{
+	server, err := server.New(server.Params{
 		ConfigService: configService,
 		DockerClient:  dockerClient,
 		WaitForClient: true,
 		Logger:        logger,
 	})
+	require.NoError(t, err)
 
 	return client, server
 }

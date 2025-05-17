@@ -66,6 +66,22 @@ func (n NetAddr) IsZero() bool {
 	return n.IP == "" && n.Port == 0
 }
 
+// KeyPairs holds TLS key pairs for the server.
+type KeyPairs struct {
+	Internal KeyPair // valid for localhost and any user-provided host
+	Custom   KeyPair // valid only for any user-provided host, may be zero value
+}
+
+// External returns the external key pair, which is the custom key pair if it
+// exists or the internal key pair otherwise.
+func (k KeyPairs) External() KeyPair {
+	if k.Custom.IsZero() {
+		return k.Internal
+	}
+
+	return k.Custom
+}
+
 // KeyPair holds a TLS key pair.
 type KeyPair struct {
 	Cert, Key []byte

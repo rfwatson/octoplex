@@ -3,6 +3,7 @@ package server
 import (
 	"cmp"
 	"context"
+	cryptotls "crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,6 +20,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/replicator"
 	"github.com/docker/docker/client"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // App is an instance of the app.
@@ -28,6 +30,7 @@ type App struct {
 	eventBus      *event.Bus
 	dispatchC     chan event.Command
 	dockerClient  container.DockerClient
+	keyPairs      domain.KeyPairs
 	waitForClient bool
 	logger        *slog.Logger
 }
@@ -50,16 +53,23 @@ const defaultChanSize = 64
 var ErrOtherInstanceDetected = errors.New("another instance is currently running")
 
 // New creates a new application instance.
-func New(params Params) *App {
+func New(params Params) (*App, error) {
+	cfg := params.ConfigService.Current()
+	keyPairs, err := buildKeyPairs(cfg.Host, cfg.TLS)
+	if err != nil {
+		return nil, fmt.Errorf("build key pairs: %w", err)
+	}
+
 	return &App{
-		cfg:           params.ConfigService.Current(),
+		cfg:           cfg,
 		configService: params.ConfigService,
 		eventBus:      event.NewBus(params.Logger.With("component", "event_bus")),
 		dispatchC:     make(chan event.Command, cmp.Or(params.ChanSize, defaultChanSize)),
 		dockerClient:  params.DockerClient,
+		keyPairs:      keyPairs,
 		waitForClient: params.WaitForClient,
 		logger:        params.Logger,
-	}
+	}, nil
 }
 
 // Run starts the application, and blocks until it exits.
@@ -80,7 +90,15 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	defer lis.Close()
 
-	grpcServer := grpc.NewServer()
+	cert, err := cryptotls.X509KeyPair(a.keyPairs.External().Cert, a.keyPairs.External().Key)
+	if err != nil {
+		return fmt.Errorf("load TLS cert: %w", err)
+	}
+	grpcServer := grpc.NewServer(grpc.Creds(credentials.NewTLS(&cryptotls.Config{
+		Certificates: []cryptotls.Certificate{cert},
+		MinVersion:   config.TLSMinVersion,
+	})))
+
 	grpcDone := make(chan error, 1)
 	internalAPI := newServer(a.DispatchAsync, a.eventBus, a.logger)
 	pb.RegisterInternalAPIServer(grpcServer, internalAPI)
@@ -144,18 +162,11 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	updateUI()
 
-	var tlsCertPath, tlsKeyPath string
-	if a.cfg.Sources.MediaServer.TLS != nil {
-		tlsCertPath = a.cfg.Sources.MediaServer.TLS.CertPath
-		tlsKeyPath = a.cfg.Sources.MediaServer.TLS.KeyPath
-	}
-
 	srv, err := mediaserver.NewActor(ctx, mediaserver.NewActorParams{
 		RTMPAddr:        buildNetAddr(a.cfg.Sources.MediaServer.RTMP),
 		RTMPSAddr:       buildNetAddr(a.cfg.Sources.MediaServer.RTMPS),
-		Host:            a.cfg.Sources.MediaServer.Host,
-		TLSCertPath:     tlsCertPath,
-		TLSKeyPath:      tlsKeyPath,
+		Host:            a.cfg.Host,
+		KeyPairs:        a.keyPairs,
 		StreamKey:       mediaserver.StreamKey(a.cfg.Sources.MediaServer.StreamKey),
 		ContainerClient: containerClient,
 		Logger:          a.logger.With("component", "mediaserver"),

@@ -1,4 +1,4 @@
-package mediaserver
+package tls_test
 
 import (
 	"crypto/ecdsa"
@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"git.netflux.io/rob/octoplex/internal/tls"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGenerateTLSCert(t *testing.T) {
-	keyPair, err := generateTLSCert("localhost", "rtmp.example.com")
+func TestGenerateKeyPair(t *testing.T) {
+	keyPair, err := tls.GenerateKeyPair("localhost", "rtmp.example.com")
 	require.NoError(t, err)
 	require.NotEmpty(t, keyPair.Cert)
 	require.NotEmpty(t, keyPair.Key)

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	typescontainer "github.com/docker/docker/api/types/container"
@@ -60,9 +59,8 @@ type Actor struct {
 	host                string
 	streamKey           StreamKey
 	updateStateInterval time.Duration
-	pass                string         // password for the media server
-	keyPairInternal     domain.KeyPair // TLS key pair for the media server
-	keyPairCustom       domain.KeyPair // TLS key pair for the media server
+	pass                string // password for the media server
+	keyPairs            domain.KeyPairs
 	logger              *slog.Logger
 	apiClient           *http.Client
 
@@ -77,11 +75,10 @@ type NewActorParams struct {
 	RTMPSAddr           OptionalNetAddr // defaults to disabled, or 127.0.0.1:1936
 	APIPort             int             // defaults to 9997
 	Host                string          // defaults to "localhost"
-	TLSCertPath         string          // defaults to empty
-	TLSKeyPath          string          // defaults to empty
 	StreamKey           StreamKey       // defaults to "live"
 	ChanSize            int             // defaults to 64
 	UpdateStateInterval time.Duration   // defaults to 5 seconds
+	KeyPairs            domain.KeyPairs
 	ContainerClient     *container.Client
 	Logger              *slog.Logger
 }
@@ -98,30 +95,8 @@ type OptionalNetAddr struct {
 //
 // Callers must consume the state channel exposed via [C].
 func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) {
-	dnsNames := []string{"localhost"}
-	if params.Host != "" {
-		dnsNames = append(dnsNames, params.Host)
-	}
-
-	keyPairInternal, err := generateTLSCert(dnsNames...)
-	if err != nil {
-		return nil, fmt.Errorf("generate TLS cert: %w", err)
-	}
-
-	var keyPairCustom domain.KeyPair
-	if params.TLSCertPath != "" {
-		keyPairCustom.Cert, err = os.ReadFile(params.TLSCertPath)
-		if err != nil {
-			return nil, fmt.Errorf("read TLS cert: %w", err)
-		}
-		keyPairCustom.Key, err = os.ReadFile(params.TLSKeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("read TLS key: %w", err)
-		}
-	}
-
 	// TODO: custom cert for API?
-	apiClient, err := buildAPIClient(keyPairInternal.Cert)
+	apiClient, err := buildAPIClient(params.KeyPairs.Internal.Cert)
 	if err != nil {
 		return nil, fmt.Errorf("build API client: %w", err)
 	}
@@ -134,8 +109,7 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 		host:                cmp.Or(params.Host, defaultHost),
 		streamKey:           cmp.Or(params.StreamKey, defaultStreamKey),
 		updateStateInterval: cmp.Or(params.UpdateStateInterval, defaultUpdateStateInterval),
-		keyPairInternal:     keyPairInternal,
-		keyPairCustom:       keyPairCustom,
+		keyPairs:            params.KeyPairs,
 		pass:                generatePassword(),
 		actorC:              make(chan action, chanSize),
 		state:               new(domain.Source),
@@ -174,12 +148,12 @@ func (a *Actor) Start(ctx context.Context) error {
 		},
 		{
 			Path:    tlsInternalCertPath,
-			Payload: bytes.NewReader(a.keyPairInternal.Cert),
+			Payload: bytes.NewReader(a.keyPairs.Internal.Cert),
 			Mode:    0600,
 		},
 		{
 			Path:    tlsInternalKeyPath,
-			Payload: bytes.NewReader(a.keyPairInternal.Key),
+			Payload: bytes.NewReader(a.keyPairs.Internal.Key),
 			Mode:    0600,
 		},
 		{
@@ -189,17 +163,17 @@ func (a *Actor) Start(ctx context.Context) error {
 		},
 	}
 
-	if !a.keyPairCustom.IsZero() {
+	if !a.keyPairs.Custom.IsZero() {
 		copyFiles = append(
 			copyFiles,
 			container.CopyFileConfig{
 				Path:    tlsCertPath,
-				Payload: bytes.NewReader(a.keyPairCustom.Cert),
+				Payload: bytes.NewReader(a.keyPairs.Custom.Cert),
 				Mode:    0600,
 			},
 			container.CopyFileConfig{
 				Path:    tlsKeyPath,
-				Payload: bytes.NewReader(a.keyPairCustom.Key),
+				Payload: bytes.NewReader(a.keyPairs.Custom.Key),
 				Mode:    0600,
 			},
 		)
@@ -271,7 +245,7 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 	}
 
 	var certPath, keyPath string
-	if a.keyPairCustom.IsZero() {
+	if a.keyPairs.Custom.IsZero() {
 		certPath = tlsInternalCertPath
 		keyPath = tlsInternalKeyPath
 	} else {
@@ -287,7 +261,7 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 			AuthInternalUsers: []User{
 				{
 					User: "any",
-					IPs:  []string{}, // any IP
+					IPs:  []string{}, // allow any IP
 					Permissions: []UserPermission{
 						{Action: "publish"},
 					},
@@ -295,7 +269,7 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 				{
 					User: "api",
 					Pass: a.pass,
-					IPs:  []string{}, // any IP
+					IPs:  []string{}, // allow any IP
 					Permissions: []UserPermission{
 						{Action: "read"},
 					},
@@ -303,7 +277,7 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 				{
 					User:        "api",
 					Pass:        a.pass,
-					IPs:         []string{}, // any IP
+					IPs:         []string{}, // allow any IP
 					Permissions: []UserPermission{{Action: "api"}},
 				},
 			},

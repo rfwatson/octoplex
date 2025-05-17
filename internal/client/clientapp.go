@@ -3,9 +3,11 @@ package client
 import (
 	"cmp"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 
+	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/event"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
@@ -13,7 +15,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/terminal"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 )
 
 // DefaultServerAddr is the default address for the client to connect to.
@@ -57,7 +59,11 @@ func New(params NewParams) *App {
 func (a *App) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
-	conn, err := grpc.NewClient(a.serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(a.serverAddr, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+		MinVersion: config.TLSMinVersion,
+		// TODO: parameterize
+		InsecureSkipVerify: true,
+	})))
 	if err != nil {
 		return fmt.Errorf("connect to gRPC server: %w", err)
 	}

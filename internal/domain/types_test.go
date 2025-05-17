@@ -49,3 +49,25 @@ func TestKeyPair(t *testing.T) {
 	keyPair.Key = []byte("key")
 	assert.False(t, keyPair.IsZero())
 }
+
+func TestKeyPairs(t *testing.T) {
+	keyPairs := domain.KeyPairs{
+		Internal: domain.KeyPair{
+			Cert: []byte("internal cert"),
+			Key:  []byte("internal key"),
+		},
+	}
+	assert.Equal(t, keyPairs.Internal, keyPairs.External())
+
+	keyPairs = domain.KeyPairs{
+		Internal: domain.KeyPair{
+			Cert: []byte("internal cert"),
+			Key:  []byte("internal key"),
+		},
+		Custom: domain.KeyPair{
+			Cert: []byte("custom cert"),
+			Key:  []byte("custom key"),
+		},
+	}
+	assert.Equal(t, keyPairs.Custom, keyPairs.External())
+}

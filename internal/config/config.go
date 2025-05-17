@@ -1,6 +1,11 @@
 package config
 
-import "cmp"
+import (
+	"cmp"
+	"crypto/tls"
+)
+
+const TLSMinVersion = tls.VersionTLS13
 
 // Destination holds the configuration for a destination.
 type Destination struct {
@@ -44,8 +49,6 @@ type TLS struct {
 // MediaServerSource holds the configuration for the media server source.
 type MediaServerSource struct {
 	StreamKey string     `yaml:"streamKey,omitempty"`
-	Host      string     `yaml:"host,omitempty"`
-	TLS       *TLS       `yaml:"tls,omitempty"`
 	RTMP      RTMPSource `yaml:"rtmp"`
 	RTMPS     RTMPSource `yaml:"rtmps"`
 }
@@ -57,6 +60,8 @@ type Sources struct {
 
 // Config holds the configuration for the application.
 type Config struct {
+	Host         string        `yaml:"host,omitempty"`
+	TLS          *TLS          `yaml:"tls,omitempty"`
 	LogFile      LogFile       `yaml:"logfile"`
 	Sources      Sources       `yaml:"sources"`
 	Destinations []Destination `yaml:"destinations"`

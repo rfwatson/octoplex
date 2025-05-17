@@ -92,6 +92,11 @@ func TestConfigServiceReadConfig(t *testing.T) {
 					t,
 					gocmp.Diff(
 						config.Config{
+							Host: "example.com",
+							TLS: &config.TLS{
+								CertPath: "/etc/cert.pem",
+								KeyPath:  "/etc/key.pem",
+							},
 							LogFile: config.LogFile{
 								Enabled: true,
 								Path:    "test.log",
@@ -99,11 +104,6 @@ func TestConfigServiceReadConfig(t *testing.T) {
 							Sources: config.Sources{
 								MediaServer: config.MediaServerSource{
 									StreamKey: "s3cr3t",
-									Host:      "rtmp.example.com",
-									TLS: &config.TLS{
-										CertPath: "/etc/cert.pem",
-										KeyPath:  "/etc/key.pem",
-									},
 									RTMP: config.RTMPSource{
 										Enabled: true,
 										NetAddr: config.NetAddr{

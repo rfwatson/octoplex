@@ -1,4 +1,4 @@
-package mediaserver
+package tls
 
 import (
 	"bytes"
@@ -14,8 +14,8 @@ import (
 	"git.netflux.io/rob/octoplex/internal/domain"
 )
 
-// generateTLSCert generates a self-signed TLS certificate and private key.
-func generateTLSCert(dnsNames ...string) (domain.KeyPair, error) {
+// GenerateKeyPair generates a self-signed TLS certificate and private key.
+func GenerateKeyPair(dnsNames ...string) (domain.KeyPair, error) {
 	privKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
 		return domain.KeyPair{}, err

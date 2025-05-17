@@ -242,13 +242,16 @@ func runServer(ctx context.Context, c *cli.Context, serverCfg serverConfig) erro
 		return fmt.Errorf("new docker client: %w", err)
 	}
 
-	app := server.New(server.Params{
+	app, err := server.New(server.Params{
 		ConfigService:  configService,
 		DockerClient:   dockerClient,
 		ConfigFilePath: configService.Path(),
 		WaitForClient:  serverCfg.waitForClient,
 		Logger:         logger,
 	})
+	if err != nil {
+		return fmt.Errorf("new server: %w", err)
+	}
 
 	if c.Command.Name == "stop" {
 		return app.Stop(ctx)

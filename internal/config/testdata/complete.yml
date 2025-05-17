@@ -1,14 +1,14 @@
 ---
+host: example.com
+tls:
+  cert: /etc/cert.pem
+  key: /etc/key.pem
 logfile:
   enabled: true
   path: test.log
 sources:
   mediaServer:
     streamKey: s3cr3t
-    host: rtmp.example.com
-    tls:
-      cert: /etc/cert.pem
-      key: /etc/key.pem
     rtmp:
       enabled: true
       ip: 0.0.0.0
