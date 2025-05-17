@@ -25,6 +25,7 @@ const DefaultServerAddr = "localhost:50051"
 type App struct {
 	bus                *event.Bus
 	serverAddr         string
+	insecureSkipVerify bool
 	clipboardAvailable bool
 	buildInfo          domain.BuildInfo
 	screen             *terminal.Screen
@@ -35,6 +36,7 @@ type App struct {
 type NewParams struct {
 	ClipboardAvailable bool
 	ServerAddr         string
+	InsecureSkipVerify bool
 	BuildInfo          domain.BuildInfo
 	Screen             *terminal.Screen
 	Logger             *slog.Logger
@@ -45,6 +47,7 @@ func New(params NewParams) *App {
 	return &App{
 		bus:                event.NewBus(params.Logger),
 		serverAddr:         cmp.Or(params.ServerAddr, DefaultServerAddr),
+		insecureSkipVerify: params.InsecureSkipVerify,
 		clipboardAvailable: params.ClipboardAvailable,
 		buildInfo:          params.BuildInfo,
 		screen:             params.Screen,
@@ -60,9 +63,8 @@ func (a *App) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	conn, err := grpc.NewClient(a.serverAddr, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
-		MinVersion: config.TLSMinVersion,
-		// TODO: parameterize
-		InsecureSkipVerify: true,
+		MinVersion:         config.TLSMinVersion,
+		InsecureSkipVerify: a.insecureSkipVerify,
 	})))
 	if err != nil {
 		return fmt.Errorf("connect to gRPC server: %w", err)

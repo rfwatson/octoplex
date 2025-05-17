@@ -34,10 +34,12 @@ func buildClientServer(
 	dockerClient container.DockerClient,
 	screen tcell.SimulationScreen,
 	screenCaptureC chan<- terminal.ScreenCapture,
+	insecureSkipVerify bool,
 	logger *slog.Logger,
 ) (*client.App, *server.App) {
 	client := client.New(client.NewParams{
-		BuildInfo: domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
+		InsecureSkipVerify: insecureSkipVerify,
+		BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
 		Screen: &terminal.Screen{
 			Screen:   screen,
 			Width:    180,

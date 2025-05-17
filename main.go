@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"syscall"
 
 	"git.netflux.io/rob/octoplex/internal/client"
@@ -63,16 +64,32 @@ func main() {
 			},
 			{
 				Name:  "client",
-				Usage: "Run the client",
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:  "host",
-						Usage: "The remote host to connect to",
-						Value: client.DefaultServerAddr,
+				Usage: "Control the client",
+				Subcommands: []*cli.Command{
+					{
+						Name:        "run",
+						Usage:       "Run the client",
+						Description: "Run the client, connecting to a remote server.",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:  "host",
+								Usage: "The remote Octoplex server to connect to",
+								Value: client.DefaultServerAddr,
+							},
+							&cli.BoolFlag{
+								Name:        "insecure-skip-verify",
+								Usage:       "Skip TLS verification (insecure)",
+								DefaultText: "false",
+								Aliases:     []string{"insecure"},
+							},
+						},
+						Action: func(c *cli.Context) error {
+							return runClient(c.Context, c, clientConfig{})
+						},
 					},
 				},
 				Action: func(c *cli.Context) error {
-					return runClient(c.Context, c, "")
+					return runClient(c.Context, c, clientConfig{})
 				},
 			},
 			{
@@ -134,13 +151,18 @@ func main() {
 
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+
+		if strings.Contains(err.Error(), "x509: certificate signed by unknown authority") {
+			os.Stderr.WriteString("Hint: Run with --insecure-skip-verify to ignore.\n")
+		}
+
 		os.Exit(1)
 	}
 }
 
 // runClient runs the client, using the provided options (but
 // overriding the host address if it's non-zero).
-func runClient(ctx context.Context, c *cli.Context, host string) error {
+func runClient(ctx context.Context, c *cli.Context, cfg clientConfig) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -165,7 +187,8 @@ func runClient(ctx context.Context, c *cli.Context, host string) error {
 	}
 
 	app := client.New(client.NewParams{
-		ServerAddr:         cmp.Or(host, c.String("host")),
+		ServerAddr:         cmp.Or(cfg.remoteHost, c.String("host")),
+		InsecureSkipVerify: cmp.Or(cfg.insecureSkipVerify, c.Bool("insecure-skip-verify")),
 		ClipboardAvailable: clipboardAvailable,
 		BuildInfo: domain.BuildInfo{
 			GoVersion: buildInfo.GoVersion,
@@ -187,6 +210,11 @@ type serverConfig struct {
 	stderrAvailable bool
 	handleSigInt    bool
 	waitForClient   bool
+}
+
+type clientConfig struct {
+	remoteHost         string
+	insecureSkipVerify bool
 }
 
 func runServer(ctx context.Context, c *cli.Context, serverCfg serverConfig) error {
@@ -312,7 +340,10 @@ func runClientAndServer(c *cli.Context) error {
 	})
 
 	g.Go(func() error {
-		if err := runClient(ctx, c, lis.Addr().String()); err != nil {
+		if err := runClient(ctx, c, clientConfig{
+			remoteHost:         lis.Addr().String(),
+			insecureSkipVerify: true,
+		}); err != nil {
 			return err
 		}
 
