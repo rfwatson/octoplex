@@ -30,6 +30,7 @@ type App struct {
 	eventBus      *event.Bus
 	dispatchC     chan event.Command
 	dockerClient  container.DockerClient
+	listenerFunc  func() (net.Listener, error)
 	keyPairs      domain.KeyPairs
 	waitForClient bool
 	logger        *slog.Logger
@@ -39,6 +40,7 @@ type App struct {
 type Params struct {
 	ConfigService  *config.Service
 	DockerClient   container.DockerClient
+	ListenerFunc   func() (net.Listener, error)
 	ChanSize       int
 	ConfigFilePath string
 	WaitForClient  bool
@@ -55,6 +57,11 @@ var ErrOtherInstanceDetected = errors.New("another instance is currently running
 // New creates a new application instance.
 func New(params Params) (*App, error) {
 	cfg := params.ConfigService.Current()
+	listenerFunc := params.ListenerFunc
+	if listenerFunc == nil {
+		listenerFunc = Listener(cmp.Or(cfg.ListenAddr, config.DefaultListenAddr))
+	}
+
 	keyPairs, err := buildKeyPairs(cfg.Host, cfg.TLS)
 	if err != nil {
 		return nil, fmt.Errorf("build key pairs: %w", err)
@@ -66,6 +73,7 @@ func New(params Params) (*App, error) {
 		eventBus:      event.NewBus(params.Logger.With("component", "event_bus")),
 		dispatchC:     make(chan event.Command, cmp.Or(params.ChanSize, defaultChanSize)),
 		dockerClient:  params.DockerClient,
+		listenerFunc:  listenerFunc,
 		keyPairs:      keyPairs,
 		waitForClient: params.WaitForClient,
 		logger:        params.Logger,
@@ -83,8 +91,7 @@ func (a *App) Run(ctx context.Context) error {
 		return errors.New("config: either sources.mediaServer.rtmp.enabled or sources.mediaServer.rtmps.enabled must be set")
 	}
 
-	const grpcAddr = ":50051"
-	lis, err := net.Listen("tcp", grpcAddr)
+	lis, err := a.listenerFunc()
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
@@ -103,7 +110,7 @@ func (a *App) Run(ctx context.Context) error {
 	internalAPI := newServer(a.DispatchAsync, a.eventBus, a.logger)
 	pb.RegisterInternalAPIServer(grpcServer, internalAPI)
 	go func() {
-		a.logger.Info("gRPC server started", "addr", grpcAddr)
+		a.logger.Info("gRPC server started", "addr", lis.Addr().String())
 		grpcDone <- grpcServer.Serve(lis)
 	}()
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -71,7 +72,7 @@ func main() {
 					},
 				},
 				Action: func(c *cli.Context) error {
-					return runClient(c.Context, c)
+					return runClient(c.Context, c, "")
 				},
 			},
 			{
@@ -137,7 +138,9 @@ func main() {
 	}
 }
 
-func runClient(ctx context.Context, c *cli.Context) error {
+// runClient runs the client, using the provided options (but
+// overriding the host address if it's non-zero).
+func runClient(ctx context.Context, c *cli.Context, host string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -162,7 +165,7 @@ func runClient(ctx context.Context, c *cli.Context) error {
 	}
 
 	app := client.New(client.NewParams{
-		ServerAddr:         c.String("host"),
+		ServerAddr:         cmp.Or(host, c.String("host")),
 		ClipboardAvailable: clipboardAvailable,
 		BuildInfo: domain.BuildInfo{
 			GoVersion: buildInfo.GoVersion,
@@ -180,6 +183,7 @@ func runClient(ctx context.Context, c *cli.Context) error {
 }
 
 type serverConfig struct {
+	listenerFunc    server.ListenerFunc // to override config
 	stderrAvailable bool
 	handleSigInt    bool
 	waitForClient   bool
@@ -245,6 +249,7 @@ func runServer(ctx context.Context, c *cli.Context, serverCfg serverConfig) erro
 	app, err := server.New(server.Params{
 		ConfigService:  configService,
 		DockerClient:   dockerClient,
+		ListenerFunc:   serverCfg.listenerFunc,
 		ConfigFilePath: configService.Path(),
 		WaitForClient:  serverCfg.waitForClient,
 		Logger:         logger,
@@ -285,12 +290,21 @@ func runServer(ctx context.Context, c *cli.Context, serverCfg serverConfig) erro
 }
 
 func runClientAndServer(c *cli.Context) error {
-	errNoErr := errors.New("no error")
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
 
+	errNoErr := errors.New("no error")
 	g, ctx := errgroup.WithContext(c.Context)
 
 	g.Go(func() error {
-		if err := runClient(ctx, c); err != nil {
+		if err := runServer(ctx, c, serverConfig{
+			listenerFunc:    server.WithListener(lis),
+			stderrAvailable: false,
+			handleSigInt:    false,
+			waitForClient:   true,
+		}); err != nil {
 			return err
 		}
 
@@ -298,11 +312,7 @@ func runClientAndServer(c *cli.Context) error {
 	})
 
 	g.Go(func() error {
-		if err := runServer(ctx, c, serverConfig{
-			stderrAvailable: false,
-			handleSigInt:    false,
-			waitForClient:   true,
-		}); err != nil {
+		if err := runClient(ctx, c, lis.Addr().String()); err != nil {
 			return err
 		}
 

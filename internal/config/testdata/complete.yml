@@ -1,4 +1,5 @@
 ---
+listenAddr: :50051
 host: example.com
 tls:
   cert: /etc/cert.pem

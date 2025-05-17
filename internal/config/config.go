@@ -5,7 +5,12 @@ import (
 	"crypto/tls"
 )
 
-const TLSMinVersion = tls.VersionTLS13
+const (
+	// DefaultListenAddr is the default listen address for the server.
+	DefaultListenAddr = "localhost:50051"
+	// TLSMinVersion is the minimum required version of TLS.
+	TLSMinVersion = tls.VersionTLS13
+)
 
 // Destination holds the configuration for a destination.
 type Destination struct {
@@ -60,6 +65,7 @@ type Sources struct {
 
 // Config holds the configuration for the application.
 type Config struct {
+	ListenAddr   string        `yaml:"listenAddr,omitempty"`
 	Host         string        `yaml:"host,omitempty"`
 	TLS          *TLS          `yaml:"tls,omitempty"`
 	LogFile      LogFile       `yaml:"logfile"`

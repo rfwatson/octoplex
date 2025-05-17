@@ -182,6 +182,7 @@ func (s *Service) writeConfig(cfgBytes []byte) error {
 //
 // This function may set serialized fields to arbitrary values.
 func (s *Service) populateConfigOnBuild(cfg *Config) {
+	cfg.ListenAddr = "localhost:50051"
 	cfg.Sources.MediaServer.StreamKey = "live"
 	cfg.Sources.MediaServer.RTMP = RTMPSource{
 		Enabled: true,

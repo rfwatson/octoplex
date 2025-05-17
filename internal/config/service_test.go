@@ -47,6 +47,7 @@ func TestConfigServiceCurrent(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, os.RemoveAll(systemConfigDir)) })
 
 	// Ensure defaults are set:
+	assert.Equal(t, "localhost:50051", service.Current().ListenAddr)
 	assert.NotNil(t, service.Current().Sources.MediaServer.RTMP)
 	assert.Equal(t, "127.0.0.1", service.Current().Sources.MediaServer.RTMP.IP)
 	assert.Equal(t, 1935, service.Current().Sources.MediaServer.RTMP.Port)
@@ -92,7 +93,8 @@ func TestConfigServiceReadConfig(t *testing.T) {
 					t,
 					gocmp.Diff(
 						config.Config{
-							Host: "example.com",
+							ListenAddr: ":50051",
+							Host:       "example.com",
 							TLS: &config.TLS{
 								CertPath: "/etc/cert.pem",
 								KeyPath:  "/etc/key.pem",
