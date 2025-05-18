@@ -51,50 +51,20 @@ func (e errInterrupt) ExitCode() int {
 
 func main() {
 	app := &cli.App{
-		Name:  "Octoplex",
-		Usage: "Octoplex is a live video restreamer for Docker.",
+		Name:  "octoplex",
+		Usage: "Live video restreamer for Docker",
 		Commands: []*cli.Command{
 			{
 				Name:        "run",
-				Usage:       "Run server and client in the same process",
-				Description: "Run the server and client in the same process. This is useful for testing, debugging or running for a single user.",
+				Usage:       "Launch both server and client in a single process",
+				Description: "Launch both server and client in a single process. This is useful for testing, debugging or running for a single user.",
 				Action: func(c *cli.Context) error {
 					return runClientAndServer(c)
 				},
 			},
 			{
-				Name:  "client",
-				Usage: "Control the client",
-				Subcommands: []*cli.Command{
-					{
-						Name:        "run",
-						Usage:       "Run the client",
-						Description: "Run the client, connecting to a remote server.",
-						Flags: []cli.Flag{
-							&cli.StringFlag{
-								Name:  "host",
-								Usage: "The remote Octoplex server to connect to",
-								Value: client.DefaultServerAddr,
-							},
-							&cli.BoolFlag{
-								Name:        "insecure-skip-verify",
-								Usage:       "Skip TLS verification (insecure)",
-								DefaultText: "false",
-								Aliases:     []string{"insecure"},
-							},
-						},
-						Action: func(c *cli.Context) error {
-							return runClient(c.Context, c, clientConfig{})
-						},
-					},
-				},
-				Action: func(c *cli.Context) error {
-					return runClient(c.Context, c, clientConfig{})
-				},
-			},
-			{
 				Name:  "server",
-				Usage: "Control the standalone server",
+				Usage: "Manage the standalone Octoplex server",
 				Action: func(c *cli.Context) error {
 					return c.App.Command("server").Subcommands[0].Action(c)
 				},
@@ -140,8 +110,42 @@ func main() {
 				},
 			},
 			{
+				Name:  "client",
+				Usage: "Manage the client",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "host",
+						Usage: "The remote Octoplex server to connect to",
+						Value: client.DefaultServerAddr,
+					},
+					&cli.BoolFlag{
+						Name:        "tls-skip-verify",
+						Usage:       "Skip TLS verification (insecure)",
+						DefaultText: "false",
+					},
+					&cli.StringFlag{
+						Name:      "log-file",
+						Usage:     "Path to the log file",
+						TakesFile: true,
+					},
+				},
+				Subcommands: []*cli.Command{
+					{
+						Name:        "start",
+						Usage:       "Start the TUI client",
+						Description: "Start the terminal user interface, connecting to a remote server.",
+						Action: func(c *cli.Context) error {
+							return runClient(c.Context, c, clientConfig{})
+						},
+					},
+				},
+				Action: func(c *cli.Context) error {
+					return runClient(c.Context, c, clientConfig{})
+				},
+			},
+			{
 				Name:  "version",
-				Usage: "Print the version",
+				Usage: "Display the currrent version",
 				Action: func(*cli.Context) error {
 					return printVersion()
 				},
@@ -153,7 +157,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 
 		if strings.Contains(err.Error(), "x509: certificate signed by unknown authority") {
-			os.Stderr.WriteString("Hint: Run with --insecure-skip-verify to ignore.\n")
+			os.Stderr.WriteString("Hint: Run with --tls-skip-verify to ignore.\n")
 		}
 
 		os.Exit(1)
@@ -166,16 +170,19 @@ func runClient(ctx context.Context, c *cli.Context, cfg clientConfig) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// TODO: logger from config
-	fptr, err := os.OpenFile("octoplex.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		return fmt.Errorf("open log file: %w", err)
+	logger := slog.New(slog.DiscardHandler)
+	if logfile := c.String("log-file"); logfile != "" {
+		fptr, err := os.OpenFile(logfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			return fmt.Errorf("open log file: %w", err)
+		}
+		logger = slog.New(slog.NewTextHandler(fptr, nil))
 	}
-	logger := slog.New(slog.NewTextHandler(fptr, nil))
+
 	logger.Info("Starting client", "version", cmp.Or(version, "devel"), "commit", cmp.Or(commit, "unknown"), "date", cmp.Or(date, "unknown"), "go_version", runtime.Version())
 
 	var clipboardAvailable bool
-	if err = clipboard.Init(); err != nil {
+	if err := clipboard.Init(); err != nil {
 		logger.Warn("Clipboard not available", "err", err)
 	} else {
 		clipboardAvailable = true
@@ -183,12 +190,12 @@ func runClient(ctx context.Context, c *cli.Context, cfg clientConfig) error {
 
 	buildInfo, ok := debug.ReadBuildInfo()
 	if !ok {
-		return fmt.Errorf("read build info: %w", err)
+		return fmt.Errorf("unable to read build info")
 	}
 
 	app := client.New(client.NewParams{
 		ServerAddr:         cmp.Or(cfg.remoteHost, c.String("host")),
-		InsecureSkipVerify: cmp.Or(cfg.insecureSkipVerify, c.Bool("insecure-skip-verify")),
+		InsecureSkipVerify: cmp.Or(cfg.insecureSkipVerify, c.Bool("tls-skip-verify")),
 		ClipboardAvailable: clipboardAvailable,
 		BuildInfo: domain.BuildInfo{
 			GoVersion: buildInfo.GoVersion,
