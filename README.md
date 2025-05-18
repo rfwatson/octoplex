@@ -157,16 +157,16 @@ Octoplex stores configuration state in a simple YAML file. (See [above](#subcomm
 Sample configuration:
 
 ```yaml
+host: rtmp.example.com             # defaults to "localhost"
+tls:                               # optional TLS settings; RTMPS support is automatic.
+  cert: /etc/mycert.pem            # If you omit cert/key, a self-signed keypair will be
+  key: /etc/mykey.pem              # generated using the `host` value above.
 logfile:
   enabled: true                        # defaults to false
   path: /path/to/logfile               # defaults to $XDG_STATE_HOME/octoplex/octoplex.log
 sources:
   mediaServer:
     streamKey: live                    # defaults to "live"
-    host: rtmp.example.com             # defaults to "localhost"
-    tls:                               # optional TLS settings; RTMPS support is automatic.
-      cert: /etc/mycert.pem            # If you omit cert/key, a self-signed keypair will be
-      key: /etc/mykey.pem              # generated using the `host` value above.
     rtmp:
       enabled: true                    # defaults to false
       ip: 127.0.0.1                    # defaults to 127.0.0.1
