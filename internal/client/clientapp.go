@@ -62,6 +62,14 @@ func New(params NewParams) *App {
 func (a *App) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
+	if a.insecureSkipVerify {
+		a.logger.Warn(
+			"TLS certificate verification is DISABLED — traffic is encrypted but unauthenticated",
+			"component", "grpc",
+			"risk", "vulnerable to active MITM",
+			"action", "use a trusted certificate and enable verification before production",
+		)
+	}
 	conn, err := grpc.NewClient(a.serverAddr, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
 		MinVersion:         config.TLSMinVersion,
 		InsecureSkipVerify: a.insecureSkipVerify,
