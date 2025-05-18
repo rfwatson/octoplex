@@ -310,9 +310,7 @@ func TestIntegrationCustomHost(t *testing.T) {
 	require.EventuallyWithT(
 		t,
 		func(c *assert.CollectT) {
-			conn, err := tls.Dial("tcp", "localhost:9997", &tls.Config{
-				InsecureSkipVerify: true,
-			})
+			conn, err := tls.Dial("tcp", "localhost:9997", &tls.Config{InsecureSkipVerify: true})
 			require.NoError(c, err)
 
 			require.Nil(

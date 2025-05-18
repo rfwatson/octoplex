@@ -135,6 +135,12 @@ func (a *Actor) Start(ctx context.Context) error {
 		return fmt.Errorf("parse port specs: %w", err)
 	}
 
+	// RTMP URLs are passed in state mostly to ensure that late-joining clients
+	// can receive them. It might be nice to clean this up, the URLs don't change
+	// so aren't really stateful data and don't need to be sent in every update.
+	a.state.RTMPURL = a.RTMPURL()
+	a.state.RTMPSURL = a.RTMPSURL()
+
 	cfg, err := a.buildServerConfig()
 	if err != nil {
 		return fmt.Errorf("build server config: %w", err)

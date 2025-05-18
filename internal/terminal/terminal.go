@@ -45,7 +45,6 @@ type UI struct {
 	eventBus           *event.Bus
 	dispatch           func(event.Command)
 	clipboardAvailable bool
-	rtmpURL, rtmpsURL  string
 	buildInfo          domain.BuildInfo
 	appExitC           chan error
 	logger             *slog.Logger
@@ -60,13 +59,14 @@ type UI struct {
 	sourceViews       sourceViews
 	destView          *tview.Table
 	noDestView        *tview.TextView
-	aboutView         *tview.Flex
+	actionsView       *tview.Flex
 	pullProgressModal *tview.Modal
 
 	// other mutable state
 
-	mu               sync.Mutex
-	urlsToStartState map[string]startState
+	mu                sync.Mutex
+	urlsToStartState  map[string]startState
+	rtmpURL, rtmpsURL string
 
 	/// addingDestination is true if add destination modal is currently visible.
 	addingDestination bool
@@ -167,12 +167,12 @@ func NewUI(ctx context.Context, params Params) (*UI, error) {
 	rxTextView := tview.NewTextView().SetDynamicColors(true).SetText("[white]" + dash)
 	rightCol.AddItem(rxTextView, 1, 0, false)
 
-	aboutView := tview.NewFlex()
-	aboutView.SetDirection(tview.FlexRow)
-	aboutView.SetBorder(true)
-	aboutView.SetTitle("Actions")
+	actionsView := tview.NewFlex()
+	actionsView.SetDirection(tview.FlexRow)
+	actionsView.SetBorder(true)
+	actionsView.SetTitle("Actions")
 
-	sidebar.AddItem(aboutView, 0, 1, false)
+	sidebar.AddItem(actionsView, 0, 1, false)
 
 	destView := tview.NewTable()
 	destView.SetTitle("Destinations")
@@ -230,7 +230,7 @@ func NewUI(ctx context.Context, params Params) (*UI, error) {
 		},
 		destView:          destView,
 		noDestView:        noDestView,
-		aboutView:         aboutView,
+		actionsView:       actionsView,
 		pullProgressModal: pullProgressModal,
 		urlsToStartState:  make(map[string]startState),
 	}
@@ -239,29 +239,6 @@ func NewUI(ctx context.Context, params Params) (*UI, error) {
 	app.SetAfterDrawFunc(ui.afterDrawHandler)
 
 	return ui, nil
-}
-
-func (ui *UI) renderAboutView() {
-	ui.aboutView.Clear()
-
-	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]a[-]        Add destination"), 1, 0, false)
-	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Del[-]      Remove destination"), 1, 0, false)
-	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Space[-]    Start/stop destination"), 1, 0, false)
-	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText(""), 1, 0, false)
-
-	i := 1
-	if ui.rtmpURL != "" {
-		rtmpURLView := tview.NewTextView().SetDynamicColors(true).SetText(fmt.Sprintf("[grey]F%d[-]       Copy source RTMP URL", i))
-		ui.aboutView.AddItem(rtmpURLView, 1, 0, false)
-		i++
-	}
-
-	if ui.rtmpsURL != "" {
-		rtmpsURLView := tview.NewTextView().SetDynamicColors(true).SetText(fmt.Sprintf("[grey]F%d[-]       Copy source RTMPS URL", i))
-		ui.aboutView.AddItem(rtmpsURLView, 1, 0, false)
-	}
-
-	ui.aboutView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]?[-]        About"), 1, 0, false)
 }
 
 var ErrUserClosed = errors.New("user closed UI")
@@ -306,7 +283,7 @@ func (ui *UI) Run(ctx context.Context) error {
 				case event.OtherInstanceDetectedEvent:
 					ui.handleOtherInstanceDetected(evt)
 				case event.MediaServerStartedEvent:
-					ui.handleMediaServerStarted(evt)
+					// no-op, consider removing event
 				case event.FatalErrorOccurredEvent:
 					ui.handleFatalErrorOccurred(evt)
 				default:
@@ -319,15 +296,6 @@ func (ui *UI) Run(ctx context.Context) error {
 			return cmp.Or(err, ErrUserClosed)
 		}
 	}
-}
-
-func (ui *UI) handleMediaServerStarted(evt event.MediaServerStartedEvent) {
-	ui.mu.Lock()
-	ui.rtmpURL = evt.RTMPURL
-	ui.rtmpsURL = evt.RTMPSURL
-	ui.mu.Unlock()
-
-	ui.renderAboutView()
 }
 
 func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
@@ -485,6 +453,9 @@ func (ui *UI) handleAppStateChanged(evt event.AppStateChangedEvent) {
 	ui.updatePullProgress(state)
 
 	ui.mu.Lock()
+	ui.rtmpURL = state.Source.RTMPURL
+	ui.rtmpsURL = state.Source.RTMPSURL
+
 	for _, dest := range state.Destinations {
 		ui.urlsToStartState[dest.URL] = containerStateToStartState(dest.Container.Status)
 	}
@@ -691,6 +662,7 @@ const (
 	headerTracks    = "Tracks"
 )
 
+// OPTIMIZE: investigate if we could/should try to redraw less frequently
 func (ui *UI) redrawFromState(state domain.AppState) {
 	var addingDestination bool
 	ui.mu.Lock()
@@ -715,6 +687,8 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 			SetAlign(tview.AlignLeft).
 			SetSelectable(false)
 	}
+
+	// sources view
 
 	tracks := dash
 	if state.Source.Live && len(state.Source.Tracks) > 0 {
@@ -754,6 +728,8 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 		rxRate = fmt.Sprintf("%d", state.Source.Container.RxRate)
 	}
 	ui.sourceViews.rx.SetText("[white]" + rxRate)
+
+	// destinations view
 
 	ui.destView.Clear()
 	ui.destView.SetCell(0, 0, headerCell("[grey]"+headerName, 3))
@@ -814,6 +790,28 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 		}
 		ui.destView.SetCell(i+1, 7, tview.NewTableCell(txRate))
 	}
+
+	// actions view
+
+	ui.actionsView.Clear()
+	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]a[-]        Add destination"), 1, 0, false)
+	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Del[-]      Remove destination"), 1, 0, false)
+	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Space[-]    Start/stop destination"), 1, 0, false)
+	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText(""), 1, 0, false)
+
+	i := 1
+	if ui.rtmpURL != "" {
+		rtmpURLView := tview.NewTextView().SetDynamicColors(true).SetText(fmt.Sprintf("[grey]F%d[-]       Copy source RTMP URL", i))
+		ui.actionsView.AddItem(rtmpURLView, 1, 0, false)
+		i++
+	}
+
+	if ui.rtmpsURL != "" {
+		rtmpsURLView := tview.NewTextView().SetDynamicColors(true).SetText(fmt.Sprintf("[grey]F%d[-]       Copy source RTMPS URL", i))
+		ui.actionsView.AddItem(rtmpsURLView, 1, 0, false)
+	}
+
+	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]?[-]        About"), 1, 0, false)
 }
 
 // Close closes the terminal user interface.

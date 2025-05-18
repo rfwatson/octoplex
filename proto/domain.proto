@@ -29,6 +29,8 @@ message Source {
   google.protobuf.Timestamp live_changed_at = 3;
   repeated string tracks = 4;
   string exit_reason = 5;
+  string rtmp_url = 6;
+  string rtmps_url = 7;
 }
 
 message Destination {

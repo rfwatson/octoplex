@@ -15,9 +15,8 @@ func TestBus(t *testing.T) {
 	ch1 := bus.Register()
 	ch2 := bus.Register()
 
-	evt := event.MediaServerStartedEvent{
-		RTMPURL:  "rtmp://rtmp.example.com/live",
-		RTMPSURL: "rtmps://rtmp.example.com/live",
+	evt := event.DestinationAddedEvent{
+		URL: "rtmp://rtmp.example.com/live",
 	}
 
 	go func() {
@@ -25,11 +24,11 @@ func TestBus(t *testing.T) {
 		bus.Send(evt)
 	}()
 
-	assert.Equal(t, evt, (<-ch1).(event.MediaServerStartedEvent))
-	assert.Equal(t, evt, (<-ch1).(event.MediaServerStartedEvent))
+	assert.Equal(t, evt, (<-ch1).(event.DestinationAddedEvent))
+	assert.Equal(t, evt, (<-ch1).(event.DestinationAddedEvent))
 
-	assert.Equal(t, evt, (<-ch2).(event.MediaServerStartedEvent))
-	assert.Equal(t, evt, (<-ch2).(event.MediaServerStartedEvent))
+	assert.Equal(t, evt, (<-ch2).(event.DestinationAddedEvent))
+	assert.Equal(t, evt, (<-ch2).(event.DestinationAddedEvent))
 
 	bus.Deregister(ch1)
 

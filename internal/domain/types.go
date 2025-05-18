@@ -35,6 +35,8 @@ type Source struct {
 	Live          bool
 	LiveChangedAt time.Time
 	Tracks        []string
+	RTMPURL       string
+	RTMPSURL      string
 	ExitReason    string
 }
 

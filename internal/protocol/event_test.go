@@ -8,7 +8,6 @@ import (
 	"git.netflux.io/rob/octoplex/internal/event"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
 	"git.netflux.io/rob/octoplex/internal/protocol"
-	"github.com/google/go-cmp/cmp"
 	gocmp "github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -28,7 +27,9 @@ func TestEventToProto(t *testing.T) {
 						Container: domain.Container{
 							ID: "abc123",
 						},
-						Live: true,
+						Live:     true,
+						RTMPURL:  "rtmp://rtmp.example.com",
+						RTMPSURL: "rtmps://rtmp.example.com",
 					},
 					Destinations: []domain.Destination{
 						{
@@ -50,7 +51,9 @@ func TestEventToProto(t *testing.T) {
 								Container: &pb.Container{
 									Id: "abc123",
 								},
-								Live: true,
+								Live:     true,
+								RtmpUrl:  "rtmp://rtmp.example.com",
+								RtmpsUrl: "rtmps://rtmp.example.com",
 							},
 							Destinations: []*pb.Destination{
 								{
@@ -122,13 +125,10 @@ func TestEventToProto(t *testing.T) {
 		},
 		{
 			name: "MediaServerStarted",
-			in:   event.MediaServerStartedEvent{RTMPURL: "rtmp://media", RTMPSURL: "rtmps://media"},
+			in:   event.MediaServerStartedEvent{},
 			want: &pb.Event{
 				EventType: &pb.Event_MediaServerStarted{
-					MediaServerStarted: &pb.MediaServerStartedEvent{
-						RtmpUrl:  "rtmp://media",
-						RtmpsUrl: "rtmps://media",
-					},
+					MediaServerStarted: &pb.MediaServerStartedEvent{},
 				},
 			},
 		},
@@ -156,6 +156,8 @@ func TestEventFromProto(t *testing.T) {
 							Source: &pb.Source{
 								Container: &pb.Container{Id: "abc123"},
 								Live:      true,
+								RtmpUrl:   "rtmp://rtmp.example.com",
+								RtmpsUrl:  "rtmps://rtmp.example.com",
 							},
 							Destinations: []*pb.Destination{
 								{
@@ -177,6 +179,8 @@ func TestEventFromProto(t *testing.T) {
 					Source: domain.Source{
 						Container: domain.Container{ID: "abc123"},
 						Live:      true,
+						RTMPURL:   "rtmp://rtmp.example.com",
+						RTMPSURL:  "rtmps://rtmp.example.com",
 					},
 					Destinations: []domain.Destination{
 						{
@@ -249,19 +253,16 @@ func TestEventFromProto(t *testing.T) {
 			name: "MediaServerStarted",
 			in: &pb.Event{
 				EventType: &pb.Event_MediaServerStarted{
-					MediaServerStarted: &pb.MediaServerStartedEvent{
-						RtmpUrl:  "rtmp://media",
-						RtmpsUrl: "rtmps://media",
-					},
+					MediaServerStarted: &pb.MediaServerStartedEvent{},
 				},
 			},
-			want: event.MediaServerStartedEvent{RTMPURL: "rtmp://media", RTMPSURL: "rtmps://media"},
+			want: event.MediaServerStartedEvent{},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Empty(t, cmp.Diff(tc.want, protocol.EventFromProto(tc.in), gocmp.Comparer(compareErrorMessages)))
+			assert.Empty(t, gocmp.Diff(tc.want, protocol.EventFromProto(tc.in), gocmp.Comparer(compareErrorMessages)))
 		})
 	}
 }

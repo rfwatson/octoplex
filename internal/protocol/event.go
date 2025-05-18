@@ -53,6 +53,8 @@ func buildAppStateChangeEvent(evt event.AppStateChangedEvent) *pb.Event {
 						Live:          evt.State.Source.Live,
 						LiveChangedAt: liveChangedAt,
 						Tracks:        evt.State.Source.Tracks,
+						RtmpUrl:       evt.State.Source.RTMPURL,
+						RtmpsUrl:      evt.State.Source.RTMPSURL,
 						ExitReason:    evt.State.Source.ExitReason,
 					},
 					Destinations: DestinationsToProto(evt.State.Destinations),
@@ -132,10 +134,10 @@ func buildOtherInstanceDetectedEvent(_ event.OtherInstanceDetectedEvent) *pb.Eve
 	}
 }
 
-func buildMediaServerStartedEvent(evt event.MediaServerStartedEvent) *pb.Event {
+func buildMediaServerStartedEvent(event.MediaServerStartedEvent) *pb.Event {
 	return &pb.Event{
 		EventType: &pb.Event_MediaServerStarted{
-			MediaServerStarted: &pb.MediaServerStartedEvent{RtmpUrl: evt.RTMPURL, RtmpsUrl: evt.RTMPSURL},
+			MediaServerStarted: &pb.MediaServerStartedEvent{},
 		},
 	}
 }
@@ -189,6 +191,8 @@ func parseAppStateChangedEvent(evt *pb.AppStateChangedEvent) event.Event {
 				Live:          evt.AppState.Source.Live,
 				LiveChangedAt: liveChangedAt,
 				Tracks:        evt.AppState.Source.Tracks,
+				RTMPURL:       evt.AppState.Source.RtmpUrl,
+				RTMPSURL:      evt.AppState.Source.RtmpsUrl,
 				ExitReason:    evt.AppState.Source.ExitReason,
 			},
 			Destinations: ProtoToDestinations(evt.AppState.Destinations),
@@ -259,5 +263,5 @@ func parseMediaServerStartedEvent(evt *pb.MediaServerStartedEvent) event.Event {
 	if evt == nil {
 		panic("nil MediaServerStartedEvent")
 	}
-	return event.MediaServerStartedEvent{RTMPURL: evt.RtmpUrl, RTMPSURL: evt.RtmpsUrl}
+	return event.MediaServerStartedEvent{}
 }

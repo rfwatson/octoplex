@@ -162,12 +162,12 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	defer containerClient.Close()
 
-	updateUI := func() {
+	sendAppStateChanged := func() {
 		// The state is mutable so can't be passed into another goroutine
 		// without cloning it first.
 		a.eventBus.Send(event.AppStateChangedEvent{State: state.Clone()})
 	}
-	updateUI()
+	sendAppStateChanged()
 
 	srv, err := mediaserver.NewActor(ctx, mediaserver.NewActorParams{
 		RTMPAddr:        buildNetAddr(a.cfg.Sources.MediaServer.RTMP),
@@ -220,7 +220,7 @@ func (a *App) Run(ctx context.Context) error {
 				return fmt.Errorf("start mediaserver: %w", err)
 			}
 
-			a.eventBus.Send(event.MediaServerStartedEvent{RTMPURL: srv.RTMPURL(), RTMPSURL: srv.RTMPSURL()})
+			sendAppStateChanged()
 		case <-a.configService.C():
 			// No-op, config updates are handled synchronously for now.
 		case cmd := <-a.dispatchC:
@@ -230,7 +230,7 @@ func (a *App) Run(ctx context.Context) error {
 				return fmt.Errorf("handle command: %w", err)
 			}
 		case <-uiUpdateT.C:
-			updateUI()
+			sendAppStateChanged()
 		case serverState := <-srv.C():
 			a.logger.Debug("Server state received", "state", serverState)
 
@@ -240,7 +240,7 @@ func (a *App) Run(ctx context.Context) error {
 			}
 
 			applyServerState(serverState, state)
-			updateUI()
+			sendAppStateChanged()
 		case replState := <-repl.C():
 			a.logger.Debug("Replicator state received", "state", replState)
 			destErrors := applyReplicatorState(replState, state)
@@ -250,7 +250,7 @@ func (a *App) Run(ctx context.Context) error {
 				repl.StopDestination(destError.url)
 			}
 
-			updateUI()
+			sendAppStateChanged()
 		}
 	}
 }

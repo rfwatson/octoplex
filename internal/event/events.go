@@ -109,10 +109,7 @@ func (e FatalErrorOccurredEvent) EventName() Name {
 }
 
 // MediaServerStartedEvent is emitted when the mediaserver component starts successfully.
-type MediaServerStartedEvent struct {
-	RTMPURL  string
-	RTMPSURL string
-}
+type MediaServerStartedEvent struct{}
 
 func (e MediaServerStartedEvent) EventName() Name {
 	return "media_server_started"

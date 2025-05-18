@@ -47,10 +47,7 @@ message StartDestinationFailedEvent {
   string message = 2;
 }
 
-message MediaServerStartedEvent {
-  string rtmp_url = 1;
-  string rtmps_url = 2;
-}
+message MediaServerStartedEvent {}
 
 message OtherInstanceDetectedEvent {}
 
