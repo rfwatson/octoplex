@@ -62,7 +62,7 @@ Octoplex can run as a single process (all-in-one), or in a client/server pair.
 
 Mode|Pick this when you...
 ---|---
-[All-in-one](#all-in-one)|Are testing locally, debugging, or streaming from the same machine that runs Docker.
+[All-in-one](#all-in-one)|Are testing locally, debugging, or streaming from the same machine that runs Docker (e.g. your laptop).
 [Client/server](#clientserver)|Want the server on a remote host (e.g., cloud VM) for long-running or unattended streams.
 
 ### All-in-one
@@ -101,12 +101,12 @@ $ octoplex server stop
 
 Subcommand|Description
 ---|---
-`run`|Run Octoplex in all-in-one mode
+`run`|Launch both server and client in a single process
 `server start`|Start the Octoplex server
 `server stop`|Stop the Octoplex server
+`server print-config`|Display the path to the configuration file
+`server edit-config`|Edit the configuration file in `$EDITOR`
 `client start`|Start the Octoplex TUI client
-`server print-config`|Echo the path to the configuration file to STDOUT
-`server edit-config`|Edit the configuration file in $EDITOR
 `version`|Print the version
 `help`|Print help screen
 
