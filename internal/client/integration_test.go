@@ -19,6 +19,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/container/mocks"
 	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/server"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"github.com/docker/docker/api/types/network"
 	dockerclient "github.com/docker/docker/client"
@@ -121,7 +122,7 @@ func testIntegration(t *testing.T, host string, mediaServerConfig config.MediaSe
 		Destinations: []config.Destination{{Name: "Local server 1", URL: destURL1}},
 	})
 
-	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, true, logger)
+	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, logger)
 	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
@@ -289,7 +290,7 @@ func TestIntegrationCustomHost(t *testing.T) {
 	})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, true, logger)
+	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, logger)
 	ch := runClientServer(ctx, t, client, server)
 
 	time.Sleep(time.Second)
@@ -357,7 +358,18 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 	})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, true, logger)
+	lis, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
+
+	client, server := buildClientServer(
+		t,
+		configService,
+		dockerClient,
+		screen,
+		screenCaptureC,
+		logger,
+		withListenerFunc(server.WithListener(lis)),
+	)
 	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
@@ -373,7 +385,9 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 			rootCAs := x509.NewCertPool()
 			require.True(c, rootCAs.AppendCertsFromPEM(certPEM), "failed to append cert to root CA pool")
 
-			for _, addr := range []string{"localhost:1936", "localhost:50051"} {
+			rtmpPort := "localhost:1936"
+			grpcPort := fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port)
+			for _, addr := range []string{rtmpPort, grpcPort} {
 				conn, err := tls.Dial("tcp", addr, &tls.Config{
 					RootCAs:            rootCAs,
 					ServerName:         "localhost",
@@ -418,9 +432,15 @@ func TestIntegrationCustomTLSNoInsecureSkipVerify(t *testing.T) {
 	})
 	screen, screenCaptureC, _ := setupSimulationScreen(t)
 
-	// force certificate verification
-	const insecureSkipVerify = false
-	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, insecureSkipVerify, logger)
+	client, server := buildClientServer(
+		t,
+		configService,
+		dockerClient,
+		screen,
+		screenCaptureC,
+		logger,
+		withInsecureSkipVerify(false),
+	)
 
 	result := <-runClientServer(ctx, t, client, server)
 	assert.ErrorContains(t, result.errClient, "failed to verify certificate: x509: certificate signed by unknown authority")
@@ -463,7 +483,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 		}},
 	})
 
-	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, true, logger)
+	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, logger)
 	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
@@ -596,7 +616,7 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 		Destinations: []config.Destination{{Name: "Example server", URL: "rtmp://rtmp.example.com/live"}},
 	})
 
-	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, true, logger)
+	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, logger)
 	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
@@ -665,7 +685,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 		Sources: config.Sources{MediaServer: config.MediaServerSource{StreamKey: "live", RTMP: config.RTMPSource{Enabled: true}}},
 	})
 
-	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, true, logger)
+	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, logger)
 	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
@@ -803,7 +823,7 @@ func TestIntegrationStartupCheck(t *testing.T) {
 	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, true, logger)
+	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, logger)
 	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
@@ -868,7 +888,7 @@ func TestIntegrationMediaServerError(t *testing.T) {
 	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, true, logger)
+	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, logger)
 	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
@@ -903,7 +923,7 @@ func TestIntegrationDockerClientError(t *testing.T) {
 	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	client, server := buildClientServer(t, configService, &dockerClient, screen, screenCaptureC, true, logger)
+	client, server := buildClientServer(t, configService, &dockerClient, screen, screenCaptureC, logger)
 	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
@@ -937,7 +957,7 @@ func TestIntegrationDockerConnectionError(t *testing.T) {
 	configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}})
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, true, logger)
+	client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, logger)
 	ch := runClientServer(ctx, t, client, server)
 
 	require.EventuallyWithT(
@@ -1028,7 +1048,7 @@ func TestIntegrationCopyURLs(t *testing.T) {
 			configService := setupConfigService(t, config.Config{Sources: config.Sources{MediaServer: tc.mediaServerConfig}})
 			screen, screenCaptureC, getContents := setupSimulationScreen(t)
 
-			client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, true, logger)
+			client, server := buildClientServer(t, configService, dockerClient, screen, screenCaptureC, logger)
 			ch := runClientServer(ctx, t, client, server)
 
 			for _, want := range tc.wantBindings {

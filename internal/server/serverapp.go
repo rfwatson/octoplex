@@ -40,7 +40,7 @@ type App struct {
 type Params struct {
 	ConfigService  *config.Service
 	DockerClient   container.DockerClient
-	ListenerFunc   func() (net.Listener, error)
+	ListenerFunc   func() (net.Listener, error) // ListenerFunc overrides the configured listen address. May be nil.
 	ChanSize       int
 	ConfigFilePath string
 	WaitForClient  bool

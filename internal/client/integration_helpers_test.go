@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -28,17 +29,49 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type buildClientServerOptions struct {
+	listenerFunc       server.ListenerFunc
+	insecureSkipVerify bool
+}
+
+type buildOpt func(*buildClientServerOptions)
+
+func withListenerFunc(listenerFunc server.ListenerFunc) func(*buildClientServerOptions) {
+	return func(o *buildClientServerOptions) {
+		o.listenerFunc = listenerFunc
+	}
+}
+
+func withInsecureSkipVerify(insecureSkipVerify bool) func(*buildClientServerOptions) {
+	return func(o *buildClientServerOptions) {
+		o.insecureSkipVerify = insecureSkipVerify
+	}
+}
+
 func buildClientServer(
 	t *testing.T,
 	configService *config.Service,
 	dockerClient container.DockerClient,
 	screen tcell.SimulationScreen,
 	screenCaptureC chan<- terminal.ScreenCapture,
-	insecureSkipVerify bool,
 	logger *slog.Logger,
+	opts ...buildOpt,
 ) (*client.App, *server.App) {
+	options := buildClientServerOptions{ // defaults
+		listenerFunc:       server.Listener("[::]:0"), // ipv6 required for GitHub actions
+		insecureSkipVerify: true,
+	}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	// Set up listener first, avoid timing issues connecting to the server.
+	lis, err := options.listenerFunc()
+	require.NoError(t, err)
+
 	client := client.New(client.NewParams{
-		InsecureSkipVerify: insecureSkipVerify,
+		ServerAddr:         fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port),
+		InsecureSkipVerify: options.insecureSkipVerify,
 		BuildInfo:          domain.BuildInfo{Version: "0.0.1", GoVersion: "go1.16.3"},
 		Screen: &terminal.Screen{
 			Screen:   screen,
@@ -51,6 +84,7 @@ func buildClientServer(
 
 	server, err := server.New(server.Params{
 		ConfigService: configService,
+		ListenerFunc:  server.WithListener(lis),
 		DockerClient:  dockerClient,
 		WaitForClient: true,
 		Logger:        logger,
