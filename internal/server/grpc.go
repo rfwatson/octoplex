@@ -82,6 +82,9 @@ func (s *Server) Communicate(stream pb.InternalAPI_CommunicateServer) error {
 			select {
 			case evt := <-eventsC:
 				if err := stream.Send(&pb.Envelope{Payload: &pb.Envelope_Event{Event: protocol.EventToProto(evt)}}); err != nil {
+					if ctxErr := stream.Context().Err(); ctxErr != nil {
+						err = ctxErr
+					}
 					return fmt.Errorf("send event: %w", err)
 				}
 			case <-ctx.Done():
@@ -103,12 +106,10 @@ func (s *Server) Communicate(stream pb.InternalAPI_CommunicateServer) error {
 
 		for {
 			in, err := stream.Recv()
-			if err == io.EOF {
-				s.logger.Info("Client disconnected")
-				return err
-			}
-
 			if err != nil {
+				if ctxErr := stream.Context().Err(); ctxErr != nil {
+					err = ctxErr
+				}
 				return fmt.Errorf("receive message: %w", err)
 			}
 
