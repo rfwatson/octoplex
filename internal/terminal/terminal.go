@@ -16,9 +16,9 @@ import (
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/event"
 	"git.netflux.io/rob/octoplex/internal/shortid"
+	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"golang.design/x/clipboard"
 )
 
 type sourceViews struct {
@@ -990,8 +990,12 @@ func (ui *UI) copySourceURLToClipboard(url string) {
 	var text string
 
 	if ui.clipboardAvailable {
-		clipboard.Write(clipboard.FmtText, []byte(url))
-		text = "URL copied to clipboard:\n\n" + url
+		if err := clipboard.WriteAll(url); err != nil {
+			ui.logger.Error("Error copying to clipboard", "err", err)
+			text = "Unable to copy to clipboard. Select and copy instead:\n\n" + url
+		} else {
+			text = "URL copied to clipboard:\n\n" + url
+		}
 	} else {
 		text = "Copy to clipboard not available:\n\n" + url
 	}

@@ -20,9 +20,9 @@ import (
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/server"
+	"github.com/atotto/clipboard"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/urfave/cli/v2"
-	"golang.design/x/clipboard"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -181,13 +181,6 @@ func runClient(ctx context.Context, c *cli.Context, cfg clientConfig) error {
 
 	logger.Info("Starting client", "version", cmp.Or(version, "devel"), "commit", cmp.Or(commit, "unknown"), "date", cmp.Or(date, "unknown"), "go_version", runtime.Version())
 
-	var clipboardAvailable bool
-	if err := clipboard.Init(); err != nil {
-		logger.Warn("Clipboard not available", "err", err)
-	} else {
-		clipboardAvailable = true
-	}
-
 	buildInfo, ok := debug.ReadBuildInfo()
 	if !ok {
 		return fmt.Errorf("unable to read build info")
@@ -196,7 +189,7 @@ func runClient(ctx context.Context, c *cli.Context, cfg clientConfig) error {
 	app := client.New(client.NewParams{
 		ServerAddr:         cmp.Or(cfg.remoteHost, c.String("host")),
 		InsecureSkipVerify: cmp.Or(cfg.insecureSkipVerify, c.Bool("tls-skip-verify")),
-		ClipboardAvailable: clipboardAvailable,
+		ClipboardAvailable: !clipboard.Unsupported,
 		BuildInfo: domain.BuildInfo{
 			GoVersion: buildInfo.GoVersion,
 			Version:   version,
