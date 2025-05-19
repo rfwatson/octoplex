@@ -51,12 +51,8 @@ jobs:
     - name: check_gomod
       run: mise run check_gomod
     - name: test
-      env:
-        DOCKER_API_VERSION: "1.45"
       run: mise run test_ci
     - name: test_integration
-      env:
-        DOCKER_API_VERSION: "1.45"
       run: mise run test_integration_ci
   release:
     needs:
