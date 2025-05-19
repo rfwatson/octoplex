@@ -1,5 +1,6 @@
 [env]
 GOTOOLCHAIN = "go1.24.3"
+CGO_ENABLED = "0"
 
 [tasks.test]
 description = "Run tests"
@@ -17,11 +18,13 @@ alias = "ti"
 description = "Run tests in CI"
 dir = "{{cwd}}"
 run = "go test -v -count 1 -race ./..."
+env = { CGO_ENABLED = "1" }
 
 [tasks.test_integration_ci]
 description = "Run integration tests in CI"
 dir = "{{cwd}}"
 run = "go test -v -count 1 -race -p 1 -tags=integration -run TestIntegration ./..."
+env = { CGO_ENABLED = "1" }
 
 [tasks.lint]
 description = "Run linters"
