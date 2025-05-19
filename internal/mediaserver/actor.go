@@ -35,7 +35,7 @@ const (
 	defaultChanSize                      = 64                                        // default channel size for asynchronous non-error channels
 	imageNameMediaMTX                    = "ghcr.io/rfwatson/mediamtx-alpine:latest" // image name for mediamtx
 	defaultStreamKey           StreamKey = "live"                                    // Default stream key. See [StreamKey].
-	componentName                        = "mediaserver"                             // component name, mostly used for Docker labels
+	componentName                        = "mediaserver"                             // component name, used for Docker hostname and labels
 	httpClientTimeout                    = time.Second                               // timeout for outgoing HTTP client requests
 	configPath                           = "/mediamtx.yml"                           // path to the media server config file
 	tlsInternalCertPath                  = "/etc/tls-internal.crt"                   // path to the internal TLS cert
@@ -61,6 +61,7 @@ type Actor struct {
 	updateStateInterval time.Duration
 	pass                string // password for the media server
 	keyPairs            domain.KeyPairs
+	inDocker            bool
 	logger              *slog.Logger
 	apiClient           *http.Client
 
@@ -80,6 +81,7 @@ type NewActorParams struct {
 	UpdateStateInterval time.Duration   // defaults to 5 seconds
 	KeyPairs            domain.KeyPairs
 	ContainerClient     *container.Client
+	InDocker            bool
 	Logger              *slog.Logger
 }
 
@@ -116,6 +118,7 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 		stateC:              make(chan domain.Source, chanSize),
 		chanSize:            chanSize,
 		containerClient:     params.ContainerClient,
+		inDocker:            params.InDocker,
 		logger:              params.Logger,
 		apiClient:           apiClient,
 	}, nil
@@ -205,7 +208,7 @@ func (a *Actor) Start(ctx context.Context) error {
 			ChanSize: a.chanSize,
 			ContainerConfig: &typescontainer.Config{
 				Image:    imageNameMediaMTX,
-				Hostname: "mediaserver",
+				Hostname: componentName,
 				Labels:   map[string]string{container.LabelComponent: componentName},
 				Healthcheck: &typescontainer.HealthConfig{
 					Test: []string{
@@ -297,6 +300,7 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 			APIEncryption:  true,
 			APIServerCert:  tlsInternalCertPath,
 			APIServerKey:   tlsInternalKeyPath,
+			APIAddr:        ":9997",
 			Paths: map[string]Path{
 				string(a.streamKey): {Source: "publisher"},
 			},
@@ -432,9 +436,23 @@ func (s *Actor) RTMPInternalURL() string {
 	return fmt.Sprintf("rtmp://mediaserver:1935/%s?user=api&pass=%s", s.streamKey, s.pass)
 }
 
-// pathURL returns the URL for fetching a path, accessible from the host.
+// pathURL returns the URL for fetching a path.
+//
+// When running in Docker, the URL must only be accessible from the container,
+// via the container hostname (i.e. mediaserver). In this case, it does not
+// need to be exposed publicly.
+//
+// When running outside Docker, the URL must be accessible from the server via
+// the defined host, which is localhost by default but could be user-defined.
 func (s *Actor) pathURL(path string) string {
-	return fmt.Sprintf("https://api:%s@localhost:%d/v3/paths/get/%s", s.pass, s.apiPort, path)
+	var hostname string
+	if s.inDocker {
+		hostname = componentName
+	} else {
+		hostname = s.host
+	}
+
+	return fmt.Sprintf("https://api:%s@%s:%d/v3/paths/get/%s", s.pass, hostname, s.apiPort, path)
 }
 
 // healthCheckURL returns the URL for the health check, accessible from the

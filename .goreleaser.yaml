@@ -26,6 +26,12 @@ archives:
       - goos: windows
         formats: [zip]
 
+dockers:
+  - image_templates:
+    - ghcr.io/rfwatson/octoplex:latest
+    - ghcr.io/rfwatson/octoplex:{{ .Tag }}
+    use: buildx
+
 brews:
   - name: octoplex
     description: "Octoplex is a live video restreamer for the terminal."

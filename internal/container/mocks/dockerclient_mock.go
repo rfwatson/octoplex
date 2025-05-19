@@ -799,6 +799,55 @@ func (_c *DockerClient_NetworkCreate_Call) RunAndReturn(run func(context.Context
 	return _c
 }
 
+// NetworkDisconnect provides a mock function with given fields: _a0, _a1, _a2, _a3
+func (_m *DockerClient) NetworkDisconnect(_a0 context.Context, _a1 string, _a2 string, _a3 bool) error {
+	ret := _m.Called(_a0, _a1, _a2, _a3)
+
+	if len(ret) == 0 {
+		panic("no return value specified for NetworkDisconnect")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, bool) error); ok {
+		r0 = rf(_a0, _a1, _a2, _a3)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// DockerClient_NetworkDisconnect_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'NetworkDisconnect'
+type DockerClient_NetworkDisconnect_Call struct {
+	*mock.Call
+}
+
+// NetworkDisconnect is a helper method to define mock.On call
+//   - _a0 context.Context
+//   - _a1 string
+//   - _a2 string
+//   - _a3 bool
+func (_e *DockerClient_Expecter) NetworkDisconnect(_a0 interface{}, _a1 interface{}, _a2 interface{}, _a3 interface{}) *DockerClient_NetworkDisconnect_Call {
+	return &DockerClient_NetworkDisconnect_Call{Call: _e.mock.On("NetworkDisconnect", _a0, _a1, _a2, _a3)}
+}
+
+func (_c *DockerClient_NetworkDisconnect_Call) Run(run func(_a0 context.Context, _a1 string, _a2 string, _a3 bool)) *DockerClient_NetworkDisconnect_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(bool))
+	})
+	return _c
+}
+
+func (_c *DockerClient_NetworkDisconnect_Call) Return(_a0 error) *DockerClient_NetworkDisconnect_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *DockerClient_NetworkDisconnect_Call) RunAndReturn(run func(context.Context, string, string, bool) error) *DockerClient_NetworkDisconnect_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NetworkList provides a mock function with given fields: _a0, _a1
 func (_m *DockerClient) NetworkList(_a0 context.Context, _a1 network.ListOptions) ([]network.Summary, error) {
 	ret := _m.Called(_a0, _a1)

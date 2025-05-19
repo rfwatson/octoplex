@@ -78,7 +78,7 @@ func TestClientRunContainer(t *testing.T) {
 		ContainerLogs(mock.Anything, "123", mock.Anything).
 		Return(io.NopCloser(bytes.NewReader(nil)), nil)
 
-	containerClient, err := container.NewClient(t.Context(), &dockerClient, logger)
+	containerClient, err := container.NewClient(t.Context(), container.NewParams{APIClient: &dockerClient, Logger: logger})
 	require.NoError(t, err)
 
 	containerStateC, errC := containerClient.RunContainer(t.Context(), container.RunContainerParams{
@@ -186,7 +186,7 @@ func TestClientRunContainerWithRestart(t *testing.T) {
 		ContainerLogs(mock.Anything, "123", mock.Anything).
 		Return(io.NopCloser(bytes.NewReader(nil)), nil)
 
-	containerClient, err := container.NewClient(t.Context(), &dockerClient, logger)
+	containerClient, err := container.NewClient(t.Context(), container.NewParams{APIClient: &dockerClient, Logger: logger})
 	require.NoError(t, err)
 
 	containerStateC, errC := containerClient.RunContainer(t.Context(), container.RunContainerParams{
@@ -275,7 +275,7 @@ func TestClientRunContainerErrorStartingContainer(t *testing.T) {
 		ContainerStart(mock.Anything, "123", dockercontainer.StartOptions{}).
 		Return(errors.New("error starting container"))
 
-	containerClient, err := container.NewClient(t.Context(), &dockerClient, logger)
+	containerClient, err := container.NewClient(t.Context(), container.NewParams{APIClient: &dockerClient, Logger: logger})
 	require.NoError(t, err)
 
 	containerStateC, errC := containerClient.RunContainer(t.Context(), container.RunContainerParams{
@@ -325,7 +325,7 @@ func TestClientClose(t *testing.T) {
 		Close().
 		Return(nil)
 
-	containerClient, err := container.NewClient(t.Context(), &dockerClient, logger)
+	containerClient, err := container.NewClient(t.Context(), container.NewParams{APIClient: &dockerClient, Logger: logger})
 	require.NoError(t, err)
 
 	require.NoError(t, containerClient.Close())
@@ -355,7 +355,7 @@ func TestRemoveUnusedNetworks(t *testing.T) {
 		NetworkRemove(mock.Anything, "another-network").
 		Return(nil)
 
-	containerClient, err := container.NewClient(t.Context(), &dockerClient, logger)
+	containerClient, err := container.NewClient(t.Context(), container.NewParams{APIClient: &dockerClient, Logger: logger})
 	require.NoError(t, err)
 
 	require.NoError(t, containerClient.RemoveUnusedNetworks(t.Context()))

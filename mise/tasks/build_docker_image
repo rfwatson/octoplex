@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="Build the Docker image, for development/testing purposes only"
+#MISE alias="bd"
+#
+# Usually the Dockerfile is built with goreleaser in CI.
+# This script is used to build the Docker image locally.
+
+set -euo pipefail
+
+CONTEXTDIR="tmp/dockerbuild"
+TARGET="${IMAGENAME:-octoplex:latest}"
+
+mkdir -p $CONTEXTDIR
+go build -o $CONTEXTDIR/octoplex .
+docker build -t "$TARGET" -f Dockerfile $CONTEXTDIR

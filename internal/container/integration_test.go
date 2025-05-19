@@ -28,7 +28,7 @@ func TestIntegrationClientStartStop(t *testing.T) {
 	containerName := "octoplex-test-" + shortid.New().String()
 	component := "test-start-stop"
 
-	client, err := container.NewClient(ctx, apiClient, logger)
+	client, err := container.NewClient(ctx, container.NewParams{APIClient: apiClient, Logger: logger})
 	require.NoError(t, err)
 
 	running, err := client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{container.LabelComponent: component}))
@@ -77,7 +77,7 @@ func TestIntegrationClientRemoveContainers(t *testing.T) {
 	require.NoError(t, err)
 	component := "test-remove-containers"
 
-	client, err := container.NewClient(ctx, apiClient, logger)
+	client, err := container.NewClient(ctx, container.NewParams{APIClient: apiClient, Logger: logger})
 	require.NoError(t, err)
 	t.Cleanup(func() { client.Close() })
 
@@ -179,7 +179,7 @@ func TestIntegrationContainerRestart(t *testing.T) {
 	containerName := "octoplex-test-" + shortid.New().String()
 	component := "test-restart"
 
-	client, err := container.NewClient(ctx, apiClient, logger)
+	client, err := container.NewClient(ctx, container.NewParams{APIClient: apiClient, Logger: logger})
 	require.NoError(t, err)
 	defer client.Close()
 

@@ -33,6 +33,7 @@ type App struct {
 	listenerFunc  func() (net.Listener, error)
 	keyPairs      domain.KeyPairs
 	waitForClient bool
+	inDocker      bool // TODO: move to config later
 	logger        *slog.Logger
 }
 
@@ -44,6 +45,7 @@ type Params struct {
 	ChanSize       int
 	ConfigFilePath string
 	WaitForClient  bool
+	InDocker       bool
 	Logger         *slog.Logger
 }
 
@@ -76,6 +78,7 @@ func New(params Params) (*App, error) {
 		listenerFunc:  listenerFunc,
 		keyPairs:      keyPairs,
 		waitForClient: params.WaitForClient,
+		inDocker:      params.InDocker,
 		logger:        params.Logger,
 	}, nil
 }
@@ -147,7 +150,14 @@ func (a *App) Run(ctx context.Context) error {
 		<-a.dispatchC
 	}
 
-	containerClient, err := container.NewClient(ctx, a.dockerClient, a.logger.With("component", "container_client"))
+	containerClient, err := container.NewClient(
+		ctx,
+		container.NewParams{
+			APIClient: a.dockerClient,
+			InDocker:  a.inDocker,
+			Logger:    a.logger.With("component", "container_client"),
+		},
+	)
 	if err != nil {
 		err = fmt.Errorf("create container client: %w", err)
 
@@ -176,6 +186,7 @@ func (a *App) Run(ctx context.Context) error {
 		KeyPairs:        a.keyPairs,
 		StreamKey:       mediaserver.StreamKey(a.cfg.Sources.MediaServer.StreamKey),
 		ContainerClient: containerClient,
+		InDocker:        a.inDocker,
 		Logger:          a.logger.With("component", "mediaserver"),
 	})
 	if err != nil {
@@ -476,7 +487,7 @@ func buildNetAddr(src config.RTMPSource) mediaserver.OptionalNetAddr {
 
 // Stop stops all containers and networks created by any instance of the app.
 func (a *App) Stop(ctx context.Context) error {
-	containerClient, err := container.NewClient(ctx, a.dockerClient, a.logger.With("component", "container_client"))
+	containerClient, err := container.NewClient(ctx, container.NewParams{APIClient: a.dockerClient, Logger: a.logger.With("component", "container_client")})
 	if err != nil {
 		return fmt.Errorf("create container client: %w", err)
 	}

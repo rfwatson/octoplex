@@ -274,12 +274,22 @@ func runServer(ctx context.Context, c *cli.Context, serverCfg serverConfig) erro
 		return fmt.Errorf("new docker client: %w", err)
 	}
 
+	inDocker := os.Getenv("OCTO_DOCKER") == "true"
+	// Hack alert: if we're running in Docker we need to ensure we don't only
+	// bind to localhost, otherwise the client cannot connect.
+	// TODO: refactor this when the server can be configured from env vars.
+	if inDocker {
+		logger.Info("Running in Docker, overriding listenAddr to bind to :50051")
+		serverCfg.listenerFunc = server.Listener(":50051")
+	}
+
 	app, err := server.New(server.Params{
 		ConfigService:  configService,
 		DockerClient:   dockerClient,
 		ListenerFunc:   serverCfg.listenerFunc,
 		ConfigFilePath: configService.Path(),
 		WaitForClient:  serverCfg.waitForClient,
+		InDocker:       inDocker,
 		Logger:         logger,
 	})
 	if err != nil {

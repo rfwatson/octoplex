@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -49,6 +50,7 @@ type DockerClient interface {
 	ImagePull(context.Context, string, image.PullOptions) (io.ReadCloser, error)
 	NetworkConnect(context.Context, string, string, *network.EndpointSettings) error
 	NetworkCreate(context.Context, string, network.CreateOptions) (network.CreateResponse, error)
+	NetworkDisconnect(context.Context, string, string, bool) error
 	NetworkList(context.Context, network.ListOptions) ([]network.Summary, error)
 	NetworkRemove(context.Context, string) error
 }
@@ -70,16 +72,24 @@ type Client struct {
 	mu           sync.Mutex
 	wg           sync.WaitGroup
 	apiClient    DockerClient
+	inDocker     bool
 	networkID    string
 	cancelFuncs  map[string]context.CancelFunc
 	pulledImages map[string]struct{}
 	logger       *slog.Logger
 }
 
+// NewParams are the parameters for creating a new Client.
+type NewParams struct {
+	APIClient DockerClient
+	InDocker  bool
+	Logger    *slog.Logger
+}
+
 // NewClient creates a new Client.
-func NewClient(ctx context.Context, apiClient DockerClient, logger *slog.Logger) (*Client, error) {
+func NewClient(ctx context.Context, params NewParams) (*Client, error) {
 	id := shortid.New()
-	network, err := apiClient.NetworkCreate(
+	network, err := params.APIClient.NetworkCreate(
 		ctx,
 		domain.AppName+"-"+id.String(),
 		network.CreateOptions{
@@ -91,17 +101,28 @@ func NewClient(ctx context.Context, apiClient DockerClient, logger *slog.Logger)
 		return nil, fmt.Errorf("network create: %w", err)
 	}
 
+	if params.InDocker {
+		containerID, err := selfContainerID()
+		if err != nil {
+			return nil, fmt.Errorf("get self ID: %w", err)
+		}
+		if err := params.APIClient.NetworkConnect(ctx, network.ID, containerID, nil); err != nil {
+			return nil, fmt.Errorf("network connect: %w", err)
+		}
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 
 	client := &Client{
 		id:           id,
 		ctx:          ctx,
 		cancel:       cancel,
-		apiClient:    apiClient,
+		apiClient:    params.APIClient,
+		inDocker:     params.InDocker,
 		networkID:    network.ID,
 		cancelFuncs:  make(map[string]context.CancelFunc),
 		pulledImages: make(map[string]struct{}),
-		logger:       logger,
+		logger:       params.Logger,
 	}
 
 	return client, nil
@@ -594,6 +615,17 @@ func (a *Client) Close() error {
 	a.wg.Wait()
 
 	if a.networkID != "" {
+		if a.inDocker {
+			containerID, err := selfContainerID()
+			if err != nil {
+				a.logger.Error("Error getting self ID", "err", err)
+			} else {
+				if err := a.apiClient.NetworkDisconnect(ctx, a.networkID, containerID, true); err != nil {
+					a.logger.Error("Error disconnecting from network", "err", err)
+				}
+			}
+		}
+
 		if err := a.apiClient.NetworkRemove(ctx, a.networkID); err != nil {
 			a.logger.Error("Error removing network", "err", err)
 		}
@@ -742,6 +774,19 @@ func (a *Client) instanceLabels(extraLabels ...map[string]string) map[string]str
 	}
 
 	return labels
+}
+
+// selfContainerID returns the ID of the current container, inferred from the
+// result of [os.Hostname].
+//
+// TODO: make this more robust.
+func selfContainerID() (string, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", fmt.Errorf("get hostname: %w", err)
+	}
+
+	return hostname, nil
 }
 
 func shortID(id string) string {
