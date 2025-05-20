@@ -18,6 +18,7 @@ import (
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
 	"git.netflux.io/rob/octoplex/internal/mediaserver"
 	"git.netflux.io/rob/octoplex/internal/replicator"
+	"git.netflux.io/rob/octoplex/internal/store"
 	"github.com/docker/docker/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -26,27 +27,25 @@ import (
 // App is an instance of the app.
 type App struct {
 	cfg           config.Config
-	configService *config.Service
+	store         *store.FileStore
 	eventBus      *event.Bus
 	dispatchC     chan event.Command
 	dockerClient  container.DockerClient
 	listenerFunc  func() (net.Listener, error)
 	keyPairs      domain.KeyPairs
 	waitForClient bool
-	inDocker      bool // TODO: move to config later
 	logger        *slog.Logger
 }
 
 // Params holds the parameters for running the application.
 type Params struct {
-	ConfigService  *config.Service
-	DockerClient   container.DockerClient
-	ListenerFunc   func() (net.Listener, error) // ListenerFunc overrides the configured listen address. May be nil.
-	ChanSize       int
-	ConfigFilePath string
-	WaitForClient  bool
-	InDocker       bool
-	Logger         *slog.Logger
+	Config        config.Config
+	Store         *store.FileStore
+	DockerClient  container.DockerClient
+	ListenerFunc  func() (net.Listener, error) // ListenerFunc overrides the configured listen address. May be nil.
+	ChanSize      int
+	WaitForClient bool
+	Logger        *slog.Logger
 }
 
 // defaultChanSize is the default size of the dispatch channel.
@@ -58,10 +57,10 @@ var ErrOtherInstanceDetected = errors.New("another instance is currently running
 
 // New creates a new application instance.
 func New(params Params) (*App, error) {
-	cfg := params.ConfigService.Current()
+	cfg := params.Config
 	listenerFunc := params.ListenerFunc
 	if listenerFunc == nil {
-		listenerFunc = Listener(cmp.Or(cfg.ListenAddr, config.DefaultListenAddr))
+		listenerFunc = Listener(cfg.ListenAddr)
 	}
 
 	keyPairs, err := buildKeyPairs(cfg.Host, cfg.TLS)
@@ -71,14 +70,13 @@ func New(params Params) (*App, error) {
 
 	return &App{
 		cfg:           cfg,
-		configService: params.ConfigService,
+		store:         params.Store,
 		eventBus:      event.NewBus(params.Logger.With("component", "event_bus")),
 		dispatchC:     make(chan event.Command, cmp.Or(params.ChanSize, defaultChanSize)),
 		dockerClient:  params.DockerClient,
 		listenerFunc:  listenerFunc,
 		keyPairs:      keyPairs,
 		waitForClient: params.WaitForClient,
-		inDocker:      params.InDocker,
 		logger:        params.Logger,
 	}, nil
 }
@@ -87,7 +85,7 @@ func New(params Params) (*App, error) {
 func (a *App) Run(ctx context.Context) error {
 	// state is the current state of the application, as reflected in the UI.
 	state := new(domain.AppState)
-	applyConfig(a.cfg, state)
+	applyPersistentState(state, a.store.Get())
 
 	// Ensure there is at least one active source.
 	if !a.cfg.Sources.MediaServer.RTMP.Enabled && !a.cfg.Sources.MediaServer.RTMPS.Enabled {
@@ -113,7 +111,7 @@ func (a *App) Run(ctx context.Context) error {
 	internalAPI := newServer(a.DispatchAsync, a.eventBus, a.logger)
 	pb.RegisterInternalAPIServer(grpcServer, internalAPI)
 	go func() {
-		a.logger.Info("gRPC server started", "addr", lis.Addr().String())
+		a.logger.Info("gRPC server started", "listen-addr", lis.Addr().String())
 		grpcDone <- grpcServer.Serve(lis)
 	}()
 
@@ -154,7 +152,7 @@ func (a *App) Run(ctx context.Context) error {
 		ctx,
 		container.NewParams{
 			APIClient: a.dockerClient,
-			InDocker:  a.inDocker,
+			InDocker:  a.cfg.InDocker,
 			Logger:    a.logger.With("component", "container_client"),
 		},
 	)
@@ -186,7 +184,7 @@ func (a *App) Run(ctx context.Context) error {
 		KeyPairs:        a.keyPairs,
 		StreamKey:       mediaserver.StreamKey(a.cfg.Sources.MediaServer.StreamKey),
 		ContainerClient: containerClient,
-		InDocker:        a.inDocker,
+		InDocker:        a.cfg.InDocker,
 		Logger:          a.logger.With("component", "mediaserver"),
 	})
 	if err != nil {
@@ -232,8 +230,6 @@ func (a *App) Run(ctx context.Context) error {
 			}
 
 			sendAppStateChanged()
-		case <-a.configService.C():
-			// No-op, config updates are handled synchronously for now.
 		case cmd := <-a.dispatchC:
 			if _, err := a.handleCommand(ctx, cmd, state, repl, containerClient, startMediaServerC); errors.Is(err, errExit) {
 				return nil
@@ -254,7 +250,7 @@ func (a *App) Run(ctx context.Context) error {
 			sendAppStateChanged()
 		case replState := <-repl.C():
 			a.logger.Debug("Replicator state received", "state", replState)
-			destErrors := applyReplicatorState(replState, state)
+			destErrors := applyReplicatorState(state, replState)
 
 			for _, destError := range destErrors {
 				a.eventBus.Send(event.DestinationStreamExitedEvent{Name: destError.name, Err: destError.err})
@@ -319,32 +315,30 @@ func (a *App) handleCommand(
 
 	switch c := cmd.(type) {
 	case event.CommandAddDestination:
-		newCfg := a.cfg
-		newCfg.Destinations = append(newCfg.Destinations, config.Destination{
+		newState := a.store.Get()
+		newState.Destinations = append(newState.Destinations, store.Destination{
 			Name: c.DestinationName,
 			URL:  c.URL,
 		})
-		if err := a.configService.SetConfig(newCfg); err != nil {
+		if err := a.store.Set(newState); err != nil {
 			a.logger.Error("Add destination failed", "err", err)
 			return event.AddDestinationFailedEvent{URL: c.URL, Err: err}, nil
 		}
-		a.cfg = newCfg
-		a.handleConfigUpdate(state)
+		a.handlePersistentStateUpdate(state)
 		a.logger.Info("Destination added", "url", c.URL)
 		a.eventBus.Send(event.DestinationAddedEvent{URL: c.URL})
 	case event.CommandRemoveDestination:
 		repl.StopDestination(c.URL) // no-op if not live
-		newCfg := a.cfg
-		newCfg.Destinations = slices.DeleteFunc(newCfg.Destinations, func(dest config.Destination) bool {
+		newState := a.store.Get()
+		newState.Destinations = slices.DeleteFunc(newState.Destinations, func(dest store.Destination) bool {
 			return dest.URL == c.URL
 		})
-		if err := a.configService.SetConfig(newCfg); err != nil {
+		if err := a.store.Set(newState); err != nil {
 			a.logger.Error("Remove destination failed", "err", err)
 			a.eventBus.Send(event.RemoveDestinationFailedEvent{URL: c.URL, Err: err})
 			break
 		}
-		a.cfg = newCfg
-		a.handleConfigUpdate(state)
+		a.handlePersistentStateUpdate(state)
 		a.eventBus.Send(event.DestinationRemovedEvent{URL: c.URL}) //nolint:gosimple
 	case event.CommandStartDestination:
 		if !state.Source.Live {
@@ -368,9 +362,10 @@ func (a *App) handleCommand(
 	return nil, nil
 }
 
-// handleConfigUpdate applies the config to the app state, and sends an AppStateChangedEvent.
-func (a *App) handleConfigUpdate(appState *domain.AppState) {
-	applyConfig(a.cfg, appState)
+// handlePersistentStateUpdate applies the persistent state to the app state,
+// amd sends a AppStateChangedEvent.
+func (a *App) handlePersistentStateUpdate(appState *domain.AppState) {
+	applyPersistentState(appState, a.store.Get())
 	a.eventBus.Send(event.AppStateChangedEvent{State: appState.Clone()})
 }
 
@@ -390,7 +385,7 @@ type destinationError struct {
 // applyReplicatorState applies the current replicator state to the app state.
 //
 // It returns a list of destination errors that should be displayed to the user.
-func applyReplicatorState(replState replicator.State, appState *domain.AppState) []destinationError {
+func applyReplicatorState(appState *domain.AppState, replState replicator.State) []destinationError {
 	var errorsToDisplay []destinationError
 
 	for i := range appState.Destinations {
@@ -417,17 +412,17 @@ func applyReplicatorState(replState replicator.State, appState *domain.AppState)
 	return errorsToDisplay
 }
 
-// applyConfig applies the config to the app state. For now we only set the
-// destinations.
-func applyConfig(cfg config.Config, appState *domain.AppState) {
-	appState.Destinations = resolveDestinations(appState.Destinations, cfg.Destinations)
+// applyPersistentState applies the persistent state to the runtime state. For
+// now we only set the destinations.
+func applyPersistentState(appState *domain.AppState, state store.State) {
+	appState.Destinations = resolveDestinations(appState.Destinations, state.Destinations)
 }
 
 // resolveDestinations merges the current destinations with newly configured
 // destinations.
-func resolveDestinations(destinations []domain.Destination, inDestinations []config.Destination) []domain.Destination {
+func resolveDestinations(destinations []domain.Destination, inDestinations []store.Destination) []domain.Destination {
 	destinations = slices.DeleteFunc(destinations, func(dest domain.Destination) bool {
-		return !slices.ContainsFunc(inDestinations, func(inDest config.Destination) bool {
+		return !slices.ContainsFunc(inDestinations, func(inDest store.Destination) bool {
 			return inDest.URL == dest.URL
 		})
 	})

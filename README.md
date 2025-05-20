@@ -150,46 +150,6 @@ $ ffmpeg -i input.mp4 -c copy -f flv rtmp://localhost:1935/live
 $ ffmpeg -i input.mp4 -c copy -f flv rtmps://localhost:1936/live
 ```
 
-### Configuration
-
-Octoplex stores configuration state in a simple YAML file. (See [above](#subcommands) for its location.)
-
-Sample configuration:
-
-```yaml
-host: rtmp.example.com             # defaults to "localhost"
-tls:                               # optional TLS settings; RTMPS support is automatic.
-  cert: /etc/mycert.pem            # If you omit cert/key, a self-signed keypair will be
-  key: /etc/mykey.pem              # generated using the `host` value above.
-logfile:
-  enabled: true                        # defaults to false
-  path: /path/to/logfile               # defaults to $XDG_STATE_HOME/octoplex/octoplex.log
-sources:
-  mediaServer:
-    streamKey: live                    # defaults to "live"
-    rtmp:
-      enabled: true                    # defaults to false
-      ip: 127.0.0.1                    # defaults to 127.0.0.1
-      port: 1935                       # defaults to 1935
-    rtmps:
-      enabled: true                    # defaults to false
-      ip: 0.0.0.0                      # defaults to 127.0.0.1
-      port: 1936                       # defaults to 1936
-destinations:
-  - name: YouTube                      # Destination name, used only for display
-    url: rtmp://rtmp.youtube.com/12345 # Destination  URL with stream key
-  - name: Twitch.tv
-    url: rtmp://rtmp.youtube.com/12345
-  # other destinations here
-```
-
-:information_source: It is also possible to add and remove destinations directly from the
-terminal user interface.
-
-:warning: `sources.mediaServer.rtmp.ip` must be set to a valid IP address if
-you want to accept connections from other hosts. Leave it blank to bind only to
-localhost (`127.0.0.1`) or use `0.0.0.0` to bind to all network interfaces.
-
 ## Contributing
 
 See [CONTRIBUTING.md](/CONTRIBUTING.md).

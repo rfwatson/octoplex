@@ -1,6 +1,0 @@
----
-logfile:
-  enabled: true
-  path: /tmp/octoplex.log
-destinations:
-- url: rtmp://rtmp.example.com:1935/live

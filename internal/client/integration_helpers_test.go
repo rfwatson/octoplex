@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -22,7 +21,9 @@ import (
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/server"
+	"git.netflux.io/rob/octoplex/internal/store"
 	"git.netflux.io/rob/octoplex/internal/terminal"
+	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"github.com/gdamore/tcell/v2"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -32,6 +33,7 @@ import (
 type buildClientServerOptions struct {
 	listenerFunc       server.ListenerFunc
 	insecureSkipVerify bool
+	state              store.State
 }
 
 type buildOpt func(*buildClientServerOptions)
@@ -48,9 +50,15 @@ func withInsecureSkipVerify(insecureSkipVerify bool) func(*buildClientServerOpti
 	}
 }
 
+func withPersistentState(state store.State) func(*buildClientServerOptions) {
+	return func(o *buildClientServerOptions) {
+		o.state = state
+	}
+}
+
 func buildClientServer(
 	t *testing.T,
-	configService *config.Service,
+	config config.Config,
 	dockerClient container.DockerClient,
 	screen tcell.SimulationScreen,
 	screenCaptureC chan<- terminal.ScreenCapture,
@@ -83,7 +91,8 @@ func buildClientServer(
 	})
 
 	server, err := server.New(server.Params{
-		ConfigService: configService,
+		Config:        config,
+		Store:         testhelpers.NewTestStore(t, options.state),
 		ListenerFunc:  server.WithListener(lis),
 		DockerClient:  dockerClient,
 		WaitForClient: true,
@@ -203,19 +212,6 @@ func contentsIncludes(contents []string, search string) bool {
 	}
 
 	return false
-}
-
-func setupConfigService(t *testing.T, cfg config.Config) *config.Service {
-	t.Helper()
-
-	tmpDir, err := os.MkdirTemp("", "octoplex_"+strings.ReplaceAll(t.Name(), "/", "_"))
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-	configService, err := config.NewService(func() (string, error) { return tmpDir, nil }, 1)
-	require.NoError(t, err)
-	require.NoError(t, configService.SetConfig(cfg))
-
-	return configService
 }
 
 func printScreen(t *testing.T, getContents func() []string, label string) {

@@ -1,4 +1,4 @@
-package config
+package xdg
 
 import (
 	"errors"
@@ -10,16 +10,12 @@ import (
 	"git.netflux.io/rob/octoplex/internal/domain"
 )
 
-func createAppConfigDir(configDir string) (string, error) {
-	path := filepath.Join(configDir, domain.AppName)
-	if err := os.MkdirAll(path, 0744); err != nil {
-		return "", fmt.Errorf("mkdir all: %w", err)
-	}
-
-	return path, nil
-}
-
-func createAppStateDir() (string, error) {
+// createAppConfigDir creates the application config directory,
+// which is at:
+//
+//   - Linux: ~/.local/state/octoplex
+//   - macOS: ~/Library/Caches/octoplex
+func CreateAppStateDir() (string, error) {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -33,7 +29,7 @@ func createAppStateDir() (string, error) {
 		// TODO: Windows support
 		return "", errors.New("not implemented")
 	default: // Unix-like
-		dir = filepath.Join(userHomeDir, ".state", domain.AppName)
+		dir = filepath.Join(userHomeDir, ".local", "state", domain.AppName)
 	}
 
 	if err := os.MkdirAll(dir, 0744); err != nil {

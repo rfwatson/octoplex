@@ -1,6 +1,0 @@
----
-logfile:
-  enabled: true
-  path: test.log
-destinations:
-- url: http://nope.example.com:443/live

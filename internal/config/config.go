@@ -6,22 +6,14 @@ import (
 )
 
 const (
-	// DefaultListenAddr is the default listen address for the server.
-	DefaultListenAddr = "localhost:50051"
 	// TLSMinVersion is the minimum required version of TLS.
 	TLSMinVersion = tls.VersionTLS13
 )
 
-// Destination holds the configuration for a destination.
-type Destination struct {
-	Name string `yaml:"name"`
-	URL  string `yaml:"url"`
-}
-
 // LogFile holds the configuration for the log file.
 type LogFile struct {
-	Enabled bool   `yaml:"enabled"`
-	Path    string `yaml:"path,omitempty"`
+	Enabled bool
+	Path    string
 
 	defaultPath string
 }
@@ -34,41 +26,42 @@ func (l LogFile) GetPath() string {
 
 // NetAddr holds an IP and/or port.
 type NetAddr struct {
-	IP   string `yaml:"ip,omitempty"`
-	Port int    `yaml:"port,omitempty"`
+	IP   string
+	Port int
 }
 
 // RTMPSource holds the configuration for the RTMP source.
 type RTMPSource struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled bool
 
-	NetAddr `yaml:",inline"`
+	NetAddr
 }
 
 // TLS holds the TLS configuration.
 type TLS struct {
-	CertPath string `yaml:"cert,omitempty"`
-	KeyPath  string `yaml:"key,omitempty"`
+	CertPath string
+	KeyPath  string
 }
 
 // MediaServerSource holds the configuration for the media server source.
 type MediaServerSource struct {
-	StreamKey string     `yaml:"streamKey,omitempty"`
-	RTMP      RTMPSource `yaml:"rtmp"`
-	RTMPS     RTMPSource `yaml:"rtmps"`
+	StreamKey string
+	RTMP      RTMPSource
+	RTMPS     RTMPSource
 }
 
 // Sources holds the configuration for the sources.
 type Sources struct {
-	MediaServer MediaServerSource `yaml:"mediaServer"`
+	MediaServer MediaServerSource
 }
 
 // Config holds the configuration for the application.
 type Config struct {
-	ListenAddr   string        `yaml:"listenAddr,omitempty"`
-	Host         string        `yaml:"host,omitempty"`
-	TLS          *TLS          `yaml:"tls,omitempty"`
-	LogFile      LogFile       `yaml:"logfile"`
-	Sources      Sources       `yaml:"sources"`
-	Destinations []Destination `yaml:"destinations"`
+	ListenAddr string
+	Host       string
+	TLS        *TLS
+	InDocker   bool
+	Debug      bool // deprecated
+	LogFile    LogFile
+	Sources    Sources
 }
