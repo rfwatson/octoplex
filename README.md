@@ -56,6 +56,10 @@ Alternatively, grab the latest build for your platform from the [releases page](
 
 Unarchive the `octoplex` binary and copy it somewhere in your $PATH.
 
+#### With Docker
+
+See [Running with Docker](#running-with-docker).
+
 ## Starting Octoplex
 
 Octoplex can run as a single process (all-in-one), or in a client/server pair.
@@ -176,6 +180,55 @@ $ ffmpeg -i input.mp4 -c copy -f flv rtmp://localhost:1935/live
 
 ```
 $ ffmpeg -i input.mp4 -c copy -f flv rtmps://localhost:1936/live
+```
+
+## Advanced
+
+### Running with Docker
+
+Octoplex server can be run from a Docker image on any Docker engine or in a cluster.
+
+:warning: By design, Octoplex needs to launch and terminate Docker containers
+on your host. If you run Octoplex inside Docker with a bind-mounted Docker
+socket, it effectively has root-level access to your server. Evaluate the
+security trade-offs carefully. If you’re unsure, consider running Octoplex
+directly on the host rather than in a container.
+
+#### docker run
+
+```bash
+docker run \
+  --name octoplex                         \  # optional: give the container a name
+  -v octoplex-data:/data                  \  # persistent data volume
+  -v /var/run/docker.sock:/var/run/docker.sock \  # allow Octoplex to manage Docker
+  -p 50051:50051                          \  # gRPC API
+  -p 1935:1935                            \  # RTMP ingest
+  -p 1936:1936                            \  # RTMPS ingest (optional)
+  --restart unless-stopped                \  # restart policy
+  ghcr.io/rfwatson/octoplex:latest
+```
+
+#### docker-compose.yml
+
+```yaml
+version: "3.9"
+
+services:
+  octoplex:
+    image: ghcr.io/rfwatson/octoplex:latest
+    container_name: octoplex
+    restart: unless-stopped
+    volumes:
+      - octoplex-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "50051:50051"   # gRPC API
+      - "1935:1935"     # RTMP ingest
+      - "1936:1936"     # RTMPS ingest (optional)
+
+volumes:
+  octoplex-data:
+    driver: local
 ```
 
 ## Contributing
