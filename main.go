@@ -409,10 +409,10 @@ func runClientAndServer(c *cli.Context) error {
 	}
 
 	// Override CLI flags:
-	serverListenAddr = fmt.Sprintf("127.0.0.1:%d", lis.Addr().(*net.TCPAddr).Port)
-	serverHostname = "localhost"
-	clientHost = fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port)
-	clientTLSSkipVerify = true
+	serverListenAddr = fmt.Sprintf(":%d", lis.Addr().(*net.TCPAddr).Port)    // listen on all interfaces
+	serverHostname = "localhost"                                             // DNS name
+	clientHost = fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port) // point client at the correct port
+	clientTLSSkipVerify = true                                               // override default TLS verification
 
 	// must be built after overriding flags:
 	cfg, err := parseConfig(c)
