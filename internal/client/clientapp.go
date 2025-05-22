@@ -70,13 +70,30 @@ func (a *App) Run(ctx context.Context) error {
 			"action", "use a trusted certificate and enable verification before production",
 		)
 	}
-	conn, err := grpc.NewClient(a.serverAddr, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+
+	// Test the TLS config.
+	// This returns a more meaningful error than if we wait for gRPC layer to
+	// fail.
+	tlsConfig := &tls.Config{
 		MinVersion:         config.TLSMinVersion,
 		InsecureSkipVerify: a.insecureSkipVerify,
-	})))
-	if err != nil {
-		return fmt.Errorf("connect to gRPC server: %w", err)
 	}
+	tlsConn, err := tls.Dial("tcp", a.serverAddr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("dial: %w", err)
+	}
+	tlsConn.Close()
+
+	conn, err := grpc.NewClient(
+		a.serverAddr,
+		grpc.WithTransportCredentials(
+			credentials.NewTLS(tlsConfig),
+		),
+	)
+	if err != nil {
+		return fmt.Errorf("new gRPC client: %w", err)
+	}
+
 	apiClient := pb.NewInternalAPIClient(conn)
 	stream, err := apiClient.Communicate(ctx)
 	if err != nil {

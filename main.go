@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -14,7 +15,6 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"git.netflux.io/rob/octoplex/internal/client"
@@ -178,7 +178,8 @@ func main() {
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 
-		if strings.Contains(err.Error(), "x509: certificate signed by unknown authority") {
+		var authErr x509.UnknownAuthorityError
+		if errors.As(err, &authErr) {
 			os.Stderr.WriteString("Hint: Run with --tls-skip-verify to ignore.\n")
 		}
 
@@ -391,6 +392,7 @@ func runClientAndServer(c *cli.Context) error {
 		return fmt.Errorf("listen: %w", err)
 	}
 
+	// Override CLI flags:
 	serverListenAddr = fmt.Sprintf("127.0.0.1:%d", lis.Addr().(*net.TCPAddr).Port)
 	serverHostname = "localhost"
 	clientHost = fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port)
