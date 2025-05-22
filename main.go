@@ -127,6 +127,7 @@ func main() {
 						Name:        "host",
 						Usage:       "The remote Octoplex server to connect to",
 						Value:       client.DefaultServerAddr,
+						Aliases:     []string{"H"},
 						Destination: &clientHost,
 					},
 					&cli.BoolFlag{

@@ -101,14 +101,42 @@ $ octoplex server stop
 
 Subcommand|Description
 ---|---
-`run`|Launch both server and client in a single process
-`server start`|Start the Octoplex server
-`server stop`|Stop the Octoplex server
-`server print-config`|Display the path to the configuration file
-`server edit-config`|Edit the configuration file in `$EDITOR`
-`client start`|Start the Octoplex TUI client
-`version`|Print the version
-`help`|Print help screen
+`octoplex run`|Launch both server and client in a single process
+`octoplex server start`|Start the Octoplex server
+`octoplex server stop`|Stop the Octoplex server
+`octoplex client start`|Start the Octoplex TUI client
+`octoplex version`|Print the version
+`octoplex help`|Print help screen
+
+### Server flags
+
+Flag|Alias|Modes|Env var|Default|Description
+---|---|---|---|---|---
+`--help`|`-h`|All|||Show help
+`--data-dir`||`server` `all-in-one`|`OCTO_DATA_DIR`|`$HOME/.local/state/octoplex` (Linux) or`$HOME/Library/Caches/octoplex` (macOS)|Directory for storing persistent state and logs
+`--listen-addr`|`-a`|`server`|`OCTO_LISTEN_ADDR`|`127.0.0.1:50051`|Listen address for gRPC API.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. Use `0:0.0.0:50051` to bind to all network interfaces.
+`--hostname`|`-H`|`server`|`OCTO_HOSTNAME`|`localhost`|DNS name of server
+`--tls-cert`||`server` `all-in-one`|`OCTO_TLS_CERT`||Path to custom TLS certifcate (PEM-encoded, must be valid for `hostname`). Used for gRPC and RTMPS connections.
+`--tls-key`||`server` `all-in-one`|`OCTO_TLS_KEY`||Path to custom TLS key (PEM-encoded, must be valid for `hostname`). Used for gRPC and RTMPS connections.
+`--in-docker`||`server`|`OCTO_DOCKER`|`false`|Configure Octoplex to run inside Docker
+`--stream-key`||`server` `all-in-one`|`OCTO_STREAM_KEY`|`live`|Stream key, e.g. `rtmp://rtmp.example.com/live`
+`--rtmp-enabled`||`server` `all-in-one`||`true`|Enable RTMP server
+`--rtmp-listen-addr`||`server` `all-in-one`||`127.0.0.1:1935`|Listen address for RTMP sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen-addr`.
+`--rtmps-enabled`||`server` `all-in-one`||`false`|Enable RTMPS server
+`--rtmps-listen-addr`||`server` `all-in-one`||`127.0.0.1:1936`|Listen address for RTMPS sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen-addr`.
+
+### Client flags
+
+Flag|Alias|Default|Description
+---|---|---|---
+`--help`|`-h`|All|||Show help
+`--host`|`-H`|`localhost:50051`|Remote Octoplex server to connect to
+`--tls-skip-verify`||`false`|Skip TLS certificate verification (insecure)
+`--log-file`|||Path to log file
+
+### All-in-one mode
+
+:information_source: When running in all-in-one mode (`octoplex run`) some flags may be overridden or unavailable.
 
 ## Usage
 
@@ -132,9 +160,9 @@ If you see the error
 
 > "The RTMP server sent an invalid SSL certificate."
 
-then either install a CA‑signed cert for your RTMPS host, or import your
-self‑signed cert into your OS’s trusted store. See the
-[configuration](#Configuration) section below.
+then either install a CA‑signed TLS certificate for your RTMPS host, or import
+your self‑signed cert into your OS’s trusted store. See the [server flags](#server-flags)
+section above.
 
 ### Restreaming with FFmpeg
 
