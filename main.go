@@ -280,6 +280,22 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Category:    "Sources",
 			DefaultText: "127.0.0.1:1936",
 		},
+		&cli.StringFlag{
+			Name:     "data-dir",
+			Usage:    "Path to the data directory for storing state, logs, etc",
+			Category: "General",
+			DefaultText: func() string {
+				switch runtime.GOOS {
+				case "darwin":
+					return "$HOME/Library/Caches/octoplex/"
+				case "windows":
+					panic("not implemented")
+				default:
+					return "$HOME/.local/state/octoplex/"
+				}
+			}(),
+			EnvVars: []string{"OCTO_DATA_DIR"},
+		},
 	}
 }
 
@@ -347,7 +363,7 @@ func runServer(ctx context.Context, c *cli.Context, cfg config.Config, serverCfg
 		return fmt.Errorf("new docker client: %w", err)
 	}
 
-	store, err := store.New(store.DefaultPath)
+	store, err := store.New(filepath.Join(cfg.DataDir, "state.json"))
 	if err != nil {
 		return fmt.Errorf("new store: %w", err)
 	}
@@ -449,14 +465,19 @@ func printVersion() error {
 }
 
 func parseConfig(c *cli.Context) (config.Config, error) {
-	logToFileEnabled := c.Bool("log-to-file")
-	logFile := c.String("log-file")
-	if logToFileEnabled && logFile == "" {
+	dataDir := c.String("data-dir")
+	if dataDir == "" {
 		appStateDir, err := xdg.CreateAppStateDir()
 		if err != nil {
 			return config.Config{}, fmt.Errorf("create app state dir: %w", err)
 		}
-		logFile = filepath.Join(appStateDir, "octoplex.log")
+		dataDir = appStateDir
+	}
+
+	logToFileEnabled := c.Bool("log-to-file")
+	logFile := c.String("log-file")
+	if logToFileEnabled && logFile == "" {
+		logFile = filepath.Join(dataDir, "octoplex.log")
 	}
 
 	cfg := config.Config{
@@ -464,6 +485,7 @@ func parseConfig(c *cli.Context) (config.Config, error) {
 		Host:       cmp.Or(serverHostname, defaultHostname),
 		InDocker:   c.Bool("in-docker"),
 		Debug:      c.Bool("debug"),
+		DataDir:    dataDir,
 		LogFile: config.LogFile{
 			Enabled: logToFileEnabled,
 			Path:    logFile,

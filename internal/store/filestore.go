@@ -7,8 +7,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-
-	"git.netflux.io/rob/octoplex/internal/xdg"
 )
 
 // Destination represents a destination for a stream.
@@ -20,30 +18,6 @@ type Destination struct {
 // State is the storable persistent state.
 type State struct {
 	Destinations []Destination `json:"destinations"`
-}
-
-// PathFunc returns a path to the store file.
-type PathFunc func() (string, error)
-
-// DefaultPath returns the default path to the store file.
-//
-//   - Linux: ~/.local/state/octoplex/state.json
-//   - macOS: ~/Library/Caches/octoplex/state.json
-func DefaultPath() (string, error) {
-	dir, err := xdg.CreateAppStateDir()
-	if err != nil {
-		return "", fmt.Errorf("create app state dir: %w", err)
-	}
-
-	return filepath.Join(dir, "state.json"), nil
-}
-
-// StaticPath returns a PathFunc that always returns the
-// provided path.
-func StaticPath(path string) PathFunc {
-	return func() (string, error) {
-		return path, nil
-	}
 }
 
 // FileStore is a file-based store for persistent application
@@ -58,12 +32,7 @@ type FileStore struct {
 
 // New creates a new FileStore with the provided config file,
 // creating it if it does not exist.
-func New(pathFunc PathFunc) (*FileStore, error) {
-	path, err := pathFunc()
-	if err != nil {
-		return nil, fmt.Errorf("build path: %w", err)
-	}
-
+func New(path string) (*FileStore, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return createFile(path)
 	} else if err != nil {

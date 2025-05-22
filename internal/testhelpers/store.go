@@ -23,7 +23,7 @@ func NewTestStore(t *testing.T, state ...store.State) *store.FileStore {
 		require.NoError(t, os.WriteFile(path, bytes, 0644))
 	}
 
-	store, err := store.New(store.StaticPath(path))
+	store, err := store.New(path)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { os.RemoveAll(path) })

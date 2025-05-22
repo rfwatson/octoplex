@@ -62,6 +62,7 @@ type Config struct {
 	TLS        *TLS
 	InDocker   bool
 	Debug      bool // deprecated
+	DataDir    string
 	LogFile    LogFile
 	Sources    Sources
 }

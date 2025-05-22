@@ -15,7 +15,7 @@ import (
 func TestFilestore(t *testing.T) {
 	path := filepath.Join(os.TempDir(), fmt.Sprintf("octoplex-%s.json", shortid.New().String()))
 	assert.NoFileExists(t, path)
-	st, err := store.New(store.StaticPath(path))
+	st, err := store.New(path)
 	require.NoError(t, err)
 	assert.FileExists(t, path)
 	t.Cleanup(func() { os.RemoveAll(path) })
@@ -30,7 +30,7 @@ func TestFilestore(t *testing.T) {
 	assert.Equal(t, "rtmp://localhost/live", state.Destinations[0].URL)
 
 	// reload from disk
-	st, err = store.New(store.StaticPath(path))
+	st, err = store.New(path)
 	require.NoError(t, err)
 	state = st.Get()
 	assert.Len(t, state.Destinations, 1)
@@ -78,7 +78,7 @@ func TestFilestoreValidation(t *testing.T) {
 
 			require.NoError(t, os.WriteFile(fptr.Name(), []byte(tc.in), 0644))
 
-			_, err = store.New(store.StaticPath(fptr.Name()))
+			_, err = store.New(fptr.Name())
 			if tc.wantErr != "" {
 				require.EqualError(t, err, tc.wantErr)
 			} else {
