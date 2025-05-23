@@ -186,7 +186,7 @@ $ ffmpeg -i input.mp4 -c copy -f flv rtmps://localhost:1936/live
 
 ### Running with Docker
 
-Octoplex server can be run from a Docker image on any Docker engine or in a cluster.
+`octoplex server` can be run from a Docker image on any Docker engine.
 
 :warning: By design, Octoplex needs to launch and terminate Docker containers
 on your host. If you run Octoplex inside Docker with a bind-mounted Docker
@@ -194,42 +194,29 @@ socket, it effectively has root-level access to your server. Evaluate the
 security trade-offs carefully. If you’re unsure, consider running Octoplex
 directly on the host rather than in a container.
 
-#### docker run
+#### `docker run`
+
+Run the Octoplex gRPC server on all interfaces (port 50051):
 
 ```bash
 docker run \
-  --name octoplex                         \  # optional: give the container a name
-  -v octoplex-data:/data                  \  # persistent data volume
-  -v /var/run/docker.sock:/var/run/docker.sock \  # allow Octoplex to manage Docker
-  -p 50051:50051                          \  # gRPC API
-  -p 1935:1935                            \  # RTMP ingest
-  -p 1936:1936                            \  # RTMPS ingest (optional)
-  --restart unless-stopped                \  # restart policy
+  --name octoplex                              \
+  -v octoplex-data:/data                       \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e OCTO_LISTEN_ADDR=":50051"                 \
+  -p 50051:50051                               \
+  --restart unless-stopped                     \
   ghcr.io/rfwatson/octoplex:latest
 ```
 
-#### docker-compose.yml
+:information_source: Note: Running the client &emdash; or the all-in-one server
+mode &emdash; from Docker is not recommended. Install Octoplex natively via Homebrew or
+download a release from GitHub instead. See [Installation](#Installation) for
+details.
 
-```yaml
-version: "3.9"
+#### `docker-compose`
 
-services:
-  octoplex:
-    image: ghcr.io/rfwatson/octoplex:latest
-    container_name: octoplex
-    restart: unless-stopped
-    volumes:
-      - octoplex-data:/data
-      - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "50051:50051"   # gRPC API
-      - "1935:1935"     # RTMP ingest
-      - "1936:1936"     # RTMPS ingest (optional)
-
-volumes:
-  octoplex-data:
-    driver: local
-```
+See [docker-compose.yaml](/docker-compose.yaml).
 
 ## Contributing
 

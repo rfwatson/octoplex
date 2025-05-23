@@ -1,0 +1,16 @@
+---
+services:
+  octoplex:
+    image: ghcr.io/rfwatson/octoplex:latest
+    container_name: octoplex
+    restart: unless-stopped
+    volumes:
+      - octoplex-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      OCTO_LISTEN_ADDR: "[::]:50051" # bind to all network interfaces
+    ports:
+      - "50051:50051"
+volumes:
+  octoplex-data:
+    driver: local
