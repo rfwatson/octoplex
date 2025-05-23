@@ -209,8 +209,8 @@ docker run \
   ghcr.io/rfwatson/octoplex:latest
 ```
 
-:information_source: Note: Running the client &emdash; or the all-in-one server
-mode &emdash; from Docker is not recommended. Install Octoplex natively via Homebrew or
+:information_source: Note: Running the client &mdash; or the all-in-one server
+mode &mdash; from Docker is not recommended. Install Octoplex natively via Homebrew or
 download a release from GitHub instead. See [Installation](#Installation) for
 details.
 
