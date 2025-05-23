@@ -34,6 +34,7 @@ dockers:
     - ghcr.io/rfwatson/octoplex:{{ .Tag }}-amd64
     use: buildx
     goarch: amd64
+    dockerfile: ./Dockerfile
     build_flag_templates:
       - "--platform=linux/amd64"
   - image_templates:
@@ -41,6 +42,7 @@ dockers:
     - ghcr.io/rfwatson/octoplex:{{ .Tag }}-arm64
     use: buildx
     goarch: arm64
+    dockerfile: ./Dockerfile
     build_flag_templates:
       - "--platform=linux/arm64"
 
