@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"github.com/docker/docker/api/types/image"
@@ -15,6 +16,7 @@ func handleImagePull(
 	imageName string,
 	dockerClient DockerClient,
 	containerStateC chan<- domain.Container,
+	logger *slog.Logger,
 ) error {
 	containerStateC <- domain.Container{
 		Status:     domain.ContainerStatusPulling,
@@ -28,7 +30,12 @@ func handleImagePull(
 	}
 
 	pullDecoder := json.NewDecoder(pullReader)
-	var pp pullProgress
+
+	var (
+		pp     pullProgress
+		logged bool
+	)
+
 	for {
 		if err := pullDecoder.Decode(&pp); err != nil {
 			if err == io.EOF {
@@ -38,6 +45,14 @@ func handleImagePull(
 		}
 
 		if pp.Progress != "" {
+			if !logged {
+				// only log if the image is actually being pulled
+				logger.Info("Pulling image", "image", imageName)
+				defer logger.Info("Pulling image complete", "image", imageName)
+
+				logged = true
+			}
+
 			containerStateC <- domain.Container{
 				Status:       domain.ContainerStatusPulling,
 				ImageName:    imageName,

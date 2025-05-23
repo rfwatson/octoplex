@@ -8,6 +8,7 @@ import (
 
 	"git.netflux.io/rob/octoplex/internal/container/mocks"
 	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"github.com/docker/docker/api/types/image"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -18,6 +19,8 @@ import (
 var pullProgressJSON []byte
 
 func TestHandleImagePull(t *testing.T) {
+	logger := testhelpers.NewTestLogger(t)
+
 	const imageName = "alpine"
 	containerStateC := make(chan domain.Container)
 
@@ -32,7 +35,7 @@ func TestHandleImagePull(t *testing.T) {
 	var containerStates []domain.Container
 
 	go func() {
-		require.NoError(t, handleImagePull(t.Context(), imageName, &dockerClient, containerStateC))
+		require.NoError(t, handleImagePull(t.Context(), imageName, &dockerClient, containerStateC, logger))
 	}()
 
 	const expectedContainerStates = 46

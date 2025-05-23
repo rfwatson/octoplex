@@ -372,7 +372,7 @@ func (a *Client) pullImageIfNeeded(ctx context.Context, imageName string, contai
 		return nil
 	}
 
-	if err := handleImagePull(ctx, imageName, a.apiClient, containerStateC); err != nil {
+	if err := handleImagePull(ctx, imageName, a.apiClient, containerStateC, a.logger); err != nil {
 		return err
 	}
 

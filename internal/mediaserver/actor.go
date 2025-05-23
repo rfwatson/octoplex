@@ -340,6 +340,7 @@ func (s *Actor) Close() error {
 // actor is closed, or the parent context is cancelled.
 func (s *Actor) actorLoop(ctx context.Context, containerStateC <-chan domain.Container, errC <-chan error) {
 	updateStateT := time.NewTicker(s.updateStateInterval)
+	updateStateT.Stop() // only start when the container starts
 	defer updateStateT.Stop()
 
 	sendState := func() { s.stateC <- *s.state }
@@ -347,6 +348,12 @@ func (s *Actor) actorLoop(ctx context.Context, containerStateC <-chan domain.Con
 	for {
 		select {
 		case containerState := <-containerStateC:
+			if containerState.Status == domain.ContainerStatusRunning && s.state.Container.Status != domain.ContainerStatusRunning {
+				// The container has moved into running state.
+				// Start polling the API.
+				updateStateT.Reset(s.updateStateInterval)
+			}
+
 			s.state.Container = containerState
 
 			if s.state.Container.Status == domain.ContainerStatusExited {
