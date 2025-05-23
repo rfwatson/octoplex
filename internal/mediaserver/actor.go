@@ -264,7 +264,7 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 
 	return yaml.Marshal(
 		Config{
-			LogLevel:        "debug",
+			LogLevel:        "info",
 			LogDestinations: []string{"stdout"},
 			AuthMethod:      "internal",
 			AuthInternalUsers: []User{
@@ -300,7 +300,7 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 			APIEncryption:  true,
 			APIServerCert:  tlsInternalCertPath,
 			APIServerKey:   tlsInternalKeyPath,
-			APIAddr:        ":9997",
+			APIAddress:     ":9997",
 			Paths: map[string]Path{
 				string(a.streamKey): {Source: "publisher"},
 			},

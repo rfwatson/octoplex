@@ -13,7 +13,7 @@ type Config struct {
 	Metrics           bool            `yaml:"metrics,omitempty"`
 	MetricsAddress    string          `yaml:"metricsAddress,omitempty"`
 	API               bool            `yaml:"api,omitempty"`
-	APIAddr           string          `yaml:"apiAddress,omitempty"`
+	APIAddress        string          `yaml:"apiAddress,omitempty"`
 	APIEncryption     bool            `yaml:"apiEncryption,omitempty"`
 	APIServerCert     string          `yaml:"apiServerCert,omitempty"`
 	APIServerKey      string          `yaml:"apiServerKey,omitempty"`
