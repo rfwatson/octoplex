@@ -69,6 +69,12 @@ var (
 )
 
 func main() {
+	if err := run(context.Background(), os.Stderr, os.Args); err != nil {
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, stderr io.Writer, args []string) error {
 	app := &cli.App{
 		Name:  "octoplex",
 		Usage: "Live video restreamer for Docker",
@@ -100,7 +106,7 @@ func main() {
 								return fmt.Errorf("parse config: %w", err)
 							}
 
-							logger, err := buildServerLogger(cfg, true)
+							logger, err := buildServerLogger(cfg, stderr, true)
 							if err != nil {
 								return fmt.Errorf("build logger: %w", err)
 							}
@@ -176,16 +182,18 @@ func main() {
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	if err := app.RunContext(ctx, args); err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
 
 		var authErr x509.UnknownAuthorityError
 		if errors.As(err, &authErr) {
-			os.Stderr.WriteString("Hint: Run with --tls-skip-verify to ignore.\n")
+			stderr.Write([]byte("Hint: Run with --tls-skip-verify to ignore.\n"))
 		}
 
-		os.Exit(1)
+		return err
 	}
+
+	return nil
 }
 
 func serverFlags(clientAndServerMode bool) []cli.Flag {
@@ -422,7 +430,7 @@ func runClientAndServer(c *cli.Context) error {
 	}
 
 	// must be built after overriding flags:
-	logger, err := buildServerLogger(cfg, false)
+	logger, err := buildServerLogger(cfg, nil, false)
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
 	}
@@ -548,10 +556,10 @@ func parseRTMPConfig(cfg *config.RTMPSource, c *cli.Context, arg string) error {
 	return nil
 }
 
-func buildServerLogger(cfg config.Config, stderrAvailable bool) (*slog.Logger, error) {
+func buildServerLogger(cfg config.Config, stderr io.Writer, stderrAvailable bool) (*slog.Logger, error) {
 	var w io.Writer
 	if stderrAvailable {
-		w = os.Stdout
+		w = stderr
 	} else if !cfg.LogFile.Enabled {
 		w = io.Discard
 	} else {
