@@ -32,7 +32,7 @@ func TestIntegrationRunServer(t *testing.T) {
 			wantStderr: []string{
 				`level=INFO msg="Starting server"`,
 				`level=INFO msg="gRPC server started" component=server listen-addr=127.0.0.1:50051`,
-				`level=INFO msg="Starting media server" component=server component=mediaserver host=localhost rtmp.enabled=true rtmp.bind_addr=127.0.0.1 rtmp.bind_port=1935 rtmps.enabled=false`,
+				`level=INFO msg="Starting media server" component=server component=mediaserver host=localhost rtmp.enabled=true rtmp.bind_addr=127.0.0.1 rtmp.bind_port=1935 rtmps.enabled=true rtmps.bind_addr=127.0.0.1`,
 				`level=INFO msg="Started container"`,
 			},
 			wantStderrOnClose: []string{
@@ -41,13 +41,13 @@ func TestIntegrationRunServer(t *testing.T) {
 			},
 		},
 		{
-			name:      "launch server with custom listen address",
+			name:      "launch server with custom gRPC listen address",
 			args:      []string{"octoplex", "server", "start", "--listen-addr", ":30123"},
 			wantPorts: []int{30123, 1935},
 			wantStderr: []string{
 				`level=INFO msg="Starting server"`,
 				`level=INFO msg="gRPC server started" component=server listen-addr=[::]:30123`,
-				`level=INFO msg="Starting media server" component=server component=mediaserver host=localhost rtmp.enabled=true rtmp.bind_addr=127.0.0.1 rtmp.bind_port=1935 rtmps.enabled=false`,
+				`level=INFO msg="Starting media server" component=server component=mediaserver host=localhost rtmp.enabled=true rtmp.bind_addr=127.0.0.1 rtmp.bind_port=1935 rtmps.enabled=true rtmps.bind_addr=127.0.0.1`,
 				`level=INFO msg="Started container"`,
 			},
 			wantStderrOnClose: []string{
@@ -56,8 +56,8 @@ func TestIntegrationRunServer(t *testing.T) {
 			},
 		},
 		{
-			name:      "launch server with custom RTMP listen address and RTMPS enabled",
-			args:      []string{"octoplex", "server", "start", "--rtmp-listen-addr", "127.0.0.1:31935", "--rtmps-enabled", "--rtmps-listen-addr", "0.0.0.0:31936"},
+			name:      "launch server with custom RTMP listen addresses",
+			args:      []string{"octoplex", "server", "start", "--rtmp-listen-addr", "127.0.0.1:31935", "--rtmps-listen-addr", "0.0.0.0:31936"},
 			wantPorts: []int{50051, 31935, 31936},
 			wantStderr: []string{
 				`level=INFO msg="Starting server"`,

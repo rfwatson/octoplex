@@ -281,7 +281,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Name:        "rtmps-enabled",
 			Usage:       "Enable the RTMPS source",
 			Category:    "Sources",
-			DefaultText: "false",
+			DefaultText: "true",
 		},
 		&cli.StringFlag{
 			Name:        "rtmps-listen-addr",
@@ -529,7 +529,10 @@ func parseConfig(c *cli.Context) (config.Config, error) {
 		}
 	}
 
-	rtmpsEnabled := c.Bool("rtmps-enabled")
+	rtmpsEnabled := true
+	if c.IsSet("rtmps-enabled") {
+		rtmpsEnabled = c.Bool("rtmps-enabled")
+	}
 	cfg.Sources.MediaServer.RTMPS.Enabled = rtmpsEnabled
 	if rtmpsEnabled {
 		if err := parseRTMPConfig(&cfg.Sources.MediaServer.RTMPS, c, "rtmps-listen-addr"); err != nil {
