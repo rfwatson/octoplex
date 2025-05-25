@@ -101,6 +101,27 @@ func TestEventToProto(t *testing.T) {
 			},
 		},
 		{
+			name: "DestinationUpdated",
+			in:   event.DestinationUpdatedEvent{ID: destinationID},
+			want: &pb.Event{
+				EventType: &pb.Event_DestinationUpdated{
+					DestinationUpdated: &pb.DestinationUpdatedEvent{Id: destinationID[:]},
+				},
+			},
+		},
+		{
+			name: "UpdateDestinationFailed",
+			in:   event.UpdateDestinationFailedEvent{ID: destinationID, Err: errors.New("update failed")},
+			want: &pb.Event{
+				EventType: &pb.Event_UpdateDestinationFailed{
+					UpdateDestinationFailed: &pb.UpdateDestinationFailedEvent{
+						Id:    destinationID[:],
+						Error: "update failed",
+					},
+				},
+			},
+		},
+		{
 			name: "DestinationStreamExited",
 			in:   event.DestinationStreamExitedEvent{Name: "stream1", Err: errors.New("exit reason")},
 			want: &pb.Event{
@@ -230,6 +251,32 @@ func TestEventFromProto(t *testing.T) {
 			},
 			want: event.AddDestinationFailedEvent{
 				URL: "rtmp://fail.example.com",
+				Err: errors.New("failed"),
+			},
+		},
+		{
+			name: "DestinationUpdated",
+			in: &pb.Event{
+				EventType: &pb.Event_DestinationUpdated{
+					DestinationUpdated: &pb.DestinationUpdatedEvent{
+						Id: destinationID[:],
+					},
+				},
+			},
+			want: event.DestinationUpdatedEvent{ID: destinationID},
+		},
+		{
+			name: "UpdateDestinationFailed",
+			in: &pb.Event{
+				EventType: &pb.Event_UpdateDestinationFailed{
+					UpdateDestinationFailed: &pb.UpdateDestinationFailedEvent{
+						Id:    destinationID[:],
+						Error: "failed",
+					},
+				},
+			},
+			want: event.UpdateDestinationFailedEvent{
+				ID:  destinationID,
 				Err: errors.New("failed"),
 			},
 		},

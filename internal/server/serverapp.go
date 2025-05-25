@@ -330,6 +330,31 @@ func (a *App) handleCommand(
 		a.handlePersistentStateUpdate(state)
 		a.logger.Info("Destination added", "url", c.URL)
 		a.eventBus.Send(event.DestinationAddedEvent{ID: destinationID})
+	case event.CommandUpdateDestination:
+		if isLive(state, c.ID) {
+			// should be caught in the UI, but just in case
+			a.logger.Warn("Update destination failed: destination is live", "id", c.ID)
+			break
+		}
+
+		newState := a.store.Get()
+		idx := slices.IndexFunc(newState.Destinations, func(dest store.Destination) bool { return dest.ID == c.ID })
+		if idx == -1 {
+			a.logger.Warn("Update destination failed: destination not found", "id", c.ID)
+			break
+		}
+
+		dest := &newState.Destinations[idx]
+		dest.Name = c.DestinationName
+		dest.URL = c.URL
+
+		if err := a.store.Set(newState); err != nil {
+			a.logger.Error("Update destination failed", "err", err)
+			a.eventBus.Send(event.UpdateDestinationFailedEvent{ID: c.ID, Err: err})
+			break
+		}
+		a.handlePersistentStateUpdate(state)
+		a.eventBus.Send(event.DestinationUpdatedEvent{ID: c.ID})
 	case event.CommandRemoveDestination:
 		newState := a.store.Get()
 
@@ -388,6 +413,16 @@ func (a *App) handleCommand(
 	return nil, nil
 }
 
+func isLive(state *domain.AppState, destinationID uuid.UUID) bool {
+	for _, dest := range state.Destinations {
+		if dest.ID == destinationID {
+			return dest.Status == domain.DestinationStatusLive
+		}
+	}
+
+	return false
+}
+
 // handlePersistentStateUpdate applies the persistent state to the app state,
 // amd sends a AppStateChangedEvent.
 func (a *App) handlePersistentStateUpdate(appState *domain.AppState) {
@@ -439,33 +474,27 @@ func applyReplicatorState(appState *domain.AppState, replState replicator.State)
 }
 
 // applyPersistentState applies the persistent state to the runtime state. For
-// now we only set the destinations.
+// now we only set the destinations, which is the only attribute that changes
+// at runtime.
 func applyPersistentState(appState *domain.AppState, state store.State) {
-	appState.Destinations = resolveDestinations(appState.Destinations, state.Destinations)
+	appState.Destinations = destinationsFromStore(state.Destinations)
 }
 
-// resolveDestinations merges the current destinations with newly configured
-// destinations.
-func resolveDestinations(destinations []domain.Destination, inDestinations []store.Destination) []domain.Destination {
-	destinations = slices.DeleteFunc(destinations, func(dest domain.Destination) bool {
-		return !slices.ContainsFunc(inDestinations, func(inDest store.Destination) bool {
-			return inDest.ID == dest.ID
-		})
-	})
+func destinationsFromStore(inDestinations []store.Destination) []domain.Destination {
+	if len(inDestinations) == 0 {
+		return nil
+	}
 
-	for i, inDest := range inDestinations {
-		if i < len(destinations) && destinations[i].ID == inDest.ID {
-			continue
-		}
-
-		destinations = slices.Insert(destinations, i, domain.Destination{
+	destinations := make([]domain.Destination, 0, len(inDestinations))
+	for _, inDest := range inDestinations {
+		destinations = append(destinations, domain.Destination{
 			ID:   inDest.ID,
 			Name: inDest.Name,
 			URL:  inDest.URL,
 		})
 	}
 
-	return destinations[:len(inDestinations)]
+	return destinations
 }
 
 // doStartupCheck performs a startup check to see if there are any existing app

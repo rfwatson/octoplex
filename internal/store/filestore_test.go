@@ -49,6 +49,16 @@ func TestFilestoreValidation(t *testing.T) {
 			in:   `{"destinations":[{"name":"test","url":"rtmp://localhost/live"}]}`,
 		},
 		{
+			name:    "empty destination name",
+			in:      `{"destinations":[{"name":"","url":"rtmp://localhost/live"}]}`,
+			wantErr: "validate: destination name cannot be empty",
+		},
+		{
+			name:    "destination name contains only whitespace",
+			in:      `{"destinations":[{"name":"   ","url":"rtmp://localhost/live"}]}`,
+			wantErr: "validate: destination name cannot be empty",
+		},
+		{
 			name:    "invalid destination URL",
 			in:      `{"destinations":[{"name":"test","url":"invalid-url"}]}`,
 			wantErr: "validate: destination URL must be an RTMP URL",

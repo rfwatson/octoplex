@@ -13,6 +13,18 @@ func (c CommandAddDestination) Name() string {
 	return "add_destination"
 }
 
+// CommandUpdateDestination adds a destination.
+type CommandUpdateDestination struct {
+	ID              uuid.UUID
+	DestinationName string
+	URL             string
+}
+
+// Name implements the Command interface.
+func (c CommandUpdateDestination) Name() string {
+	return "update_destination"
+}
+
 // CommandRemoveDestination removes a destination.
 type CommandRemoveDestination struct {
 	ID uuid.UUID

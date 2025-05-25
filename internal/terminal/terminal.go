@@ -271,10 +271,14 @@ func (ui *UI) Run(ctx context.Context) error {
 					ui.handleAppStateChanged(evt)
 				case event.DestinationAddedEvent:
 					ui.handleDestinationAdded(evt)
-				case event.StartDestinationFailedEvent:
-					ui.handleStartDestinationFailed(evt)
 				case event.AddDestinationFailedEvent:
 					ui.handleDestinationEventError(evt.Err)
+				case event.DestinationUpdatedEvent:
+					ui.handleDestinationUpdated(evt)
+				case event.UpdateDestinationFailedEvent:
+					ui.handleDestinationEventError(evt.Err)
+				case event.StartDestinationFailedEvent:
+					ui.handleStartDestinationFailed(evt)
 				case event.DestinationStreamExitedEvent:
 					ui.handleDestinationStreamExited(evt)
 				case event.DestinationRemovedEvent:
@@ -322,6 +326,9 @@ func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
 		case 'a', 'A':
 			ui.addDestination()
+			return nil
+		case 'e', 'E':
+			ui.updateDestination()
 			return nil
 		case ' ':
 			ui.toggleDestination()
@@ -522,26 +529,28 @@ func (ui *UI) updateProgressModal(container domain.Container) {
 	}
 }
 
-// page names represent a specific page in the terminal user interface.
+// Page names represent a specific page in the terminal user interface.
 //
 // Modals should generally have a unique name, which allows them to be stacked
 // on top of other modals.
 const (
-	pageNameMain                        = "main"
-	pageNameAddDestination              = "add-destination"
-	pageNameViewURLs                    = "view-urls"
-	pageNameConfigUpdateFailed          = "modal-config-update-failed"
-	pageNameNoDestinations              = "no-destinations"
-	pageNameModalAbout                  = "modal-about"
-	pageNameModalClipboard              = "modal-clipboard"
-	pageNameModalDestinationError       = "modal-destination-error"
-	pageNameModalFatalError             = "modal-fatal-error"
-	pageNameModalPullProgress           = "modal-pull-progress"
-	pageNameModalQuit                   = "modal-quit"
-	pageNameModalRemoveDestination      = "modal-remove-destination"
-	pageNameModalSourceError            = "modal-source-error"
-	pageNameModalStartDestinationFailed = "modal-start-destination-failed"
-	pageNameModalStartupCheck           = "modal-startup-check"
+	pageNameMain                         = "main"
+	pageNameAddDestination               = "add-destination"
+	pageNameUpdateDestination            = "update-destination"
+	pageNameViewURLs                     = "view-urls"
+	pageNameConfigUpdateFailed           = "modal-config-update-failed"
+	pageNameNoDestinations               = "no-destinations"
+	pageNameModalAbout                   = "modal-about"
+	pageNameModalClipboard               = "modal-clipboard"
+	pageNameModalDestinationError        = "modal-destination-error"
+	pageNameModalFatalError              = "modal-fatal-error"
+	pageNameModalPullProgress            = "modal-pull-progress"
+	pageNameModalQuit                    = "modal-quit"
+	pageNameModalRemoveDestination       = "modal-remove-destination"
+	pageNameModalSourceError             = "modal-source-error"
+	pageNameModalStartDestinationFailed  = "modal-start-destination-failed"
+	pageNameModalUpdateDestinationFailed = "modal-update-destination-failed"
+	pageNameModalStartupCheck            = "modal-startup-check"
 )
 
 // modalVisible returns true if any modal, including the add destination form,
@@ -566,6 +575,9 @@ func (ui *UI) saveSelectedDestination() {
 }
 
 // selectPreviousDestination sets the focus to the last-selected destination.
+//
+// This is needed to ensure the user ends up focused in the correct element
+// after closing a modal window.
 func (ui *UI) selectPreviousDestination() {
 	if ui.modalVisible() {
 		return
@@ -743,8 +755,8 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 	ui.destView.SetCell(0, 7, headerCell("[grey]"+headerTx, 1))
 
 	for i, dest := range state.Destinations {
-		ui.destView.SetCell(i+1, 0, tview.NewTableCell(dest.Name))
-		ui.destView.SetCell(i+1, 1, tview.NewTableCell(dest.URL).SetReference(dest.ID).SetMaxWidth(20))
+		ui.destView.SetCell(i+1, 0, tview.NewTableCell(dest.Name).SetReference(dest.ID).SetMaxWidth(20))
+		ui.destView.SetCell(i+1, 1, tview.NewTableCell(dest.URL))
 		const statusLen = 10
 		switch dest.Status {
 		case domain.DestinationStatusLive:
@@ -796,6 +808,7 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 
 	ui.actionsView.Clear()
 	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]a[-]        Add destination"), 1, 0, false)
+	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]e[-]        Edit destination"), 1, 0, false)
 	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Del[-]      Remove destination"), 1, 0, false)
 	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]Space[-]    Start/stop destination"), 1, 0, false)
 	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText(""), 1, 0, false)
@@ -825,47 +838,32 @@ func (ui *UI) Wait() {
 	<-ui.appExitC
 }
 
+const (
+	formInputLabelName = "Name"
+	formInputLabelURL  = "RTMP URL"
+)
+
 func (ui *UI) addDestination() {
-	const (
-		inputLen        = 60
-		inputLabelName  = "Name"
-		inputLabelURL   = "RTMP URL"
-		formInnerWidth  = inputLen + 8 + 1 // inputLen + length of longest label + one space
-		formInnerHeight = 7                // line count from first input field to last button
-		formWidth       = formInnerWidth + 4
-		formHeight      = formInnerHeight + 2
-	)
-
-	var currWidth, currHeight int
-	_, _, currWidth, currHeight = ui.container.GetRect()
-
-	form := tview.NewForm()
-	form.
-		AddInputField(inputLabelName, "My stream", inputLen, nil, nil).
-		AddInputField(inputLabelURL, "rtmp://", inputLen, nil, nil).
-		AddButton("Add", func() {
-			ui.dispatch(event.CommandAddDestination{
-				DestinationName: form.GetFormItemByLabel(inputLabelName).(*tview.InputField).GetText(),
-				URL:             form.GetFormItemByLabel(inputLabelURL).(*tview.InputField).GetText(),
-			})
-		}).
-		AddButton("Cancel", func() {
+	form := ui.buildDestinationForm("My stream", "rtmp://")
+	form.SetTitle("Add a new destination")
+	form.AddButton("Add", func() {
+		ui.dispatch(event.CommandAddDestination{
+			DestinationName: form.GetFormItemByLabel(formInputLabelName).(*tview.InputField).GetText(),
+			URL:             form.GetFormItemByLabel(formInputLabelURL).(*tview.InputField).GetText(),
+		})
+	})
+	form.AddButton("Cancel", func() {
+		ui.closeAddDestinationForm()
+		ui.selectPreviousDestination()
+	})
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
 			ui.closeAddDestinationForm()
 			ui.selectPreviousDestination()
-		}).
-		SetFieldBackgroundColor(tcell.ColorDarkSlateGrey).
-		SetBorder(true).
-		SetTitle("Add a new destination").
-		SetTitleAlign(tview.AlignLeft).
-		SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-			if event.Key() == tcell.KeyEscape {
-				ui.closeAddDestinationForm()
-				ui.selectPreviousDestination()
-				return nil
-			}
-			return event
-		}).
-		SetRect((currWidth-formWidth)/2, (currHeight-formHeight)/2, formWidth, formHeight)
+			return nil
+		}
+		return event
+	})
 
 	ui.mu.Lock()
 	ui.addingDestination = true
@@ -877,10 +875,85 @@ func (ui *UI) addDestination() {
 	ui.pages.AddPage(pageNameAddDestination, form, false, true)
 }
 
-func (ui *UI) removeDestination() {
-	const urlCol = 1
+func (ui *UI) updateDestination() {
 	row, _ := ui.destView.GetSelection()
-	destinationID, ok := ui.destView.GetCell(row, urlCol).GetReference().(uuid.UUID)
+	if row == 0 || row >= ui.destView.GetRowCount() {
+		return
+	}
+
+	destinationID := ui.destView.GetCell(row, 0).GetReference().(uuid.UUID)
+	var isLive bool
+	ui.mu.Lock()
+	isLive = ui.destinationIDsToStartState[destinationID] != startStateNotStarted
+	ui.mu.Unlock()
+
+	if isLive {
+		ui.showModal(
+			pageNameModalUpdateDestinationFailed,
+			"You cannot update a destination while it is live.\n\nStop the live stream first.",
+			[]string{"Ok"},
+			false,
+			nil,
+		)
+
+		return
+	}
+
+	name := ui.destView.GetCell(row, 0).Text
+	url := ui.destView.GetCell(row, 1).Text
+
+	form := ui.buildDestinationForm(name, url)
+	form.SetTitle("Edit destination")
+	form.AddButton("Save changes", func() {
+		ui.dispatch(event.CommandUpdateDestination{
+			ID:              destinationID,
+			DestinationName: form.GetFormItemByLabel(formInputLabelName).(*tview.InputField).GetText(),
+			URL:             form.GetFormItemByLabel(formInputLabelURL).(*tview.InputField).GetText(),
+		})
+	})
+	form.AddButton("Cancel", func() {
+		ui.closeUpdateDestinationForm()
+		ui.selectPreviousDestination()
+	})
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			ui.closeUpdateDestinationForm()
+			ui.selectPreviousDestination()
+			return nil
+		}
+		return event
+	})
+
+	ui.pages.AddPage(pageNameUpdateDestination, form, false, true)
+}
+
+func (ui *UI) buildDestinationForm(nameValue, urlValue string) *tview.Form {
+	const (
+		inputLen        = 60
+		formInnerWidth  = inputLen + 8 + 1 // inputLen + length of longest label + one space
+		formInnerHeight = 7                // line count from first input field to last button
+		formWidth       = formInnerWidth + 4
+		formHeight      = formInnerHeight + 2
+	)
+
+	var currWidth, currHeight int
+	_, _, currWidth, currHeight = ui.container.GetRect()
+
+	form := tview.NewForm()
+	form.
+		AddInputField(formInputLabelName, nameValue, inputLen, nil, nil).
+		AddInputField(formInputLabelURL, urlValue, inputLen, nil, nil).
+		SetFieldBackgroundColor(tcell.ColorDarkSlateGrey).
+		SetBorder(true).
+		SetTitleAlign(tview.AlignLeft).
+		SetRect((currWidth-formWidth)/2, (currHeight-formHeight)/2, formWidth, formHeight)
+
+	return form
+}
+
+func (ui *UI) removeDestination() {
+	row, _ := ui.destView.GetSelection()
+	destinationID, ok := ui.destView.GetCell(row, 0).GetReference().(uuid.UUID)
 	if !ok {
 		return
 	}
@@ -918,6 +991,11 @@ func (ui *UI) handleDestinationAdded(event.DestinationAddedEvent) {
 	ui.selectLastDestination()
 }
 
+func (ui *UI) handleDestinationUpdated(event.DestinationUpdatedEvent) {
+	ui.closeUpdateDestinationForm()
+	ui.selectPreviousDestination()
+}
+
 func (ui *UI) handleDestinationRemoved(event.DestinationRemovedEvent) {
 	ui.selectPreviousDestination()
 }
@@ -930,7 +1008,7 @@ func (ui *UI) handleDestinationEventError(err error) {
 		false,
 		func(int, string) {
 			pageName, frontPage := ui.pages.GetFrontPage()
-			if pageName != pageNameAddDestination {
+			if pageName != pageNameAddDestination && pageName != pageNameUpdateDestination {
 				ui.logger.Warn("Unexpected page when configuration form closed", "page", pageName)
 			}
 			ui.app.SetFocus(frontPage)
@@ -951,10 +1029,13 @@ func (ui *UI) closeAddDestinationForm() {
 	}
 }
 
+func (ui *UI) closeUpdateDestinationForm() {
+	ui.pages.RemovePage(pageNameUpdateDestination)
+}
+
 func (ui *UI) toggleDestination() {
-	const urlCol = 1
 	row, _ := ui.destView.GetSelection()
-	destinationID, ok := ui.destView.GetCell(row, urlCol).GetReference().(uuid.UUID)
+	destinationID, ok := ui.destView.GetCell(row, 0).GetReference().(uuid.UUID)
 	if !ok {
 		return
 	}

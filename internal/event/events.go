@@ -11,6 +11,8 @@ const (
 	EventNameAppStateChanged         Name = "app_state_changed"
 	EventNameDestinationAdded        Name = "destination_added"
 	EventNameAddDestinationFailed    Name = "add_destination_failed"
+	EventNameDestinationUpdated      Name = "destination_updated"
+	EventNameUpdateDestinationFailed Name = "update_destination_failed"
 	EventNameDestinationStreamExited Name = "destination_stream_exited"
 	EventNameStartDestinationFailed  Name = "start_destination_failed"
 	EventNameDestinationRemoved      Name = "destination_removed"
@@ -51,6 +53,25 @@ type AddDestinationFailedEvent struct {
 
 func (e AddDestinationFailedEvent) EventName() Name {
 	return EventNameAddDestinationFailed
+}
+
+// DestinationUpdatedEvent is emitted when a destination is successfully updated.
+type DestinationUpdatedEvent struct {
+	ID uuid.UUID
+}
+
+func (e DestinationUpdatedEvent) EventName() Name {
+	return EventNameDestinationUpdated
+}
+
+// UpdateDestinationFailedEvent is emitted when a destination fails to be updated.
+type UpdateDestinationFailedEvent struct {
+	ID  uuid.UUID
+	Err error
+}
+
+func (e UpdateDestinationFailedEvent) EventName() Name {
+	return EventNameUpdateDestinationFailed
 }
 
 // DestinationStreamExitedEvent is emitted when a destination goes off-air unexpectedly.

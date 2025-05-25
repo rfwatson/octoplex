@@ -37,6 +37,23 @@ func TestCommandToProto(t *testing.T) {
 			},
 		},
 		{
+			name: "UpdateDestination",
+			in: event.CommandUpdateDestination{
+				ID:              id,
+				DestinationName: "test",
+				URL:             "rtmp://rtmp.example.com",
+			},
+			want: &pb.Command{
+				CommandType: &pb.Command_UpdateDestination{
+					UpdateDestination: &pb.UpdateDestinationCommand{
+						Id:   id[:],
+						Name: "test",
+						Url:  "rtmp://rtmp.example.com",
+					},
+				},
+			},
+		},
+		{
 			name: "RemoveDestination",
 			in:   event.CommandRemoveDestination{ID: id},
 			want: &pb.Command{
@@ -111,6 +128,23 @@ func TestCommandFromProto(t *testing.T) {
 				},
 			},
 			want: event.CommandAddDestination{
+				DestinationName: "test",
+				URL:             "rtmp://rtmp.example.com",
+			},
+		},
+		{
+			name: "UpdateDestination",
+			in: &pb.Command{
+				CommandType: &pb.Command_UpdateDestination{
+					UpdateDestination: &pb.UpdateDestinationCommand{
+						Id:   id[:],
+						Name: "test",
+						Url:  "rtmp://rtmp.example.com",
+					},
+				},
+			},
+			want: event.CommandUpdateDestination{
+				ID:              id,
 				DestinationName: "test",
 				URL:             "rtmp://rtmp.example.com",
 			},

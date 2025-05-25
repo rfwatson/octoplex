@@ -6,18 +6,25 @@ option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc";
 message Command {
   oneof command_type {
     AddDestinationCommand add_destination = 1;
-    RemoveDestinationCommand remove_destination = 2;
-    StartDestinationCommand start_destination = 3;
-    StopDestinationCommand stop_destination = 4;
-    CloseOtherInstancesCommand close_other_instances = 5;
-    KillServerCommand kill_server = 6;
-    StartHandshakeCommand start_handshake = 7;
+    UpdateDestinationCommand update_destination = 2;
+    RemoveDestinationCommand remove_destination = 3;
+    StartDestinationCommand start_destination = 4;
+    StopDestinationCommand stop_destination = 5;
+    CloseOtherInstancesCommand close_other_instances = 6;
+    KillServerCommand kill_server = 7;
+    StartHandshakeCommand start_handshake = 8;
   }
 }
 
 message AddDestinationCommand {
   string name = 1;
   string url = 2;
+}
+
+message UpdateDestinationCommand {
+  bytes id = 1;
+  string name = 2;
+  string url = 3;
 }
 
 message RemoveDestinationCommand { bytes id = 1; }

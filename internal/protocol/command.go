@@ -13,6 +13,8 @@ func CommandToProto(command event.Command) *pb.Command {
 	switch evt := command.(type) {
 	case event.CommandAddDestination:
 		return buildAddDestinationCommand(evt)
+	case event.CommandUpdateDestination:
+		return buildUpdateDestinationCommand(evt)
 	case event.CommandRemoveDestination:
 		return buildRemoveDestinationCommand(evt)
 	case event.CommandStartDestination:
@@ -30,6 +32,10 @@ func CommandToProto(command event.Command) *pb.Command {
 
 func buildAddDestinationCommand(cmd event.CommandAddDestination) *pb.Command {
 	return &pb.Command{CommandType: &pb.Command_AddDestination{AddDestination: &pb.AddDestinationCommand{Name: cmd.DestinationName, Url: cmd.URL}}}
+}
+
+func buildUpdateDestinationCommand(cmd event.CommandUpdateDestination) *pb.Command {
+	return &pb.Command{CommandType: &pb.Command_UpdateDestination{UpdateDestination: &pb.UpdateDestinationCommand{Id: cmd.ID[:], Name: cmd.DestinationName, Url: cmd.URL}}}
 }
 
 func buildRemoveDestinationCommand(cmd event.CommandRemoveDestination) *pb.Command {
@@ -61,6 +67,8 @@ func CommandFromProto(pbCmd *pb.Command) (event.Command, error) {
 	switch cmd := pbCmd.CommandType.(type) {
 	case *pb.Command_AddDestination:
 		return parseAddDestinationCommand(cmd.AddDestination)
+	case *pb.Command_UpdateDestination:
+		return parseUpdateDestinationCommand(cmd.UpdateDestination)
 	case *pb.Command_RemoveDestination:
 		return parseRemoveDestinationCommand(cmd.RemoveDestination)
 	case *pb.Command_StartDestination:
@@ -82,6 +90,23 @@ func parseAddDestinationCommand(cmd *pb.AddDestinationCommand) (event.Command, e
 	}
 
 	return event.CommandAddDestination{DestinationName: cmd.Name, URL: cmd.Url}, nil
+}
+
+func parseUpdateDestinationCommand(cmd *pb.UpdateDestinationCommand) (event.Command, error) {
+	if cmd == nil {
+		return nil, fmt.Errorf("nil UpdateDestinationCommand")
+	}
+
+	id, err := uuid.FromBytes(cmd.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.CommandUpdateDestination{
+		ID:              id,
+		DestinationName: cmd.Name,
+		URL:             cmd.Url,
+	}, nil
 }
 
 func parseRemoveDestinationCommand(cmd *pb.RemoveDestinationCommand) (event.Command, error) {

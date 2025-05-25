@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -113,6 +114,10 @@ func validate(state State) error {
 	urlCounts := make(map[string]int)
 
 	for _, dest := range state.Destinations {
+		if len(strings.TrimSpace(dest.Name)) == 0 {
+			err = errors.Join(err, errors.New("destination name cannot be empty"))
+		}
+
 		if u, urlErr := url.Parse(dest.URL); urlErr != nil {
 			err = errors.Join(err, fmt.Errorf("invalid destination URL: %w", urlErr))
 		} else if u.Scheme != "rtmp" {

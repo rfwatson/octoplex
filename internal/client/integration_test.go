@@ -625,6 +625,90 @@ func TestIntegrationRestartDestination(t *testing.T) {
 	assert.ErrorIs(t, result.errServer, context.Canceled)
 }
 
+func TestIntegrationUpdateDestination(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
+
+	logger := testhelpers.NewTestLogger(t).With("component", "integration")
+	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	require.NoError(t, err)
+
+	screen, screenCaptureC, getContents := setupSimulationScreen(t)
+
+	client, server := buildClientServer(
+		t,
+		config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}},
+		dockerClient,
+		screen,
+		screenCaptureC,
+		logger,
+		withPersistentState(store.State{
+			Destinations: []store.Destination{
+				{
+					ID:   uuid.MustParse("ca390fbe-1028-46ad-be5c-2d70f81d2eec"),
+					Name: "Stream name 1",
+					URL:  "rtmp://rtmp.example.com/live",
+				}},
+		}),
+	)
+	ch := runClientServer(ctx, t, client, server)
+
+	require.EventuallyWithT(
+		t,
+		func(c *assert.CollectT) {
+			contents := getContents()
+
+			assert.Contains(c, contents[1], "Status   waiting for stream", "expected mediaserver status to be waiting")
+		},
+		waitTime,
+		time.Second,
+		"expected the mediaserver to start",
+	)
+	printScreen(t, getContents, "After starting the mediaserver")
+
+	// Edit destination:
+	sendKey(t, screen, tcell.KeyRune, 'e')
+
+	require.EventuallyWithT(
+		t,
+		func(c *assert.CollectT) {
+			contents := getContents()
+			assert.True(c, contentsIncludes(contents, "Save changes"), "expected to see update destination form")
+		},
+		waitTime,
+		time.Second,
+		"expected to see the update destination form",
+	)
+	printScreen(t, getContents, "After opening the update destination form")
+
+	sendBackspaces(t, screen, 13)
+	sendKeys(t, screen, "New name")
+	sendKey(t, screen, tcell.KeyEnter, ' ')
+	sendKey(t, screen, tcell.KeyRune, '2')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
+	sendKey(t, screen, tcell.KeyEnter, ' ')
+
+	require.EventuallyWithT(
+		t,
+		func(c *assert.CollectT) {
+			contents := getContents()
+
+			assert.False(c, contentsIncludes(contents, "Save changes"), "expected not to see update destination form")
+			assert.True(c, contentsIncludes(contents, "New name           rtmp://rtmp.example.com/live2           off-air"), "expected to see updated destination")
+		},
+		waitTime,
+		time.Second,
+		"expected the destination to be updated",
+	)
+	printScreen(t, getContents, "After updating the destination")
+
+	cancel()
+
+	result := <-ch
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorIs(t, result.errServer, context.Canceled)
+}
+
 func TestIntegrationStartDestinationFailed(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()

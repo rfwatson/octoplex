@@ -21,6 +21,10 @@ func EventToProto(ev event.Event) *pb.Event {
 		return buildDestinationAddedEvent(evt)
 	case event.AddDestinationFailedEvent:
 		return buildAddDestinationFailedEvent(evt)
+	case event.DestinationUpdatedEvent:
+		return buildDestinationUpdatedEvent(evt)
+	case event.UpdateDestinationFailedEvent:
+		return buildUpdateDestinationFailedEvent(evt)
 	case event.DestinationStreamExitedEvent:
 		return buildDestinationStreamExitedEvent(evt)
 	case event.StartDestinationFailedEvent:
@@ -85,6 +89,25 @@ func buildAddDestinationFailedEvent(evt event.AddDestinationFailedEvent) *pb.Eve
 		EventType: &pb.Event_AddDestinationFailed{
 			AddDestinationFailed: &pb.AddDestinationFailedEvent{
 				Url:   evt.URL,
+				Error: evt.Err.Error(),
+			},
+		},
+	}
+}
+
+func buildDestinationUpdatedEvent(evt event.DestinationUpdatedEvent) *pb.Event {
+	return &pb.Event{
+		EventType: &pb.Event_DestinationUpdated{
+			DestinationUpdated: &pb.DestinationUpdatedEvent{Id: evt.ID[:]},
+		},
+	}
+}
+
+func buildUpdateDestinationFailedEvent(evt event.UpdateDestinationFailedEvent) *pb.Event {
+	return &pb.Event{
+		EventType: &pb.Event_UpdateDestinationFailed{
+			UpdateDestinationFailed: &pb.UpdateDestinationFailedEvent{
+				Id:    evt.ID[:],
 				Error: evt.Err.Error(),
 			},
 		},
@@ -171,6 +194,10 @@ func EventFromProto(pbEv *pb.Event) (event.Event, error) {
 		return parseDestinationAddedEvent(evt.DestinationAdded)
 	case *pb.Event_AddDestinationFailed:
 		return parseAddDestinationFailedEvent(evt.AddDestinationFailed)
+	case *pb.Event_DestinationUpdated:
+		return parseDestinationUpdatedEvent(evt.DestinationUpdated)
+	case *pb.Event_UpdateDestinationFailed:
+		return parseUpdateDestinationFailedEvent(evt.UpdateDestinationFailed)
 	case *pb.Event_DestinationStreamExited:
 		return parseDestinationStreamExitedEvent(evt.DestinationStreamExited)
 	case *pb.Event_StartDestinationFailed:
@@ -248,6 +275,31 @@ func parseAddDestinationFailedEvent(evt *pb.AddDestinationFailedEvent) (event.Ev
 	return event.AddDestinationFailedEvent{URL: evt.Url, Err: errors.New(evt.Error)}, nil
 }
 
+func parseDestinationUpdatedEvent(evt *pb.DestinationUpdatedEvent) (event.Event, error) {
+	if evt == nil {
+		return nil, errors.New("nil DestinationUpdatedEvent")
+	}
+
+	id, err := uuid.FromBytes(evt.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.DestinationUpdatedEvent{ID: id}, nil
+}
+
+func parseUpdateDestinationFailedEvent(evt *pb.UpdateDestinationFailedEvent) (event.Event, error) {
+	if evt == nil {
+		return nil, errors.New("nil UpdateDestinationFailedEvent")
+	}
+
+	id, err := uuid.FromBytes(evt.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.UpdateDestinationFailedEvent{ID: id, Err: errors.New(evt.Error)}, nil
+}
 func parseDestinationStreamExitedEvent(evt *pb.DestinationStreamExitedEvent) (event.Event, error) {
 	if evt == nil {
 		return nil, errors.New("nil DestinationStreamExitedEvent")
