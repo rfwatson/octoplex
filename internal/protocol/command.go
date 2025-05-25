@@ -1,8 +1,11 @@
 package protocol
 
 import (
+	"fmt"
+
 	"git.netflux.io/rob/octoplex/internal/event"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	"github.com/google/uuid"
 )
 
 // CommandToProto converts a command to a protobuf message.
@@ -30,15 +33,15 @@ func buildAddDestinationCommand(cmd event.CommandAddDestination) *pb.Command {
 }
 
 func buildRemoveDestinationCommand(cmd event.CommandRemoveDestination) *pb.Command {
-	return &pb.Command{CommandType: &pb.Command_RemoveDestination{RemoveDestination: &pb.RemoveDestinationCommand{Url: cmd.URL}}}
+	return &pb.Command{CommandType: &pb.Command_RemoveDestination{RemoveDestination: &pb.RemoveDestinationCommand{Id: cmd.ID[:]}}}
 }
 
 func buildStartDestinationCommand(cmd event.CommandStartDestination) *pb.Command {
-	return &pb.Command{CommandType: &pb.Command_StartDestination{StartDestination: &pb.StartDestinationCommand{Url: cmd.URL}}}
+	return &pb.Command{CommandType: &pb.Command_StartDestination{StartDestination: &pb.StartDestinationCommand{Id: cmd.ID[:]}}}
 }
 
 func buildStopDestinationCommand(cmd event.CommandStopDestination) *pb.Command {
-	return &pb.Command{CommandType: &pb.Command_StopDestination{StopDestination: &pb.StopDestinationCommand{Url: cmd.URL}}}
+	return &pb.Command{CommandType: &pb.Command_StopDestination{StopDestination: &pb.StopDestinationCommand{Id: cmd.ID[:]}}}
 }
 
 func buildCloseOtherInstanceCommand(event.CommandCloseOtherInstance) *pb.Command {
@@ -50,9 +53,9 @@ func buildKillServerCommand(event.CommandKillServer) *pb.Command {
 }
 
 // CommandFromProto converts a protobuf message to a command.
-func CommandFromProto(pbCmd *pb.Command) event.Command {
+func CommandFromProto(pbCmd *pb.Command) (event.Command, error) {
 	if pbCmd == nil || pbCmd.CommandType == nil {
-		panic("invalid or nil pb.Command")
+		return nil, fmt.Errorf("nil or empty Command")
 	}
 
 	switch cmd := pbCmd.CommandType.(type) {
@@ -65,40 +68,59 @@ func CommandFromProto(pbCmd *pb.Command) event.Command {
 	case *pb.Command_StopDestination:
 		return parseStopDestinationCommand(cmd.StopDestination)
 	case *pb.Command_CloseOtherInstances:
-		return parseCloseOtherInstanceCommand(cmd.CloseOtherInstances)
+		return parseCloseOtherInstanceCommand(cmd.CloseOtherInstances), nil
 	case *pb.Command_KillServer:
-		return parseKillServerCommand(cmd.KillServer)
+		return parseKillServerCommand(cmd.KillServer), nil
 	default:
-		panic("unknown pb.Command type")
+		return nil, fmt.Errorf("unknown command type: %T", cmd)
 	}
 }
 
-func parseAddDestinationCommand(cmd *pb.AddDestinationCommand) event.Command {
+func parseAddDestinationCommand(cmd *pb.AddDestinationCommand) (event.Command, error) {
 	if cmd == nil {
-		panic("nil AddDestinationCommand")
+		return nil, fmt.Errorf("nil AddDestinationCommand")
 	}
-	return event.CommandAddDestination{DestinationName: cmd.Name, URL: cmd.Url}
+
+	return event.CommandAddDestination{DestinationName: cmd.Name, URL: cmd.Url}, nil
 }
 
-func parseRemoveDestinationCommand(cmd *pb.RemoveDestinationCommand) event.Command {
+func parseRemoveDestinationCommand(cmd *pb.RemoveDestinationCommand) (event.Command, error) {
 	if cmd == nil {
-		panic("nil RemoveDestinationCommand")
+		return nil, fmt.Errorf("nil RemoveDestinationCommand")
 	}
-	return event.CommandRemoveDestination{URL: cmd.Url}
+
+	id, err := uuid.FromBytes(cmd.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.CommandRemoveDestination{ID: id}, nil
 }
 
-func parseStartDestinationCommand(cmd *pb.StartDestinationCommand) event.Command {
+func parseStartDestinationCommand(cmd *pb.StartDestinationCommand) (event.Command, error) {
 	if cmd == nil {
-		panic("nil StartDestinationCommand")
+		return nil, fmt.Errorf("nil StartDestinationCommand")
 	}
-	return event.CommandStartDestination{URL: cmd.Url}
+
+	id, err := uuid.FromBytes(cmd.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.CommandStartDestination{ID: id}, nil
 }
 
-func parseStopDestinationCommand(cmd *pb.StopDestinationCommand) event.Command {
+func parseStopDestinationCommand(cmd *pb.StopDestinationCommand) (event.Command, error) {
 	if cmd == nil {
-		panic("nil StopDestinationCommand")
+		return nil, fmt.Errorf("nil StopDestinationCommand")
 	}
-	return event.CommandStopDestination{URL: cmd.Url}
+
+	id, err := uuid.FromBytes(cmd.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.CommandStopDestination{ID: id}, nil
 }
 
 func parseCloseOtherInstanceCommand(_ *pb.CloseOtherInstancesCommand) event.Command {

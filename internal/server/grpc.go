@@ -115,7 +115,10 @@ func (s *Server) Communicate(stream pb.InternalAPI_CommunicateServer) error {
 
 			switch pbCmd := in.Payload.(type) {
 			case *pb.Envelope_Command:
-				cmd := protocol.CommandFromProto(pbCmd.Command)
+				cmd, err := protocol.CommandFromProto(pbCmd.Command)
+				if err != nil {
+					return fmt.Errorf("command from proto: %w", err)
+				}
 				s.logger.Debug("Received command from gRPC stream", "command", cmd.Name())
 				s.dispatcher(cmd)
 			default:

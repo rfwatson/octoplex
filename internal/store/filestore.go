@@ -7,12 +7,15 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+
+	"github.com/google/uuid"
 )
 
 // Destination represents a destination for a stream.
 type Destination struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	URL  string    `json:"url"`
 }
 
 // State is the storable persistent state.

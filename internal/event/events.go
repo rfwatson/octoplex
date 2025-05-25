@@ -1,6 +1,9 @@
 package event
 
-import "git.netflux.io/rob/octoplex/internal/domain"
+import (
+	"git.netflux.io/rob/octoplex/internal/domain"
+	"github.com/google/uuid"
+)
 
 type Name string
 
@@ -33,7 +36,7 @@ func (e AppStateChangedEvent) EventName() Name {
 
 // DestinationAddedEvent is emitted when a destination is successfully added.
 type DestinationAddedEvent struct {
-	URL string
+	ID uuid.UUID
 }
 
 func (e DestinationAddedEvent) EventName() Name {
@@ -62,7 +65,7 @@ func (e DestinationStreamExitedEvent) EventName() Name {
 
 // StartDestinationFailedEvent is emitted when a destination fails to start.
 type StartDestinationFailedEvent struct {
-	URL     string
+	ID      uuid.UUID
 	Message string
 }
 
@@ -73,7 +76,7 @@ func (e StartDestinationFailedEvent) EventName() Name {
 // DestinationRemovedEvent is emitted when a destination is successfully
 // removed.
 type DestinationRemovedEvent struct {
-	URL string
+	ID uuid.UUID
 }
 
 func (e DestinationRemovedEvent) EventName() Name {
@@ -83,7 +86,7 @@ func (e DestinationRemovedEvent) EventName() Name {
 // RemoveDestinationFailedEvent is emitted when a destination fails to be
 // removed.
 type RemoveDestinationFailedEvent struct {
-	URL string
+	ID  uuid.UUID
 	Err error
 }
 

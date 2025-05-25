@@ -9,11 +9,15 @@ import (
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
 	"git.netflux.io/rob/octoplex/internal/protocol"
 	gocmp "github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func TestEventToProto(t *testing.T) {
+	destinationID := uuid.New()
+
 	testCases := []struct {
 		name string
 		in   event.Event
@@ -33,6 +37,7 @@ func TestEventToProto(t *testing.T) {
 					},
 					Destinations: []domain.Destination{
 						{
+							ID:   destinationID,
 							Name: "dest1",
 							URL:  "rtmp://dest1.example.com",
 							Container: domain.Container{
@@ -57,6 +62,7 @@ func TestEventToProto(t *testing.T) {
 							},
 							Destinations: []*pb.Destination{
 								{
+									Id:   destinationID[:],
 									Name: "dest1",
 									Url:  "rtmp://dest1.example.com",
 									Container: &pb.Container{
@@ -72,18 +78,19 @@ func TestEventToProto(t *testing.T) {
 		},
 		{
 			name: "DestinationAdded",
-			in:   event.DestinationAddedEvent{URL: "rtmp://dest.example.com"},
+			in:   event.DestinationAddedEvent{ID: destinationID},
 			want: &pb.Event{
 				EventType: &pb.Event_DestinationAdded{
-					DestinationAdded: &pb.DestinationAddedEvent{
-						Url: "rtmp://dest.example.com",
-					},
+					DestinationAdded: &pb.DestinationAddedEvent{Id: destinationID[:]},
 				},
 			},
 		},
 		{
 			name: "AddDestinationFailed",
-			in:   event.AddDestinationFailedEvent{URL: "rtmp://fail.example.com", Err: errors.New("failed")},
+			in: event.AddDestinationFailedEvent{
+				URL: "rtmp://fail.example.com",
+				Err: errors.New("failed"),
+			},
 			want: &pb.Event{
 				EventType: &pb.Event_AddDestinationFailed{
 					AddDestinationFailed: &pb.AddDestinationFailedEvent{
@@ -142,6 +149,8 @@ func TestEventToProto(t *testing.T) {
 }
 
 func TestEventFromProto(t *testing.T) {
+	destinationID := uuid.New()
+
 	testCases := []struct {
 		name string
 		in   *pb.Event
@@ -161,6 +170,7 @@ func TestEventFromProto(t *testing.T) {
 							},
 							Destinations: []*pb.Destination{
 								{
+									Id:        destinationID[:],
 									Name:      "dest1",
 									Url:       "rtmp://dest1.example.com",
 									Container: &pb.Container{Id: "bcd456"},
@@ -184,6 +194,7 @@ func TestEventFromProto(t *testing.T) {
 					},
 					Destinations: []domain.Destination{
 						{
+							ID:        destinationID,
 							Name:      "dest1",
 							URL:       "rtmp://dest1.example.com",
 							Container: domain.Container{ID: "bcd456"},
@@ -201,11 +212,11 @@ func TestEventFromProto(t *testing.T) {
 			in: &pb.Event{
 				EventType: &pb.Event_DestinationAdded{
 					DestinationAdded: &pb.DestinationAddedEvent{
-						Url: "rtmp://dest.example.com",
+						Id: destinationID[:],
 					},
 				},
 			},
-			want: event.DestinationAddedEvent{URL: "rtmp://dest.example.com"},
+			want: event.DestinationAddedEvent{ID: destinationID},
 		},
 		{
 			name: "AddDestinationFailed",
@@ -217,7 +228,10 @@ func TestEventFromProto(t *testing.T) {
 					},
 				},
 			},
-			want: event.AddDestinationFailedEvent{URL: "rtmp://fail.example.com", Err: errors.New("failed")},
+			want: event.AddDestinationFailedEvent{
+				URL: "rtmp://fail.example.com",
+				Err: errors.New("failed"),
+			},
 		},
 		{
 			name: "DestinationStreamExited",
@@ -262,7 +276,9 @@ func TestEventFromProto(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Empty(t, gocmp.Diff(tc.want, protocol.EventFromProto(tc.in), gocmp.Comparer(compareErrorMessages)))
+			got, err := protocol.EventFromProto(tc.in)
+			require.NoError(t, err)
+			assert.Empty(t, gocmp.Diff(tc.want, got, gocmp.Comparer(compareErrorMessages)))
 		})
 	}
 }

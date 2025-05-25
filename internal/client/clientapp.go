@@ -141,7 +141,12 @@ func (a *App) Run(ctx context.Context) error {
 				continue
 			}
 
-			evt := protocol.EventFromProto(pbEvt)
+			evt, err := protocol.EventFromProto(pbEvt)
+			if err != nil {
+				a.logger.Error("Failed to convert protobuf event to domain event", "err", err, "event", pbEvt)
+				continue
+			}
+
 			a.logger.Debug("Received event from gRPC stream", "event", evt.EventName(), "payload", evt)
 			a.bus.Send(evt)
 		}

@@ -20,11 +20,11 @@ message AddDestinationCommand {
   string url = 2;
 }
 
-message RemoveDestinationCommand { string url = 1; }
+message RemoveDestinationCommand { bytes id = 1; }
 
-message StartDestinationCommand { string url = 1; }
+message StartDestinationCommand { bytes id = 1; }
 
-message StopDestinationCommand { string url = 1; }
+message StopDestinationCommand { bytes id = 1; }
 
 message CloseOtherInstancesCommand {}
 

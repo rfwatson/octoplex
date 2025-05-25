@@ -26,6 +26,7 @@ import (
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	"github.com/gdamore/tcell/v2"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -127,7 +128,13 @@ func testIntegration(t *testing.T, host string, mediaServerConfig config.MediaSe
 		logger,
 		withPersistentState(store.State{
 			// Load one destination from config, add the other in-app.
-			Destinations: []store.Destination{{Name: "Local server 1", URL: destURL1}},
+			Destinations: []store.Destination{
+				{
+					ID:   uuid.MustParse("2e4c97cc-652d-4f3c-b2ee-9594e1c77a3d"),
+					Name: "Local server 1",
+					URL:  destURL1,
+				},
+			},
 		}),
 	)
 	ch := runClientServer(ctx, t, client, server)
@@ -492,7 +499,13 @@ func TestIntegrationRestartDestination(t *testing.T) {
 		screenCaptureC,
 		logger,
 		withPersistentState(store.State{
-			Destinations: []store.Destination{{Name: "Local server 1", URL: fmt.Sprintf("rtmp://%s:%d/live", hostIP, destServerRTMPPort.Int())}},
+			Destinations: []store.Destination{
+				{
+					ID:   uuid.MustParse("dd100899-5801-423d-8c1f-569edfde10dd"),
+					Name: "Local server 1",
+					URL:  fmt.Sprintf("rtmp://%s:%d/live", hostIP, destServerRTMPPort.Int()),
+				},
+			},
 		}),
 	)
 	ch := runClientServer(ctx, t, client, server)
@@ -630,7 +643,12 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 		screenCaptureC,
 		logger,
 		withPersistentState(store.State{
-			Destinations: []store.Destination{{Name: "Example server", URL: "rtmp://rtmp.example.com/live"}},
+			Destinations: []store.Destination{
+				{
+					ID:   uuid.MustParse("85d1e543-efda-4440-932f-69ff49c21f2e"),
+					Name: "Example server",
+					URL:  "rtmp://rtmp.example.com/live",
+				}},
 		}),
 	)
 	ch := runClientServer(ctx, t, client, server)

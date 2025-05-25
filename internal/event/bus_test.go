@@ -5,6 +5,7 @@ import (
 
 	"git.netflux.io/rob/octoplex/internal/event"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,9 +16,7 @@ func TestBus(t *testing.T) {
 	ch1 := bus.Register()
 	ch2 := bus.Register()
 
-	evt := event.DestinationAddedEvent{
-		URL: "rtmp://rtmp.example.com/live",
-	}
+	evt := event.DestinationAddedEvent{ID: uuid.New()}
 
 	go func() {
 		bus.Send(evt)

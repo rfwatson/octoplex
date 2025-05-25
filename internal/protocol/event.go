@@ -2,11 +2,13 @@ package protocol
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/event"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -73,7 +75,7 @@ func buildAppStateChangeEvent(evt event.AppStateChangedEvent) *pb.Event {
 func buildDestinationAddedEvent(evt event.DestinationAddedEvent) *pb.Event {
 	return &pb.Event{
 		EventType: &pb.Event_DestinationAdded{
-			DestinationAdded: &pb.DestinationAddedEvent{Url: evt.URL},
+			DestinationAdded: &pb.DestinationAddedEvent{Id: evt.ID[:]},
 		},
 	}
 }
@@ -81,7 +83,10 @@ func buildDestinationAddedEvent(evt event.DestinationAddedEvent) *pb.Event {
 func buildAddDestinationFailedEvent(evt event.AddDestinationFailedEvent) *pb.Event {
 	return &pb.Event{
 		EventType: &pb.Event_AddDestinationFailed{
-			AddDestinationFailed: &pb.AddDestinationFailedEvent{Url: evt.URL, Error: evt.Err.Error()},
+			AddDestinationFailed: &pb.AddDestinationFailedEvent{
+				Url:   evt.URL,
+				Error: evt.Err.Error(),
+			},
 		},
 	}
 }
@@ -89,7 +94,10 @@ func buildAddDestinationFailedEvent(evt event.AddDestinationFailedEvent) *pb.Eve
 func buildDestinationStreamExitedEvent(evt event.DestinationStreamExitedEvent) *pb.Event {
 	return &pb.Event{
 		EventType: &pb.Event_DestinationStreamExited{
-			DestinationStreamExited: &pb.DestinationStreamExitedEvent{Name: evt.Name, Error: evt.Err.Error()},
+			DestinationStreamExited: &pb.DestinationStreamExitedEvent{
+				Name:  evt.Name,
+				Error: evt.Err.Error(),
+			},
 		},
 	}
 }
@@ -97,7 +105,10 @@ func buildDestinationStreamExitedEvent(evt event.DestinationStreamExitedEvent) *
 func buildStartDestinationFailedEvent(evt event.StartDestinationFailedEvent) *pb.Event {
 	return &pb.Event{
 		EventType: &pb.Event_StartDestinationFailed{
-			StartDestinationFailed: &pb.StartDestinationFailedEvent{Url: evt.URL, Message: evt.Message},
+			StartDestinationFailed: &pb.StartDestinationFailedEvent{
+				Id:      evt.ID[:],
+				Message: evt.Message,
+			},
 		},
 	}
 }
@@ -105,7 +116,9 @@ func buildStartDestinationFailedEvent(evt event.StartDestinationFailedEvent) *pb
 func buildDestinationRemovedEvent(evt event.DestinationRemovedEvent) *pb.Event {
 	return &pb.Event{
 		EventType: &pb.Event_DestinationRemoved{
-			DestinationRemoved: &pb.DestinationRemovedEvent{Url: evt.URL},
+			DestinationRemoved: &pb.DestinationRemovedEvent{
+				Id: evt.ID[:],
+			},
 		},
 	}
 }
@@ -113,7 +126,10 @@ func buildDestinationRemovedEvent(evt event.DestinationRemovedEvent) *pb.Event {
 func buildRemoveDestinationFailedEvent(evt event.RemoveDestinationFailedEvent) *pb.Event {
 	return &pb.Event{
 		EventType: &pb.Event_RemoveDestinationFailed{
-			RemoveDestinationFailed: &pb.RemoveDestinationFailedEvent{Url: evt.URL, Error: evt.Err.Error()},
+			RemoveDestinationFailed: &pb.RemoveDestinationFailedEvent{
+				Id:    evt.ID[:],
+				Error: evt.Err.Error(),
+			},
 		},
 	}
 }
@@ -143,9 +159,9 @@ func buildMediaServerStartedEvent(event.MediaServerStartedEvent) *pb.Event {
 }
 
 // EventFromProto converts a protobuf message to an event.
-func EventFromProto(pbEv *pb.Event) event.Event {
+func EventFromProto(pbEv *pb.Event) (event.Event, error) {
 	if pbEv == nil || pbEv.EventType == nil {
-		panic("invalid or nil pb.Event")
+		return nil, errors.New("nil or empty pb.Event")
 	}
 
 	switch evt := pbEv.EventType.(type) {
@@ -166,22 +182,27 @@ func EventFromProto(pbEv *pb.Event) event.Event {
 	case *pb.Event_FatalError:
 		return parseFatalErrorOccurredEvent(evt.FatalError)
 	case *pb.Event_OtherInstanceDetected:
-		return parseOtherInstanceDetectedEvent(evt.OtherInstanceDetected)
+		return parseOtherInstanceDetectedEvent(evt.OtherInstanceDetected), nil
 	case *pb.Event_MediaServerStarted:
 		return parseMediaServerStartedEvent(evt.MediaServerStarted)
 	default:
-		panic("unknown pb.Event type")
+		return nil, fmt.Errorf("unknown event type: %T", evt)
 	}
 }
 
-func parseAppStateChangedEvent(evt *pb.AppStateChangedEvent) event.Event {
+func parseAppStateChangedEvent(evt *pb.AppStateChangedEvent) (event.Event, error) {
 	if evt == nil || evt.AppState == nil || evt.AppState.Source == nil {
-		panic("invalid AppStateChangedEvent")
+		return nil, errors.New("nil or empty AppStateChangedEvent")
 	}
 
 	var liveChangedAt time.Time
 	if evt.AppState.Source.LiveChangedAt != nil {
 		liveChangedAt = evt.AppState.Source.LiveChangedAt.AsTime()
+	}
+
+	destinations, err := ProtoToDestinations(evt.AppState.Destinations)
+	if err != nil {
+		return nil, fmt.Errorf("parse destinations: %w", err)
 	}
 
 	return event.AppStateChangedEvent{
@@ -195,7 +216,7 @@ func parseAppStateChangedEvent(evt *pb.AppStateChangedEvent) event.Event {
 				RTMPSURL:      evt.AppState.Source.RtmpsUrl,
 				ExitReason:    evt.AppState.Source.ExitReason,
 			},
-			Destinations: ProtoToDestinations(evt.AppState.Destinations),
+			Destinations: destinations,
 			BuildInfo: domain.BuildInfo{
 				GoVersion: evt.AppState.BuildInfo.GoVersion,
 				Version:   evt.AppState.BuildInfo.Version,
@@ -203,65 +224,91 @@ func parseAppStateChangedEvent(evt *pb.AppStateChangedEvent) event.Event {
 				Date:      evt.AppState.BuildInfo.Date,
 			},
 		},
-	}
+	}, nil
 }
 
-func parseDestinationAddedEvent(evt *pb.DestinationAddedEvent) event.Event {
+func parseDestinationAddedEvent(evt *pb.DestinationAddedEvent) (event.Event, error) {
 	if evt == nil {
-		panic("nil DestinationAddedEvent")
+		return nil, errors.New("nil DestinationAddedEvent")
 	}
-	return event.DestinationAddedEvent{URL: evt.Url}
+
+	id, err := uuid.FromBytes(evt.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.DestinationAddedEvent{ID: id}, nil
 }
 
-func parseAddDestinationFailedEvent(evt *pb.AddDestinationFailedEvent) event.Event {
+func parseAddDestinationFailedEvent(evt *pb.AddDestinationFailedEvent) (event.Event, error) {
 	if evt == nil {
-		panic("nil AddDestinationFailedEvent")
+		return nil, errors.New("nil AddDestinationFailedEvent")
 	}
-	return event.AddDestinationFailedEvent{URL: evt.Url, Err: errors.New(evt.Error)}
+
+	return event.AddDestinationFailedEvent{URL: evt.Url, Err: errors.New(evt.Error)}, nil
 }
 
-func parseDestinationStreamExitedEvent(evt *pb.DestinationStreamExitedEvent) event.Event {
+func parseDestinationStreamExitedEvent(evt *pb.DestinationStreamExitedEvent) (event.Event, error) {
 	if evt == nil {
-		panic("nil DestinationStreamExitedEvent")
+		return nil, errors.New("nil DestinationStreamExitedEvent")
 	}
-	return event.DestinationStreamExitedEvent{Name: evt.Name, Err: errors.New(evt.Error)}
+
+	return event.DestinationStreamExitedEvent{Name: evt.Name, Err: errors.New(evt.Error)}, nil
 }
 
-func parseStartDestinationFailedEvent(evt *pb.StartDestinationFailedEvent) event.Event {
+func parseStartDestinationFailedEvent(evt *pb.StartDestinationFailedEvent) (event.Event, error) {
 	if evt == nil {
-		panic("nil StartDestinationFailedEvent")
+		return nil, errors.New("nil StartDestinationFailedEvent")
 	}
-	return event.StartDestinationFailedEvent{URL: evt.Url, Message: evt.Message}
+
+	id, err := uuid.FromBytes(evt.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.StartDestinationFailedEvent{ID: id, Message: evt.Message}, nil
 }
 
-func parseDestinationRemovedEvent(evt *pb.DestinationRemovedEvent) event.Event {
+func parseDestinationRemovedEvent(evt *pb.DestinationRemovedEvent) (event.Event, error) {
 	if evt == nil {
-		panic("nil DestinationRemovedEvent")
+		return nil, errors.New("nil DestinationRemovedEvent")
 	}
-	return event.DestinationRemovedEvent{URL: evt.Url}
+
+	id, err := uuid.FromBytes(evt.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.DestinationRemovedEvent{ID: id}, nil
 }
 
-func parseRemoveDestinationFailedEvent(evt *pb.RemoveDestinationFailedEvent) event.Event {
+func parseRemoveDestinationFailedEvent(evt *pb.RemoveDestinationFailedEvent) (event.Event, error) {
 	if evt == nil {
-		panic("nil RemoveDestinationFailedEvent")
+		return nil, errors.New("nil RemoveDestinationFailedEvent")
 	}
-	return event.RemoveDestinationFailedEvent{URL: evt.Url, Err: errors.New(evt.Error)}
+
+	id, err := uuid.FromBytes(evt.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.RemoveDestinationFailedEvent{ID: id, Err: errors.New(evt.Error)}, nil
 }
 
-func parseFatalErrorOccurredEvent(evt *pb.FatalErrorEvent) event.Event {
+func parseFatalErrorOccurredEvent(evt *pb.FatalErrorEvent) (event.Event, error) {
 	if evt == nil {
-		panic("nil FatalErrorEvent")
+		return nil, errors.New("nil FatalErrorEvent")
 	}
-	return event.FatalErrorOccurredEvent{Message: evt.Message}
+	return event.FatalErrorOccurredEvent{Message: evt.Message}, nil
 }
 
 func parseOtherInstanceDetectedEvent(_ *pb.OtherInstanceDetectedEvent) event.Event {
 	return event.OtherInstanceDetectedEvent{}
 }
 
-func parseMediaServerStartedEvent(evt *pb.MediaServerStartedEvent) event.Event {
+func parseMediaServerStartedEvent(evt *pb.MediaServerStartedEvent) (event.Event, error) {
 	if evt == nil {
-		panic("nil MediaServerStartedEvent")
+		return nil, errors.New("nil MediaServerStartedEvent")
 	}
-	return event.MediaServerStartedEvent{}
+	return event.MediaServerStartedEvent{}, nil
 }

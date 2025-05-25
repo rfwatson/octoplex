@@ -9,6 +9,7 @@ import (
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
 	"git.netflux.io/rob/octoplex/internal/protocol"
 	gocmp "github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -148,6 +149,8 @@ func TestContainerFromProto(t *testing.T) {
 }
 
 func TestDestinationConversions(t *testing.T) {
+	id := uuid.New()
+
 	testCases := []struct {
 		name string
 		in   domain.Destination
@@ -156,12 +159,14 @@ func TestDestinationConversions(t *testing.T) {
 		{
 			name: "basic destination",
 			in: domain.Destination{
+				ID:        id,
 				Name:      "dest1",
 				URL:       "rtmp://dest1",
 				Status:    domain.DestinationStatusLive,
 				Container: domain.Container{ID: "c1"},
 			},
 			want: &pb.Destination{
+				Id:        id[:],
 				Name:      "dest1",
 				Url:       "rtmp://dest1",
 				Status:    pb.Destination_STATUS_LIVE,
@@ -179,7 +184,9 @@ func TestDestinationConversions(t *testing.T) {
 			require.NotNil(t, proto.Container)
 			assert.Equal(t, tc.want.Container.Id, proto.Container.Id)
 
-			dests := protocol.ProtoToDestinations([]*pb.Destination{proto})
+			dests, err := protocol.ProtoToDestinations([]*pb.Destination{proto})
+			require.NoError(t, err)
+
 			assert.Len(t, dests, 1)
 			assert.Equal(t, tc.in.Name, dests[0].Name)
 			assert.Equal(t, tc.in.URL, dests[0].URL)

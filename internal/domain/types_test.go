@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"git.netflux.io/rob/octoplex/internal/domain"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,6 +15,7 @@ func TestAppStateClone(t *testing.T) {
 			{
 				Container: domain.Container{ID: "123"},
 				Status:    0,
+				ID:        uuid.New(),
 				Name:      "YouTube",
 				URL:       "rtmp://a.rtmp.youtube.com/live2",
 			},

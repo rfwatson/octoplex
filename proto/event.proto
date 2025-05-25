@@ -28,22 +28,22 @@ message DestinationStreamExitedEvent {
   string error = 2;
 }
 
-message DestinationAddedEvent { string url = 1; }
+message DestinationAddedEvent { bytes id = 1; }
 
 message AddDestinationFailedEvent {
   string url = 1;
   string error = 2;
 }
 
-message DestinationRemovedEvent { string url = 1; }
+message DestinationRemovedEvent { bytes id = 1; }
 
 message RemoveDestinationFailedEvent {
-  string url = 1;
+  bytes id = 1;
   string error = 2;
 }
 
 message StartDestinationFailedEvent {
-  string url = 1;
+  bytes id = 1;
   string message = 2;
 }
 

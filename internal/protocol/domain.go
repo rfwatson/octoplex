@@ -2,10 +2,12 @@ package protocol
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/domain"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -102,6 +104,7 @@ func DestinationToProto(d domain.Destination) *pb.Destination {
 	return &pb.Destination{
 		Container: ContainerToProto(d.Container),
 		Status:    DestinationStatusToProto(d.Status),
+		Id:        d.ID[:],
 		Name:      d.Name,
 		Url:       d.URL,
 	}
@@ -109,9 +112,9 @@ func DestinationToProto(d domain.Destination) *pb.Destination {
 
 // ProtoToDestinations converts a slice of protobuf Destinations to a slice of
 // domain.Destinations.
-func ProtoToDestinations(pbDests []*pb.Destination) []domain.Destination {
+func ProtoToDestinations(pbDests []*pb.Destination) ([]domain.Destination, error) {
 	if pbDests == nil {
-		return nil
+		return nil, nil
 	}
 
 	dests := make([]domain.Destination, 0, len(pbDests))
@@ -119,14 +122,21 @@ func ProtoToDestinations(pbDests []*pb.Destination) []domain.Destination {
 		if pbDest == nil {
 			continue
 		}
+
+		id, err := uuid.FromBytes(pbDest.Id)
+		if err != nil {
+			return nil, fmt.Errorf("parse ID: %w", err)
+		}
+
 		dests = append(dests, domain.Destination{
 			Container: ContainerFromProto(pbDest.Container),
 			Status:    domain.DestinationStatus(pbDest.Status),
+			ID:        id,
 			Name:      pbDest.Name,
 			URL:       pbDest.Url,
 		})
 	}
-	return dests
+	return dests, nil
 }
 
 // DestinationStatusToProto converts a domain.DestinationStatus to a

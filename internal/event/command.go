@@ -1,5 +1,7 @@
 package event
 
+import "github.com/google/uuid"
+
 // CommandAddDestination adds a destination.
 type CommandAddDestination struct {
 	DestinationName string
@@ -13,7 +15,7 @@ func (c CommandAddDestination) Name() string {
 
 // CommandRemoveDestination removes a destination.
 type CommandRemoveDestination struct {
-	URL string
+	ID uuid.UUID
 }
 
 // Name implements the Command interface.
@@ -23,7 +25,7 @@ func (c CommandRemoveDestination) Name() string {
 
 // CommandStartDestination starts a destination.
 type CommandStartDestination struct {
-	URL string
+	ID uuid.UUID
 }
 
 // Name implements the Command interface.
@@ -33,7 +35,7 @@ func (c CommandStartDestination) Name() string {
 
 // CommandStopDestination stops a destination.
 type CommandStopDestination struct {
-	URL string
+	ID uuid.UUID
 }
 
 // Name implements the Command interface.

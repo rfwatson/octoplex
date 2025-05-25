@@ -20,6 +20,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/replicator"
 	"git.netflux.io/rob/octoplex/internal/store"
 	"github.com/docker/docker/client"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -315,8 +316,10 @@ func (a *App) handleCommand(
 
 	switch c := cmd.(type) {
 	case event.CommandAddDestination:
+		destinationID := uuid.New()
 		newState := a.store.Get()
 		newState.Destinations = append(newState.Destinations, store.Destination{
+			ID:   destinationID,
 			Name: c.DestinationName,
 			URL:  c.URL,
 		})
@@ -326,29 +329,52 @@ func (a *App) handleCommand(
 		}
 		a.handlePersistentStateUpdate(state)
 		a.logger.Info("Destination added", "url", c.URL)
-		a.eventBus.Send(event.DestinationAddedEvent{URL: c.URL})
+		a.eventBus.Send(event.DestinationAddedEvent{ID: destinationID})
 	case event.CommandRemoveDestination:
-		repl.StopDestination(c.URL) // no-op if not live
 		newState := a.store.Get()
-		newState.Destinations = slices.DeleteFunc(newState.Destinations, func(dest store.Destination) bool {
-			return dest.URL == c.URL
-		})
-		if err := a.store.Set(newState); err != nil {
-			a.logger.Error("Remove destination failed", "err", err)
-			a.eventBus.Send(event.RemoveDestinationFailedEvent{URL: c.URL, Err: err})
-			break
-		}
-		a.handlePersistentStateUpdate(state)
-		a.eventBus.Send(event.DestinationRemovedEvent{URL: c.URL}) //nolint:gosimple
-	case event.CommandStartDestination:
-		if !state.Source.Live {
-			a.eventBus.Send(event.StartDestinationFailedEvent{URL: c.URL, Message: "source not live"})
+
+		idx := slices.IndexFunc(newState.Destinations, func(dest store.Destination) bool { return dest.ID == c.ID })
+		if idx == -1 {
+			a.logger.Warn("Remove destination failed: destination not found", "id", c.ID)
 			break
 		}
 
-		repl.StartDestination(c.URL)
+		dest := state.Destinations[idx]
+		repl.StopDestination(dest.URL) // no-op if not live
+		newState.Destinations = slices.Delete(newState.Destinations, idx, idx+1)
+
+		if err := a.store.Set(newState); err != nil {
+			a.logger.Error("Remove destination failed", "err", err)
+			a.eventBus.Send(event.RemoveDestinationFailedEvent{ID: c.ID, Err: err})
+			break
+		}
+		a.handlePersistentStateUpdate(state)
+		a.eventBus.Send(event.DestinationRemovedEvent{ID: c.ID}) //nolint:gosimple
+	case event.CommandStartDestination:
+		if !state.Source.Live {
+			a.eventBus.Send(event.StartDestinationFailedEvent{ID: c.ID, Message: "source not live"})
+			break
+		}
+
+		destIndex := slices.IndexFunc(state.Destinations, func(d domain.Destination) bool {
+			return d.ID == c.ID
+		})
+		if destIndex == -1 {
+			a.logger.Warn("Start destination failed: destination not found", "id", c.ID)
+			break
+		}
+
+		repl.StartDestination(state.Destinations[destIndex].URL)
 	case event.CommandStopDestination:
-		repl.StopDestination(c.URL)
+		destIndex := slices.IndexFunc(state.Destinations, func(d domain.Destination) bool {
+			return d.ID == c.ID
+		})
+		if destIndex == -1 {
+			a.logger.Warn("Start destination failed: destination not found", "id", c.ID)
+			break
+		}
+
+		repl.StopDestination(state.Destinations[destIndex].URL)
 	case event.CommandCloseOtherInstance:
 		if err := closeOtherInstances(ctx, containerClient); err != nil {
 			return nil, fmt.Errorf("close other instances: %w", err)
@@ -423,16 +449,17 @@ func applyPersistentState(appState *domain.AppState, state store.State) {
 func resolveDestinations(destinations []domain.Destination, inDestinations []store.Destination) []domain.Destination {
 	destinations = slices.DeleteFunc(destinations, func(dest domain.Destination) bool {
 		return !slices.ContainsFunc(inDestinations, func(inDest store.Destination) bool {
-			return inDest.URL == dest.URL
+			return inDest.ID == dest.ID
 		})
 	})
 
 	for i, inDest := range inDestinations {
-		if i < len(destinations) && destinations[i].URL == inDest.URL {
+		if i < len(destinations) && destinations[i].ID == inDest.ID {
 			continue
 		}
 
 		destinations = slices.Insert(destinations, i, domain.Destination{
+			ID:   inDest.ID,
 			Name: inDest.Name,
 			URL:  inDest.URL,
 		})

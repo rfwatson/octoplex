@@ -7,11 +7,15 @@ import (
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
 	"git.netflux.io/rob/octoplex/internal/protocol"
 	gocmp "github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func TestCommandToProto(t *testing.T) {
+	id := uuid.MustParse("0a193840-c24e-4c2f-93b5-eb3446088783")
+
 	testCases := []struct {
 		name string
 		in   event.Command
@@ -34,40 +38,30 @@ func TestCommandToProto(t *testing.T) {
 		},
 		{
 			name: "RemoveDestination",
-			in: event.CommandRemoveDestination{
-				URL: "rtmp://remove.example.com",
-			},
+			in:   event.CommandRemoveDestination{ID: id},
 			want: &pb.Command{
 				CommandType: &pb.Command_RemoveDestination{
 					RemoveDestination: &pb.RemoveDestinationCommand{
-						Url: "rtmp://remove.example.com",
+						Id: id[:],
 					},
 				},
 			},
 		},
 		{
 			name: "StartDestination",
-			in: event.CommandStartDestination{
-				URL: "rtmp://start.example.com",
-			},
+			in:   event.CommandStartDestination{ID: id},
 			want: &pb.Command{
 				CommandType: &pb.Command_StartDestination{
-					StartDestination: &pb.StartDestinationCommand{
-						Url: "rtmp://start.example.com",
-					},
+					StartDestination: &pb.StartDestinationCommand{Id: id[:]},
 				},
 			},
 		},
 		{
 			name: "StopDestination",
-			in: event.CommandStopDestination{
-				URL: "rtmp://stop.example.com",
-			},
+			in:   event.CommandStopDestination{ID: id},
 			want: &pb.Command{
 				CommandType: &pb.Command_StopDestination{
-					StopDestination: &pb.StopDestinationCommand{
-						Url: "rtmp://stop.example.com",
-					},
+					StopDestination: &pb.StopDestinationCommand{Id: id[:]},
 				},
 			},
 		},
@@ -99,6 +93,8 @@ func TestCommandToProto(t *testing.T) {
 }
 
 func TestCommandFromProto(t *testing.T) {
+	id := uuid.MustParse("5aefdbf5-95c6-418e-b63a-c95682861db1")
+
 	testCases := []struct {
 		name string
 		in   *pb.Command
@@ -123,34 +119,28 @@ func TestCommandFromProto(t *testing.T) {
 			name: "RemoveDestination",
 			in: &pb.Command{
 				CommandType: &pb.Command_RemoveDestination{
-					RemoveDestination: &pb.RemoveDestinationCommand{
-						Url: "rtmp://remove.example.com",
-					},
+					RemoveDestination: &pb.RemoveDestinationCommand{Id: id[:]},
 				},
 			},
-			want: event.CommandRemoveDestination{URL: "rtmp://remove.example.com"},
+			want: event.CommandRemoveDestination{ID: id},
 		},
 		{
 			name: "StartDestination",
 			in: &pb.Command{
 				CommandType: &pb.Command_StartDestination{
-					StartDestination: &pb.StartDestinationCommand{
-						Url: "rtmp://start.example.com",
-					},
+					StartDestination: &pb.StartDestinationCommand{Id: id[:]},
 				},
 			},
-			want: event.CommandStartDestination{URL: "rtmp://start.example.com"},
+			want: event.CommandStartDestination{ID: id},
 		},
 		{
 			name: "StopDestination",
 			in: &pb.Command{
 				CommandType: &pb.Command_StopDestination{
-					StopDestination: &pb.StopDestinationCommand{
-						Url: "rtmp://stop.example.com",
-					},
+					StopDestination: &pb.StopDestinationCommand{Id: id[:]},
 				},
 			},
-			want: event.CommandStopDestination{URL: "rtmp://stop.example.com"},
+			want: event.CommandStopDestination{ID: id},
 		},
 		{
 			name: "CloseOtherInstance",
@@ -174,7 +164,9 @@ func TestCommandFromProto(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Empty(t, gocmp.Diff(tc.want, protocol.CommandFromProto(tc.in)))
+			got, err := protocol.CommandFromProto(tc.in)
+			require.NoError(t, err)
+			assert.Empty(t, gocmp.Diff(tc.want, got))
 		})
 	}
 }

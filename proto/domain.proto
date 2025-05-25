@@ -42,8 +42,9 @@ message Destination {
 
   Container container = 1;
   Status status = 2;
-  string name = 3;
-  string url = 4;
+  bytes id = 3;
+  string name = 4;
+  string url = 5;
 }
 
 message BuildInfo {

@@ -18,6 +18,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/shortid"
 	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
+	"github.com/google/uuid"
 	"github.com/rivo/tview"
 )
 
@@ -64,9 +65,9 @@ type UI struct {
 
 	// other mutable state
 
-	mu                sync.Mutex
-	urlsToStartState  map[string]startState
-	rtmpURL, rtmpsURL string
+	mu                         sync.Mutex
+	destinationIDsToStartState map[uuid.UUID]startState
+	rtmpURL, rtmpsURL          string
 
 	/// addingDestination is true if add destination modal is currently visible.
 	addingDestination bool
@@ -228,11 +229,11 @@ func NewUI(ctx context.Context, params Params) (*UI, error) {
 			mem:    memTextView,
 			rx:     rxTextView,
 		},
-		destView:          destView,
-		noDestView:        noDestView,
-		actionsView:       actionsView,
-		pullProgressModal: pullProgressModal,
-		urlsToStartState:  make(map[string]startState),
+		destView:                   destView,
+		noDestView:                 noDestView,
+		actionsView:                actionsView,
+		pullProgressModal:          pullProgressModal,
+		destinationIDsToStartState: make(map[uuid.UUID]startState),
 	}
 
 	app.SetInputCapture(ui.inputCaptureHandler)
@@ -457,7 +458,7 @@ func (ui *UI) handleAppStateChanged(evt event.AppStateChangedEvent) {
 	ui.rtmpsURL = state.Source.RTMPSURL
 
 	for _, dest := range state.Destinations {
-		ui.urlsToStartState[dest.URL] = containerStateToStartState(dest.Container.Status)
+		ui.destinationIDsToStartState[dest.ID] = containerStateToStartState(dest.Container.Status)
 	}
 
 	ui.hasDestinations = len(state.Destinations) > 0
@@ -743,7 +744,7 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 
 	for i, dest := range state.Destinations {
 		ui.destView.SetCell(i+1, 0, tview.NewTableCell(dest.Name))
-		ui.destView.SetCell(i+1, 1, tview.NewTableCell(dest.URL).SetReference(dest.URL).SetMaxWidth(20))
+		ui.destView.SetCell(i+1, 1, tview.NewTableCell(dest.URL).SetReference(dest.ID).SetMaxWidth(20))
 		const statusLen = 10
 		switch dest.Status {
 		case domain.DestinationStatusLive:
@@ -879,14 +880,14 @@ func (ui *UI) addDestination() {
 func (ui *UI) removeDestination() {
 	const urlCol = 1
 	row, _ := ui.destView.GetSelection()
-	url, ok := ui.destView.GetCell(row, urlCol).GetReference().(string)
+	destinationID, ok := ui.destView.GetCell(row, urlCol).GetReference().(uuid.UUID)
 	if !ok {
 		return
 	}
 
 	var started bool
 	ui.mu.Lock()
-	started = ui.urlsToStartState[url] != startStateNotStarted
+	started = ui.destinationIDsToStartState[destinationID] != startStateNotStarted
 	ui.mu.Unlock()
 
 	text := "Are you sure you want to remove the destination?"
@@ -901,7 +902,7 @@ func (ui *UI) removeDestination() {
 		false,
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.dispatch(event.CommandRemoveDestination{URL: url})
+				ui.dispatch(event.CommandRemoveDestination{ID: destinationID})
 			}
 		},
 	)
@@ -953,7 +954,7 @@ func (ui *UI) closeAddDestinationForm() {
 func (ui *UI) toggleDestination() {
 	const urlCol = 1
 	row, _ := ui.destView.GetSelection()
-	url, ok := ui.destView.GetCell(row, urlCol).GetReference().(string)
+	destinationID, ok := ui.destView.GetCell(row, urlCol).GetReference().(uuid.UUID)
 	if !ok {
 		return
 	}
@@ -973,16 +974,16 @@ func (ui *UI) toggleDestination() {
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
-	ss := ui.urlsToStartState[url]
+	ss := ui.destinationIDsToStartState[destinationID]
 	switch ss {
 	case startStateNotStarted:
-		ui.urlsToStartState[url] = startStateStarting
-		ui.dispatch(event.CommandStartDestination{URL: url})
+		ui.destinationIDsToStartState[destinationID] = startStateStarting
+		ui.dispatch(event.CommandStartDestination{ID: destinationID})
 	case startStateStarting:
 		// do nothing
 		return
 	case startStateStarted:
-		ui.dispatch(event.CommandStopDestination{URL: url})
+		ui.dispatch(event.CommandStopDestination{ID: destinationID})
 	}
 }
 

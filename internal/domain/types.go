@@ -3,6 +3,8 @@ package domain
 import (
 	"slices"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // AppState holds application state.
@@ -53,6 +55,7 @@ const (
 type Destination struct {
 	Container Container
 	Status    DestinationStatus
+	ID        uuid.UUID
 	Name      string
 	URL       string
 }
