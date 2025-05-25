@@ -485,7 +485,10 @@ func parseConfig(c *cli.Context) (config.Config, error) {
 
 	logToFileEnabled := c.Bool("log-to-file")
 	logFile := c.String("log-file")
-	if logToFileEnabled && logFile == "" {
+
+	if !logToFileEnabled && logFile != "" {
+		logToFileEnabled = true // enable logging to file if log-file is set
+	} else if logToFileEnabled && logFile == "" {
 		logFile = filepath.Join(dataDir, "octoplex.log")
 	}
 
