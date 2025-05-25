@@ -4,8 +4,10 @@ import (
 	"cmp"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/domain"
@@ -71,18 +73,36 @@ func (a *App) Run(ctx context.Context) error {
 		)
 	}
 
-	// Test the TLS config.
-	// This returns a more meaningful error than if we wait for gRPC layer to
-	// fail.
 	tlsConfig := &tls.Config{
 		MinVersion:         config.TLSMinVersion,
 		InsecureSkipVerify: a.insecureSkipVerify,
 	}
-	tlsConn, err := tls.Dial("tcp", a.serverAddr, tlsConfig)
-	if err != nil {
-		return fmt.Errorf("dial: %w", err)
+
+	var err error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		// Test the TLS config.
+		// This returns a more meaningful error than if we wait for gRPC layer to
+		// fail.
+		var tlsConn *tls.Conn
+		tlsConn, err = tls.Dial("tcp", a.serverAddr, tlsConfig)
+		if err == nil {
+			tlsConn.Close()
+		}
+	}()
+
+	select {
+	case <-done:
+		if err != nil {
+			return fmt.Errorf("test TLS connection: %w", err)
+		}
+	case <-ctx.Done(): // Important: avoid blocking forever if the context is cancelled during startup.
+		return ctx.Err()
+	case <-time.After(5 * time.Second):
+		return errors.New("timed out waiting for TLS connection to be established")
 	}
-	tlsConn.Close()
 
 	conn, err := grpc.NewClient(
 		a.serverAddr,

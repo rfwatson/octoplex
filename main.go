@@ -460,7 +460,7 @@ func runClientAndServer(c *cli.Context) error {
 		return errNoErr
 	})
 
-	if err := g.Wait(); err == errNoErr {
+	if err := g.Wait(); errors.Is(err, errNoErr) {
 		return nil
 	} else {
 		return err
