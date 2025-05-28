@@ -64,7 +64,7 @@ func New(params Params) (*App, error) {
 		listenerFunc = Listener(cfg.ListenAddr)
 	}
 
-	keyPairs, err := buildKeyPairs(cfg.Host, cfg.TLS)
+	keyPairs, err := buildKeyPairs(cfg.Host, cfg.TLS, cfg.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("build key pairs: %w", err)
 	}

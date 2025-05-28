@@ -41,7 +41,7 @@ func buildAPIClient(certPEM []byte) (*http.Client, error) {
 	}, nil
 }
 
-const userAgent = "octoplex-client"
+const userAgent = "octoplex-server"
 
 type apiPath struct {
 	Name   string   `json:"name"`

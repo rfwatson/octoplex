@@ -5,6 +5,7 @@ package client_test
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -12,6 +13,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/container/mocks"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/server"
+	"git.netflux.io/rob/octoplex/internal/shortid"
 	"git.netflux.io/rob/octoplex/internal/store"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"github.com/docker/docker/api/types/network"
@@ -37,20 +40,20 @@ import (
 const waitTime = time.Minute
 
 func TestIntegration(t *testing.T) {
-	t.Run("RTMP with default host, port and stream key", func(t *testing.T) {
-		testIntegration(t, "", config.MediaServerSource{
+	t.Run("RTMP with default stream key", func(t *testing.T) {
+		testIntegration(t, config.MediaServerSource{
 			RTMP: config.RTMPSource{Enabled: true},
 		})
 	})
 
-	t.Run("RTMPS with default host, port and stream key", func(t *testing.T) {
-		testIntegration(t, "", config.MediaServerSource{
+	t.Run("RTMPS with default stream key", func(t *testing.T) {
+		testIntegration(t, config.MediaServerSource{
 			RTMPS: config.RTMPSource{Enabled: true},
 		})
 	})
 
-	t.Run("RTMP with custom host, port and stream key", func(t *testing.T) {
-		testIntegration(t, "localhost", config.MediaServerSource{
+	t.Run("RTMP with custom stream key", func(t *testing.T) {
+		testIntegration(t, config.MediaServerSource{
 			StreamKey: "s0meK3y",
 			RTMP: config.RTMPSource{
 				Enabled: true,
@@ -59,8 +62,8 @@ func TestIntegration(t *testing.T) {
 		})
 	})
 
-	t.Run("RTMPS with custom host, port and stream key", func(t *testing.T) {
-		testIntegration(t, "localhost", config.MediaServerSource{
+	t.Run("RTMPS with custom stream key", func(t *testing.T) {
+		testIntegration(t, config.MediaServerSource{
 			StreamKey: "an0therK3y",
 			RTMPS: config.RTMPSource{
 				Enabled: true,
@@ -76,7 +79,7 @@ func TestIntegration(t *testing.T) {
 // https://stackoverflow.com/a/60740997/62871
 const hostIP = "172.17.0.1"
 
-func testIntegration(t *testing.T, host string, mediaServerConfig config.MediaServerSource) {
+func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
 
@@ -355,6 +358,110 @@ func TestIntegrationCustomHost(t *testing.T) {
 	assert.ErrorIs(t, result.errServer, context.Canceled)
 }
 
+func TestIntegrationTLSCerts(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+
+	logger := testhelpers.NewTestLogger(t).With("component", "integration")
+	dockerClient, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	require.NoError(t, err)
+
+	screen, screenCaptureC, _ := setupSimulationScreen(t)
+
+	dataDir := filepath.Join(os.TempDir(), "octoplex-test-data-"+shortid.New().String())
+	require.NoError(t, os.MkdirAll(dataDir, 0700))
+	t.Cleanup(func() { os.RemoveAll(dataDir) })
+
+	lis, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
+
+	client, srv := buildClientServer(
+		t,
+		config.Config{
+			DataDir: dataDir,
+			Sources: config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.RTMPSource{Enabled: true}}},
+		},
+		dockerClient,
+		screen,
+		screenCaptureC,
+		logger,
+		withListenerFunc(server.WithListener(lis)),
+	)
+	ch := runClientServer(ctx, t, client, srv)
+
+	var certs [][]byte
+	require.EventuallyWithT(
+		t,
+		func(c *assert.CollectT) {
+			certs = nil
+			rtmpPort := "localhost:1936"
+			grpcPort := fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port)
+			for _, addr := range []string{rtmpPort, grpcPort} {
+				conn, dialErr := tls.Dial("tcp", addr, &tls.Config{ServerName: "localhost", InsecureSkipVerify: true})
+				require.NoErrorf(c, dialErr, "failed to connect to %s: %v", addr, dialErr)
+				defer conn.Close()
+
+				peerCerts := conn.ConnectionState().PeerCertificates
+				require.Len(c, peerCerts, 1, "expected one peer certificate for %s", addr)
+				certBytes := sha256.Sum256(peerCerts[0].Raw)
+				certs = append(certs, certBytes[:])
+			}
+		},
+		waitTime,
+		time.Second,
+	)
+
+	cancel()
+	result := <-ch
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorIs(t, result.errServer, context.Canceled)
+
+	// now, restart the server and ensure the certs are the same
+
+	ctx, cancel = context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	lis, err = net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
+
+	client, srv = buildClientServer(
+		t,
+		config.Config{
+			DataDir: dataDir,
+			Sources: config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.RTMPSource{Enabled: true}}},
+		},
+		dockerClient,
+		screen,
+		screenCaptureC,
+		logger,
+		withListenerFunc(server.WithListener(lis)),
+	)
+	ch = runClientServer(ctx, t, client, srv)
+
+	require.EventuallyWithT(
+		t,
+		func(c *assert.CollectT) {
+			rtmpPort := "localhost:1936"
+			grpcPort := fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port)
+			for i, addr := range []string{rtmpPort, grpcPort} {
+				conn, dialErr := tls.Dial("tcp", addr, &tls.Config{ServerName: "localhost", InsecureSkipVerify: true})
+				require.NoErrorf(c, dialErr, "failed to connect to %s: %v", addr, dialErr)
+				defer conn.Close()
+
+				peerCert := conn.ConnectionState().PeerCertificates[0]
+				certBytes := sha256.Sum256(peerCert.Raw)
+				assert.Equal(c, certs[i], certBytes[:], "expected cert for %s to be the same as before", addr)
+			}
+		},
+		waitTime,
+		time.Second,
+	)
+
+	cancel()
+	result = <-ch
+	assert.ErrorContains(t, result.errClient, "context canceled")
+	assert.ErrorIs(t, result.errServer, context.Canceled)
+}
+
 func TestIntegrationCustomTLSCerts(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
@@ -411,6 +518,7 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 					InsecureSkipVerify: false,
 				})
 				require.NoErrorf(c, err, "failed to connect to %s: %v", addr, err)
+				defer conn.Close()
 
 				peerCert := conn.ConnectionState().PeerCertificates[0]
 				wantCert, err := x509.ParseCertificate(block.Bytes)

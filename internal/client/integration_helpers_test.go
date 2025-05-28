@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -21,6 +23,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/server"
+	"git.netflux.io/rob/octoplex/internal/shortid"
 	"git.netflux.io/rob/octoplex/internal/store"
 	"git.netflux.io/rob/octoplex/internal/terminal"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
@@ -33,6 +36,7 @@ import (
 type buildClientServerOptions struct {
 	listenerFunc       server.ListenerFunc
 	insecureSkipVerify bool
+	dataDir            string
 	state              store.State
 }
 
@@ -58,7 +62,7 @@ func withPersistentState(state store.State) func(*buildClientServerOptions) {
 
 func buildClientServer(
 	t *testing.T,
-	config config.Config,
+	cfg config.Config,
 	dockerClient container.DockerClient,
 	screen tcell.SimulationScreen,
 	screenCaptureC chan<- terminal.ScreenCapture,
@@ -71,6 +75,13 @@ func buildClientServer(
 	}
 	for _, opt := range opts {
 		opt(&options)
+	}
+
+	// isolate test data
+	if cfg.DataDir == "" {
+		cfg.DataDir = filepath.Join(os.TempDir(), "octoplex-test-data-"+shortid.New().String())
+		require.NoError(t, os.MkdirAll(cfg.DataDir, 0700))
+		t.Cleanup(func() { os.RemoveAll(cfg.DataDir) })
 	}
 
 	// Set up listener first, avoid timing issues connecting to the server.
@@ -91,7 +102,7 @@ func buildClientServer(
 	})
 
 	server, err := server.New(server.Params{
-		Config:        config,
+		Config:        cfg,
 		Store:         testhelpers.NewTestStore(t, options.state),
 		ListenerFunc:  server.WithListener(lis),
 		DockerClient:  dockerClient,
