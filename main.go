@@ -25,7 +25,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/xdg"
 	"github.com/atotto/clipboard"
 	dockerclient "github.com/docker/docker/client"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -75,7 +75,7 @@ func main() {
 }
 
 func run(ctx context.Context, stderr io.Writer, args []string) error {
-	app := &cli.App{
+	app := &cli.Command{
 		Name:  "octoplex",
 		Usage: "Live video restreamer for Docker",
 		Commands: []*cli.Command{
@@ -84,23 +84,23 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 				Usage:       "Launch both server and client in a single process",
 				Description: "Launch both server and client in a single process. This is useful for testing, debugging or streaming from the same machine that runs Docker (e.g. a laptop).",
 				Flags:       serverFlags(true),
-				Action: func(c *cli.Context) error {
-					return runClientAndServer(c)
+				Action: func(ctx context.Context, c *cli.Command) error {
+					return runClientAndServer(ctx, c)
 				},
 			},
 			{
 				Name:  "server",
 				Usage: "Manage the standalone Octoplex server",
-				Action: func(c *cli.Context) error {
-					return c.App.Command("server").Subcommands[0].Action(c)
+				Action: func(ctx context.Context, c *cli.Command) error {
+					return c.Commands[0].Action(ctx, c)
 				},
-				Subcommands: []*cli.Command{
+				Commands: []*cli.Command{
 					{
 						Name:        "start",
 						Usage:       "Start the server",
 						Description: "Start the standalone server, without a CLI client attached.",
 						Flags:       serverFlags(false),
-						Action: func(c *cli.Context) error {
+						Action: func(ctx context.Context, c *cli.Command) error {
 							cfg, err := parseConfig(c)
 							if err != nil {
 								return fmt.Errorf("parse config: %w", err)
@@ -111,16 +111,16 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 								return fmt.Errorf("build logger: %w", err)
 							}
 
-							return runServer(c.Context, c, cfg, serverConfig{stderrAvailable: true, handleSigInt: true, waitForClient: false}, logger.With("component", "server"))
+							return runServer(ctx, c, cfg, serverConfig{stderrAvailable: true, handleSigInt: true, waitForClient: false}, logger.With("component", "server"))
 						},
 					},
 					{
 						Name:        "stop",
 						Usage:       "Stop the server",
 						Description: "Stop all containers and networks created by Octoplex, and exit.",
-						Action: func(c *cli.Context) error {
+						Action: func(ctx context.Context, c *cli.Command) error {
 							// Delegate to start command:
-							return c.App.Command("server").Subcommands[0].Action(c)
+							return c.Root().Command("server").Command("start").Action(ctx, c)
 						},
 					},
 				},
@@ -148,41 +148,41 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 						TakesFile: true,
 					},
 				},
-				Subcommands: []*cli.Command{
+				Commands: []*cli.Command{
 					{
 						Name:        "start",
 						Usage:       "Start the TUI client",
 						Description: "Start the terminal user interface, connecting to a remote server.",
-						Action: func(c *cli.Context) error {
+						Action: func(ctx context.Context, c *cli.Command) error {
 							logger, err := buildClientLogger(c)
 							if err != nil {
 								return fmt.Errorf("build logger: %w", err)
 							}
 
-							return runClient(c.Context, c, logger)
+							return runClient(ctx, c, logger)
 						},
 					},
 				},
-				Action: func(c *cli.Context) error {
+				Action: func(ctx context.Context, c *cli.Command) error {
 					logger, err := buildClientLogger(c)
 					if err != nil {
 						return fmt.Errorf("build logger: %w", err)
 					}
 
-					return runClient(c.Context, c, logger)
+					return runClient(ctx, c, logger)
 				},
 			},
 			{
 				Name:  "version",
 				Usage: "Display the currrent version",
-				Action: func(*cli.Context) error {
+				Action: func(context.Context, *cli.Command) error {
 					return printVersion()
 				},
 			},
 		},
 	}
 
-	if err := app.RunContext(ctx, args); err != nil {
+	if err := app.Run(ctx, args); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 
 		var authErr x509.UnknownAuthorityError
@@ -204,7 +204,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			DefaultText: defaultListenAddr,
 			Category:    "Server",
 			Aliases:     []string{"a"},
-			EnvVars:     []string{"OCTO_LISTEN_ADDR"},
+			Sources:     cli.EnvVars("OCTO_LISTEN_ADDR"),
 			Destination: &serverListenAddr,
 			Hidden:      clientAndServerMode,
 		},
@@ -214,7 +214,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			DefaultText: defaultHostname,
 			Category:    "Server",
 			Aliases:     []string{"H"},
-			EnvVars:     []string{"OCTO_HOSTNAME"},
+			Sources:     cli.EnvVars("OCTO_HOSTNAME"),
 			Destination: &serverHostname,
 			Hidden:      clientAndServerMode,
 		},
@@ -222,7 +222,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Name:     "in-docker",
 			Usage:    "Configure the server to run inside Docker",
 			Category: "Server",
-			EnvVars:  []string{"OCTO_DOCKER"},
+			Sources:  cli.EnvVars("OCTO_DOCKER"),
 			Hidden:   clientAndServerMode,
 		},
 		&cli.StringFlag{
@@ -230,40 +230,40 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Usage:     "Path to a TLS certificate",
 			Category:  "Server",
 			TakesFile: true,
-			EnvVars:   []string{"OCTO_TLS_CERT"},
+			Sources:   cli.EnvVars("OCTO_TLS_CERT"),
 		},
 		&cli.StringFlag{
 			Name:      "tls-key",
 			Usage:     "Path to a TLS key",
 			Category:  "Server",
 			TakesFile: true,
-			EnvVars:   []string{"OCTO_TLS_KEY"},
+			Sources:   cli.EnvVars("OCTO_TLS_KEY"),
 		},
 		&cli.BoolFlag{
 			Name:     "log-to-file",
 			Usage:    "Write logs to file instead of stderr",
 			Category: "Logs",
-			EnvVars:  []string{"OCTO_LOG_TO_FILE"},
+			Sources:  cli.EnvVars("OCTO_LOG_TO_FILE"),
 		},
 		&cli.StringFlag{
 			Name:      "log-file",
 			Usage:     "Path to the log file (implies log-to-file)",
 			Category:  "Logs",
 			TakesFile: true,
-			EnvVars:   []string{"OCTO_LOG_FILE"},
+			Sources:   cli.EnvVars("OCTO_LOG_FILE"),
 		},
 		&cli.BoolFlag{
 			Name:     "debug", // TODO: replace with --log-level
 			Usage:    "Enable debug logging",
 			Category: "Logs",
-			EnvVars:  []string{"OCTO_DEBUG"},
+			Sources:  cli.EnvVars("OCTO_DEBUG"),
 		},
 		&cli.StringFlag{
 			Name:        "stream-key",
 			Usage:       "Stream key for RTMP sources",
 			Category:    "Sources",
 			DefaultText: defaultStreamKey,
-			EnvVars:     []string{"OCTO_STREAM_KEY"},
+			Sources:     cli.EnvVars("OCTO_STREAM_KEY"),
 		},
 		&cli.BoolFlag{
 			Name:        "rtmp-enabled",
@@ -303,13 +303,13 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 					return "$HOME/.local/state/octoplex/"
 				}
 			}(),
-			EnvVars: []string{"OCTO_DATA_DIR"},
+			Sources: cli.EnvVars("OCTO_DATA_DIR"),
 		},
 	}
 }
 
 // runClient runs the client.
-func runClient(ctx context.Context, _ *cli.Context, logger *slog.Logger) error {
+func runClient(ctx context.Context, _ *cli.Command, logger *slog.Logger) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -348,7 +348,7 @@ type serverConfig struct {
 }
 
 // runServer runs the server.
-func runServer(ctx context.Context, c *cli.Context, cfg config.Config, serverCfg serverConfig, logger *slog.Logger) error {
+func runServer(ctx context.Context, c *cli.Command, cfg config.Config, serverCfg serverConfig, logger *slog.Logger) error {
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 
@@ -389,7 +389,7 @@ func runServer(ctx context.Context, c *cli.Context, cfg config.Config, serverCfg
 		return fmt.Errorf("new server: %w", err)
 	}
 
-	if c.Command.Name == "stop" {
+	if c.Name == "stop" {
 		return app.Stop(ctx)
 	}
 
@@ -411,7 +411,7 @@ func runServer(ctx context.Context, c *cli.Context, cfg config.Config, serverCfg
 }
 
 // runClientAndServer runs client and server in the same process.
-func runClientAndServer(c *cli.Context) error {
+func runClientAndServer(ctx context.Context, c *cli.Command) error {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
@@ -436,7 +436,7 @@ func runClientAndServer(c *cli.Context) error {
 	}
 
 	errNoErr := errors.New("no error")
-	g, ctx := errgroup.WithContext(c.Context)
+	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
 		if err := runServer(
@@ -473,7 +473,7 @@ func printVersion() error {
 	return nil
 }
 
-func parseConfig(c *cli.Context) (config.Config, error) {
+func parseConfig(c *cli.Command) (config.Config, error) {
 	dataDir := c.String("data-dir")
 	if dataDir == "" {
 		appStateDir, err := xdg.CreateAppStateDir()
@@ -543,7 +543,7 @@ func parseConfig(c *cli.Context) (config.Config, error) {
 	return cfg, nil
 }
 
-func parseRTMPConfig(cfg *config.RTMPSource, c *cli.Context, arg string) error {
+func parseRTMPConfig(cfg *config.RTMPSource, c *cli.Command, arg string) error {
 	if !c.IsSet(arg) {
 		return nil
 	}
@@ -584,7 +584,7 @@ func buildServerLogger(cfg config.Config, stderr io.Writer, stderrAvailable bool
 	return slog.New(slog.NewTextHandler(w, &handlerOpts)), nil
 }
 
-func buildClientLogger(c *cli.Context) (*slog.Logger, error) {
+func buildClientLogger(c *cli.Command) (*slog.Logger, error) {
 	logger := slog.New(slog.DiscardHandler)
 
 	if logfile := c.String("log-file"); logfile != "" {
