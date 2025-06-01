@@ -81,7 +81,9 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 }
 
 // StartDestination starts a destination stream.
-func (a *Actor) StartDestination(url string) {
+func (a *Actor) StartDestination(url string) <-chan State {
+	doneC := make(chan State, 1)
+
 	a.actorC <- func() {
 		if _, ok := a.currURLs[url]; ok {
 			return
@@ -128,9 +130,11 @@ func (a *Actor) StartDestination(url string) {
 		go func() {
 			defer a.wg.Done()
 
-			a.destLoop(url, containerStateC, errC)
+			a.destLoop(url, doneC, containerStateC, errC)
 		}()
 	}
+
+	return doneC
 }
 
 // Grab the first fatal log line, if it exists, or the first error log line,
@@ -184,8 +188,17 @@ func (a *Actor) StopDestination(url string) {
 }
 
 // destLoop is the actor loop for a destination stream.
-func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, errC <-chan error) {
+//
+// doneC will be sent a single [State] when the container terminates.
+func (a *Actor) destLoop(
+	url string,
+	doneC chan<- State,
+	containerStateC <-chan domain.Container,
+	errC <-chan error,
+) {
 	state := &State{URL: url}
+	defer func() { doneC <- *state }()
+
 	sendState := func() { a.stateC <- *state }
 
 	for {
@@ -203,11 +216,16 @@ func (a *Actor) destLoop(url string, containerStateC <-chan domain.Container, er
 				state.Status = domain.DestinationStatusOffAir
 			}
 			sendState()
-		case err := <-errC:
+		case err, ok := <-errC:
+			if !ok {
+				sendState()
+				return
+			}
+
 			if err != nil {
 				a.logger.Error("Error from container client", "err", err)
+				state.Container.Err = err
 			}
-			state.Container.Err = err
 			sendState()
 			return
 		}

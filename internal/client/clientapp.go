@@ -13,8 +13,10 @@ import (
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/event"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	"git.netflux.io/rob/octoplex/internal/optional"
 	"git.netflux.io/rob/octoplex/internal/protocol"
 	"git.netflux.io/rob/octoplex/internal/terminal"
+	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -57,6 +59,169 @@ func New(params NewParams) *App {
 	}
 }
 
+// AddDestination adds a new destination to the server.
+func (a *App) AddDestination(ctx context.Context, name, url string) (id string, err error) {
+	conn, err := a.buildClientConn(ctx)
+	if err != nil {
+		return "", fmt.Errorf("build client conn: %w", err)
+	}
+	defer conn.Close()
+
+	apiClient := pb.NewInternalAPIClient(conn)
+
+	resp, err := apiClient.AddDestination(ctx, &pb.AddDestinationRequest{
+		Command: &pb.AddDestinationCommand{
+			Name: name,
+			Url:  url,
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("call API: %w", err)
+	}
+
+	switch evt := resp.Result.(type) {
+	case *pb.AddDestinationResponse_Ok:
+		destID, err := uuid.FromBytes(evt.Ok.Id)
+		if err != nil {
+			return "", fmt.Errorf("parse destination ID: %w", err)
+		}
+
+		return destID.String(), nil
+	case *pb.AddDestinationResponse_Error:
+		return "", fmt.Errorf("add destination failed: %s", evt.Error.Error)
+	default:
+		panic("unreachable")
+	}
+}
+
+func (a *App) UpdateDestination(ctx context.Context, destinationID string, name, url optional.V[string]) error {
+	id, err := parseID(destinationID)
+	if err != nil {
+		return fmt.Errorf("parse ID: %w", err)
+	}
+
+	conn, err := a.buildClientConn(ctx)
+	if err != nil {
+		return fmt.Errorf("build client conn: %w", err)
+	}
+	defer conn.Close()
+
+	apiClient := pb.NewInternalAPIClient(conn)
+
+	resp, err := apiClient.UpdateDestination(ctx, &pb.UpdateDestinationRequest{
+		Command: &pb.UpdateDestinationCommand{
+			Id:   id[:],
+			Name: name.Ref(),
+			Url:  url.Ref(),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("call API: %w", err)
+	}
+
+	switch evt := resp.Result.(type) {
+	case *pb.UpdateDestinationResponse_Ok:
+		return nil
+	case *pb.UpdateDestinationResponse_Error:
+		return fmt.Errorf("update destination failed: %s", evt.Error.Error)
+	default:
+		panic("unreachable")
+	}
+}
+
+func (a *App) RemoveDestination(ctx context.Context, destinationID string) error {
+	id, err := parseID(destinationID)
+	if err != nil {
+		return fmt.Errorf("parse ID: %w", err)
+	}
+
+	conn, err := a.buildClientConn(ctx)
+	if err != nil {
+		return fmt.Errorf("build client conn: %w", err)
+	}
+	defer conn.Close()
+
+	apiClient := pb.NewInternalAPIClient(conn)
+
+	resp, err := apiClient.RemoveDestination(ctx, &pb.RemoveDestinationRequest{
+		Command: &pb.RemoveDestinationCommand{Id: id[:]},
+	})
+	if err != nil {
+		return fmt.Errorf("call API: %w", err)
+	}
+
+	switch evt := resp.Result.(type) {
+	case *pb.RemoveDestinationResponse_Ok:
+		return nil
+	case *pb.RemoveDestinationResponse_Error:
+		return fmt.Errorf("remove destination failed: %s", evt.Error.Error)
+	default:
+		panic("unreachable")
+	}
+}
+
+func (a *App) StartDestination(ctx context.Context, destinationID string) error {
+	id, err := parseID(destinationID)
+	if err != nil {
+		return fmt.Errorf("parse ID: %w", err)
+	}
+
+	conn, err := a.buildClientConn(ctx)
+	if err != nil {
+		return fmt.Errorf("build client conn: %w", err)
+	}
+	defer conn.Close()
+
+	apiClient := pb.NewInternalAPIClient(conn)
+
+	resp, err := apiClient.StartDestination(ctx, &pb.StartDestinationRequest{
+		Command: &pb.StartDestinationCommand{Id: id[:]},
+	})
+	if err != nil {
+		return fmt.Errorf("call API: %w", err)
+	}
+
+	switch evt := resp.Result.(type) {
+	case *pb.StartDestinationResponse_Ok:
+		return nil
+	case *pb.StartDestinationResponse_Error:
+		return fmt.Errorf("start destination failed: %s", evt.Error.Error)
+	default:
+		panic("unreachable")
+	}
+}
+
+func (a *App) StopDestination(ctx context.Context, destinationID string) error {
+	id, err := parseID(destinationID)
+	if err != nil {
+		return fmt.Errorf("parse ID: %w", err)
+	}
+
+	conn, err := a.buildClientConn(ctx)
+	if err != nil {
+		return fmt.Errorf("build client conn: %w", err)
+	}
+	defer conn.Close()
+
+	apiClient := pb.NewInternalAPIClient(conn)
+
+	resp, err := apiClient.StopDestination(ctx, &pb.StopDestinationRequest{
+		Command: &pb.StopDestinationCommand{Id: id[:]},
+	})
+	if err != nil {
+		return fmt.Errorf("call API: %w", err)
+	}
+
+	switch evt := resp.Result.(type) {
+	case *pb.StopDestinationResponse_Ok:
+		return nil
+	case *pb.StopDestinationResponse_Error:
+		return fmt.Errorf("stop destination failed: %s", evt.Error.Error)
+	default:
+		panic("unreachable")
+	}
+}
+
 // Run starts the application, and blocks until it is closed.
 //
 // It returns nil if the application was closed by the user, or an error if it
@@ -64,55 +229,11 @@ func New(params NewParams) *App {
 func (a *App) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
-	if a.insecureSkipVerify {
-		a.logger.Warn(
-			"TLS certificate verification is DISABLED — traffic is encrypted but unauthenticated",
-			"component", "grpc",
-			"risk", "vulnerable to active MITM",
-			"action", "use a trusted certificate and enable verification before production",
-		)
-	}
-
-	tlsConfig := &tls.Config{
-		MinVersion:         config.TLSMinVersion,
-		InsecureSkipVerify: a.insecureSkipVerify,
-	}
-
-	var err error
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-
-		// Test the TLS config.
-		// This returns a more meaningful error than if we wait for gRPC layer to
-		// fail.
-		var tlsConn *tls.Conn
-		tlsConn, err = tls.Dial("tcp", a.serverAddr, tlsConfig)
-		if err == nil {
-			tlsConn.Close()
-		}
-	}()
-
-	select {
-	case <-done:
-		if err != nil {
-			return fmt.Errorf("test TLS connection: %w", err)
-		}
-	case <-ctx.Done(): // Important: avoid blocking forever if the context is cancelled during startup.
-		return ctx.Err()
-	case <-time.After(5 * time.Second):
-		return errors.New("timed out waiting for TLS connection to be established")
-	}
-
-	conn, err := grpc.NewClient(
-		a.serverAddr,
-		grpc.WithTransportCredentials(
-			credentials.NewTLS(tlsConfig),
-		),
-	)
+	conn, err := a.buildClientConn(ctx)
 	if err != nil {
-		return fmt.Errorf("new gRPC client: %w", err)
+		return fmt.Errorf("build client conn: %w", err)
 	}
+	defer conn.Close()
 
 	apiClient := pb.NewInternalAPIClient(conn)
 	stream, err := apiClient.Communicate(ctx)
@@ -124,7 +245,7 @@ func (a *App) Run(ctx context.Context) error {
 		EventBus: a.bus,
 		Dispatcher: func(cmd event.Command) {
 			a.logger.Debug("Command dispatched to gRPC stream", "cmd", cmd.Name())
-			if sendErr := stream.Send(&pb.Envelope{Payload: &pb.Envelope_Command{Command: protocol.CommandToProto(cmd)}}); sendErr != nil {
+			if sendErr := stream.Send(&pb.Envelope{Payload: &pb.Envelope_Command{Command: protocol.CommandToWrappedProto(cmd)}}); sendErr != nil {
 				a.logger.Error("Error dispatching command to gRPC stream", "err", sendErr)
 			}
 		},
@@ -161,7 +282,7 @@ func (a *App) Run(ctx context.Context) error {
 				continue
 			}
 
-			evt, err := protocol.EventFromProto(pbEvt)
+			evt, err := protocol.EventFromWrappedProto(pbEvt)
 			if err != nil {
 				a.logger.Error("Failed to convert protobuf event to domain event", "err", err, "event", pbEvt)
 				continue
@@ -179,6 +300,60 @@ func (a *App) Run(ctx context.Context) error {
 	}
 }
 
+func (a *App) buildClientConn(ctx context.Context) (*grpc.ClientConn, error) {
+	if a.insecureSkipVerify {
+		a.logger.Warn(
+			"TLS certificate verification is DISABLED — traffic is encrypted but unauthenticated",
+			"component", "grpc",
+			"risk", "vulnerable to active MITM",
+			"action", "use a trusted certificate and enable verification before production",
+		)
+	}
+
+	tlsConfig := &tls.Config{
+		MinVersion:         config.TLSMinVersion,
+		InsecureSkipVerify: a.insecureSkipVerify,
+	}
+
+	var err error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		// Test the TLS config.
+		// This returns a more meaningful error than if we wait for gRPC layer to
+		// fail.
+		var tlsConn *tls.Conn
+		tlsConn, err = tls.Dial("tcp", a.serverAddr, tlsConfig)
+		if err == nil {
+			tlsConn.Close()
+		}
+	}()
+
+	select {
+	case <-done:
+		if err != nil {
+			return nil, fmt.Errorf("test TLS connection: %w", err)
+		}
+	case <-ctx.Done(): // Important: avoid blocking forever if the context is cancelled during startup.
+		return nil, ctx.Err()
+	case <-time.After(5 * time.Second):
+		return nil, errors.New("timed out waiting for TLS connection to be established")
+	}
+
+	conn, err := grpc.NewClient(
+		a.serverAddr,
+		grpc.WithTransportCredentials(
+			credentials.NewTLS(tlsConfig),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("new gRPC client: %w", err)
+	}
+
+	return conn, nil
+}
+
 func (a *App) doHandshake(stream pb.InternalAPI_CommunicateClient) error {
 	if err := stream.Send(&pb.Envelope{Payload: &pb.Envelope_Command{Command: &pb.Command{CommandType: &pb.Command_StartHandshake{}}}}); err != nil {
 		return fmt.Errorf("send start handshake command: %w", err)
@@ -193,4 +368,17 @@ func (a *App) doHandshake(stream pb.InternalAPI_CommunicateClient) error {
 	}
 
 	return nil
+}
+
+func parseID(id string) (uuid.UUID, error) {
+	if id == "" {
+		return uuid.Nil, errors.New("ID cannot be empty")
+	}
+
+	destID, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return destID, nil
 }

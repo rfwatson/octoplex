@@ -14,7 +14,10 @@ const (
 	EventNameDestinationUpdated      Name = "destination_updated"
 	EventNameUpdateDestinationFailed Name = "update_destination_failed"
 	EventNameDestinationStreamExited Name = "destination_stream_exited"
+	EventNameDestinationStarted      Name = "destination_started"
 	EventNameStartDestinationFailed  Name = "start_destination_failed"
+	EventNameDestinationStopped      Name = "destination_stopped"
+	EventNameStopDestinationFailed   Name = "stop_destination_failed"
 	EventNameDestinationRemoved      Name = "destination_removed"
 	EventNameRemoveDestinationFailed Name = "remove_destination_failed"
 	EventNameFatalErrorOccurred      Name = "fatal_error_occurred"
@@ -84,14 +87,42 @@ func (e DestinationStreamExitedEvent) EventName() Name {
 	return EventNameDestinationStreamExited
 }
 
+// DestinationStartedEvent is emitted when a destination starts successfully.
+type DestinationStartedEvent struct {
+	ID uuid.UUID
+}
+
+func (e DestinationStartedEvent) EventName() Name {
+	return EventNameDestinationStarted
+}
+
 // StartDestinationFailedEvent is emitted when a destination fails to start.
 type StartDestinationFailedEvent struct {
-	ID      uuid.UUID
-	Message string
+	ID  uuid.UUID
+	Err error
 }
 
 func (e StartDestinationFailedEvent) EventName() Name {
 	return EventNameStartDestinationFailed
+}
+
+// DestinationStoppedEvent is emitted when a destination stops successfully.
+type DestinationStoppedEvent struct {
+	ID uuid.UUID
+}
+
+func (e DestinationStoppedEvent) EventName() Name {
+	return EventNameDestinationStopped
+}
+
+// StopDestinationFailedEvent is emitted when a destination fails to stop.
+type StopDestinationFailedEvent struct {
+	ID  uuid.UUID
+	Err error
+}
+
+func (e StopDestinationFailedEvent) EventName() Name {
+	return EventNameStopDestinationFailed
 }
 
 // DestinationRemovedEvent is emitted when a destination is successfully

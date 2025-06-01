@@ -20,6 +20,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/client"
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/optional"
 	"git.netflux.io/rob/octoplex/internal/server"
 	"git.netflux.io/rob/octoplex/internal/store"
 	"git.netflux.io/rob/octoplex/internal/xdg"
@@ -162,6 +163,178 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 							return runClient(ctx, c, logger)
 						},
 					},
+					{
+						Name:  "destination",
+						Usage: "Manage destinations",
+						Commands: []*cli.Command{
+							{
+								Name:        "add",
+								Usage:       "Add a new destination",
+								Description: "Add a new destination to the server.",
+								Flags: []cli.Flag{
+									&cli.StringFlag{
+										Name:     "name",
+										Usage:    "Name of the destination",
+										Aliases:  []string{"n"},
+										Required: true,
+									},
+									&cli.StringFlag{
+										Name:     "url",
+										Usage:    "RTMP URL of the destination",
+										Aliases:  []string{"u"},
+										Required: true,
+									},
+								},
+								Action: func(ctx context.Context, c *cli.Command) error {
+									client, err := buildClient(ctx, c)
+									if err != nil {
+										return fmt.Errorf("build client: %w", err)
+									}
+
+									if id, err := client.AddDestination(ctx, c.String("name"), c.String("url")); err != nil {
+										return fmt.Errorf("add destination: %w", err)
+									} else {
+										os.Stderr.WriteString(id + "\n")
+										return nil
+									}
+								},
+							},
+							{
+								Name:        "update",
+								Usage:       "Update an existing destination",
+								Description: "Update an existing destination on the server.",
+								Flags: []cli.Flag{
+									&cli.StringFlag{
+										Name:  "id",
+										Usage: "ID of the destination to update",
+									},
+									&cli.StringFlag{
+										Name:    "name",
+										Usage:   "Name of the destination",
+										Aliases: []string{"n"},
+									},
+									&cli.StringFlag{
+										Name:    "url",
+										Usage:   "RTMP URL of the destination",
+										Aliases: []string{"u"},
+									},
+								},
+								Action: func(ctx context.Context, c *cli.Command) error {
+									destID := idFromArgOrFlag(c)
+									if destID == "" {
+										return errIDMissing
+									}
+
+									client, err := buildClient(ctx, c)
+									if err != nil {
+										return fmt.Errorf("build client: %w", err)
+									}
+
+									var name, url optional.V[string]
+									if c.IsSet("name") {
+										name = optional.New(c.String("name"))
+									}
+									if c.IsSet("url") {
+										url = optional.New(c.String("url"))
+									}
+
+									if err := client.UpdateDestination(ctx, destID, name, url); err != nil {
+										return fmt.Errorf("update destination: %w", err)
+									} else {
+										os.Stderr.WriteString("OK\n")
+										return nil
+									}
+								},
+							},
+							{
+								Name:        "remove",
+								Usage:       "Remove a destination",
+								Description: "Remove a destination on the server.",
+								Flags: []cli.Flag{
+									&cli.StringFlag{
+										Name:  "id",
+										Usage: "ID of the destination to remove",
+									},
+								},
+								Action: func(ctx context.Context, c *cli.Command) error {
+									destID := idFromArgOrFlag(c)
+									if destID == "" {
+										return errIDMissing
+									}
+
+									client, err := buildClient(ctx, c)
+									if err != nil {
+										return fmt.Errorf("build client: %w", err)
+									}
+
+									if err := client.RemoveDestination(ctx, destID); err != nil {
+										return fmt.Errorf("remove destination: %w", err)
+									} else {
+										os.Stderr.WriteString("OK\n")
+										return nil
+									}
+								},
+							},
+							{
+								Name:        "start",
+								Usage:       "Start streaming to a destination",
+								Description: "Start streaming to a destination.",
+								Flags: []cli.Flag{
+									&cli.StringFlag{
+										Name:  "id",
+										Usage: "ID of the destination to start",
+									},
+								},
+								Action: func(ctx context.Context, c *cli.Command) error {
+									destID := idFromArgOrFlag(c)
+									if destID == "" {
+										return errIDMissing
+									}
+
+									client, err := buildClient(ctx, c)
+									if err != nil {
+										return fmt.Errorf("build client: %w", err)
+									}
+
+									if err := client.StartDestination(ctx, destID); err != nil {
+										return fmt.Errorf("start destination: %w", err)
+									} else {
+										os.Stderr.WriteString("OK\n")
+										return nil
+									}
+								},
+							},
+							{
+								Name:        "stop",
+								Usage:       "Stop streaming to a destination",
+								Description: "Stop streaming to a destination.",
+								Flags: []cli.Flag{
+									&cli.StringFlag{
+										Name:  "id",
+										Usage: "ID of the destination to stop",
+									},
+								},
+								Action: func(ctx context.Context, c *cli.Command) error {
+									destID := idFromArgOrFlag(c)
+									if destID == "" {
+										return errIDMissing
+									}
+
+									client, err := buildClient(ctx, c)
+									if err != nil {
+										return fmt.Errorf("build client: %w", err)
+									}
+
+									if err := client.StopDestination(ctx, destID); err != nil {
+										return fmt.Errorf("stop destination: %w", err)
+									} else {
+										os.Stderr.WriteString("OK\n")
+										return nil
+									}
+								},
+							},
+						},
+					},
 				},
 				Action: func(ctx context.Context, c *cli.Command) error {
 					logger, err := buildClientLogger(c)
@@ -194,6 +367,12 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 	}
 
 	return nil
+}
+
+var errIDMissing = errors.New("destination ID is required, either as a the first positional argument or via --id flag")
+
+func idFromArgOrFlag(c *cli.Command) string {
+	return cmp.Or(c.Args().First(), c.String("id"))
 }
 
 func serverFlags(clientAndServerMode bool) []cli.Flag {
@@ -337,6 +516,31 @@ func runClient(ctx context.Context, _ *cli.Command, logger *slog.Logger) error {
 	}
 
 	return nil
+}
+
+func buildClient(ctx context.Context, c *cli.Command) (*client.App, error) {
+	logger, err := buildClientLogger(c)
+	if err != nil {
+		return nil, fmt.Errorf("build logger: %w", err)
+	}
+
+	buildInfo, ok := debug.ReadBuildInfo()
+	if !ok {
+		return nil, fmt.Errorf("unable to read build info")
+	}
+
+	return client.New(client.NewParams{
+		ServerAddr:         clientHost,
+		InsecureSkipVerify: clientTLSSkipVerify,
+		ClipboardAvailable: !clipboard.Unsupported,
+		BuildInfo: domain.BuildInfo{
+			GoVersion: buildInfo.GoVersion,
+			Version:   version,
+			Commit:    commit,
+			Date:      date,
+		},
+		Logger: logger,
+	}), nil
 }
 
 // serverConfig holds additional configuration for launching the server.

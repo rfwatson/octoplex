@@ -25,12 +25,21 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// command is a wrapper around an event.Command that includes
+// additional data required to dispatch it.
+type command struct {
+	event.Command
+
+	clientID event.ClientID   // may be zero value, if the command is synchronous
+	doneC    chan event.Event // may be nil, if the command is asynchronous
+}
+
 // App is an instance of the app.
 type App struct {
 	cfg           config.Config
 	store         *store.FileStore
 	eventBus      *event.Bus
-	dispatchC     chan event.Command
+	dispatchC     chan command
 	dockerClient  container.DockerClient
 	listenerFunc  func() (net.Listener, error)
 	keyPairs      domain.KeyPairs
@@ -73,7 +82,7 @@ func New(params Params) (*App, error) {
 		cfg:           cfg,
 		store:         params.Store,
 		eventBus:      event.NewBus(params.Logger.With("component", "event_bus")),
-		dispatchC:     make(chan event.Command, cmp.Or(params.ChanSize, defaultChanSize)),
+		dispatchC:     make(chan command, cmp.Or(params.ChanSize, defaultChanSize)),
 		dockerClient:  params.DockerClient,
 		listenerFunc:  listenerFunc,
 		keyPairs:      keyPairs,
@@ -109,7 +118,7 @@ func (a *App) Run(ctx context.Context) error {
 	})))
 
 	grpcDone := make(chan error, 1)
-	internalAPI := newServer(a.DispatchAsync, a.eventBus, a.logger)
+	internalAPI := newServer(a.DispatchSync, a.DispatchAsync, a.eventBus, a.logger)
 	pb.RegisterInternalAPIServer(grpcServer, internalAPI)
 	go func() {
 		a.logger.Info("gRPC server started", "listen-addr", lis.Addr().String())
@@ -232,10 +241,38 @@ func (a *App) Run(ctx context.Context) error {
 
 			sendAppStateChanged()
 		case cmd := <-a.dispatchC:
-			if _, err := a.handleCommand(ctx, cmd, state, repl, containerClient, startMediaServerC); errors.Is(err, errExit) {
-				return nil
-			} else if err != nil {
-				return fmt.Errorf("handle command: %w", err)
+			okEvt, errEvt, err := a.handleCommand(ctx, cmd, state, repl, containerClient, startMediaServerC)
+			if err != nil {
+				if errors.Is(err, errExit) {
+					return nil
+				} else {
+					return fmt.Errorf("handle command: %w", err)
+				}
+			}
+
+			if errEvt != nil {
+				// Command execution failed, send the error to the event bus for
+				// this client only.
+				if cmd.clientID != "" {
+					a.eventBus.SendTo(cmd.clientID, errEvt)
+				}
+				if cmd.doneC != nil {
+					cmd.doneC <- errEvt
+				}
+				continue
+			}
+
+			// TODO: always return a non-nil event from handleCommand
+			if okEvt == nil {
+				continue
+			}
+
+			// Command execution successful, send the event to the event bus for
+			// all clients.
+			a.eventBus.Send(okEvt)
+
+			if cmd.doneC != nil {
+				cmd.doneC <- okEvt
 			}
 		case <-uiUpdateT.C:
 			sendAppStateChanged()
@@ -251,70 +288,50 @@ func (a *App) Run(ctx context.Context) error {
 			sendAppStateChanged()
 		case replState := <-repl.C():
 			a.logger.Debug("Replicator state received", "state", replState)
-			destErrors := applyReplicatorState(state, replState)
-
-			for _, destError := range destErrors {
-				a.eventBus.Send(event.DestinationStreamExitedEvent{Name: destError.name, Err: destError.err})
-				repl.StopDestination(destError.url)
-			}
-
+			applyReplicatorState(state, replState)
 			sendAppStateChanged()
 		}
 	}
 }
 
-type syncCommand struct {
-	event.Command
-
-	done chan<- event.Event
-}
-
-// Dispatch dispatches a command to be executed synchronously.
-func (a *App) Dispatch(cmd event.Command) event.Event {
+// DispatchSync dispatches a command to be executed synchronously.
+func (a *App) DispatchSync(cmd event.Command) (event.Event, error) {
 	ch := make(chan event.Event, 1)
-	a.dispatchC <- syncCommand{Command: cmd, done: ch}
-	return <-ch
+	a.dispatchC <- command{
+		Command: cmd,
+		doneC:   ch,
+	}
+
+	return <-ch, nil
 }
 
 // DispatchAsync dispatches a command to be executed synchronously.
-func (a *App) DispatchAsync(cmd event.Command) {
-	a.dispatchC <- cmd
+func (a *App) DispatchAsync(clientID event.ClientID, cmd event.Command) {
+	a.dispatchC <- command{Command: cmd, clientID: clientID}
 }
 
 // errExit is an error that indicates the server should exit.
 var errExit = errors.New("exit")
 
-// handleCommand handles an incoming command. It may return an Event which will
-// already have been published to the event bus, but which is returned for the
-// benefit of synchronous callers. The event may be nil. It may also publish
-// other events to the event bus which are not returned. Currently the only
-// error that may be returned is [errExit], which indicates to the main event
-// loop that the server should exit.
+// handleCommand handles an incoming command.
+//
+// It returns one of:
+//
+// - a successful event, which should be sent to all clients
+// - an error event, which should be sent to the client that sent the command
+// - an error, which is currently only ever [errExit] to indicate that the
+//   server should exit cleanly.
 func (a *App) handleCommand(
 	ctx context.Context,
-	cmd event.Command,
+	cmd command,
 	state *domain.AppState,
 	repl *replicator.Actor,
 	containerClient *container.Client,
 	startMediaServerC chan struct{},
-) (evt event.Event, _ error) {
+) (evt event.Event, errEvt event.Event, err error) {
 	a.logger.Debug("Command received in handler", "cmd", cmd.Name())
-	defer func() {
-		if evt != nil {
-			a.eventBus.Send(evt)
-		}
-		if c, ok := cmd.(syncCommand); ok {
-			c.done <- evt
-		}
-	}()
 
-	// If the command is a syncCommand, we need to extract the command from it so
-	// it can be type-switched against.
-	if c, ok := cmd.(syncCommand); ok {
-		cmd = c.Command
-	}
-
-	switch c := cmd.(type) {
+	switch c := cmd.Command.(type) {
 	case event.CommandAddDestination:
 		destinationID := uuid.New()
 		newState := a.store.Get()
@@ -325,60 +342,62 @@ func (a *App) handleCommand(
 		})
 		if err := a.store.Set(newState); err != nil {
 			a.logger.Error("Add destination failed", "err", err)
-			return event.AddDestinationFailedEvent{URL: c.URL, Err: err}, nil
+			return nil, event.AddDestinationFailedEvent{URL: c.URL, Err: err}, nil
 		}
 		a.handlePersistentStateUpdate(state)
 		a.logger.Info("Destination added", "url", c.URL)
-		a.eventBus.Send(event.DestinationAddedEvent{ID: destinationID})
+		return event.DestinationAddedEvent{ID: destinationID}, nil, nil
 	case event.CommandUpdateDestination:
 		if isLive(state, c.ID) {
 			// should be caught in the UI, but just in case
 			a.logger.Warn("Update destination failed: destination is live", "id", c.ID)
-			break
+			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Err: errors.New("destination is live")}, nil
 		}
 
 		newState := a.store.Get()
 		idx := slices.IndexFunc(newState.Destinations, func(dest store.Destination) bool { return dest.ID == c.ID })
 		if idx == -1 {
 			a.logger.Warn("Update destination failed: destination not found", "id", c.ID)
-			break
+			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Err: fmt.Errorf("destination not found")}, nil
 		}
 
 		dest := &newState.Destinations[idx]
-		dest.Name = c.DestinationName
-		dest.URL = c.URL
+		if c.DestinationName.IsPresent() {
+			dest.Name = c.DestinationName.Value
+		}
+		if c.URL.IsPresent() {
+			dest.URL = c.URL.Value
+		}
 
 		if err := a.store.Set(newState); err != nil {
 			a.logger.Error("Update destination failed", "err", err)
-			a.eventBus.Send(event.UpdateDestinationFailedEvent{ID: c.ID, Err: err})
-			break
+			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Err: err}, nil
 		}
 		a.handlePersistentStateUpdate(state)
-		a.eventBus.Send(event.DestinationUpdatedEvent{ID: c.ID})
+		return event.DestinationUpdatedEvent{ID: c.ID}, nil, nil
 	case event.CommandRemoveDestination:
 		newState := a.store.Get()
 
 		idx := slices.IndexFunc(newState.Destinations, func(dest store.Destination) bool { return dest.ID == c.ID })
 		if idx == -1 {
 			a.logger.Warn("Remove destination failed: destination not found", "id", c.ID)
-			break
+			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: fmt.Errorf("destination not found")}, nil
 		}
 
+		// TODO: fail early if live?
 		dest := state.Destinations[idx]
 		repl.StopDestination(dest.URL) // no-op if not live
 		newState.Destinations = slices.Delete(newState.Destinations, idx, idx+1)
 
 		if err := a.store.Set(newState); err != nil {
 			a.logger.Error("Remove destination failed", "err", err)
-			a.eventBus.Send(event.RemoveDestinationFailedEvent{ID: c.ID, Err: err})
-			break
+			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: err}, nil
 		}
 		a.handlePersistentStateUpdate(state)
-		a.eventBus.Send(event.DestinationRemovedEvent{ID: c.ID}) //nolint:gosimple
+		return event.DestinationRemovedEvent{ID: c.ID}, nil, nil //nolint:gosimple
 	case event.CommandStartDestination:
 		if !state.Source.Live {
-			a.eventBus.Send(event.StartDestinationFailedEvent{ID: c.ID, Message: "source not live"})
-			break
+			return nil, event.StartDestinationFailedEvent{ID: c.ID, Err: errors.New("source not live")}, nil
 		}
 
 		destIndex := slices.IndexFunc(state.Destinations, func(d domain.Destination) bool {
@@ -386,31 +405,49 @@ func (a *App) handleCommand(
 		})
 		if destIndex == -1 {
 			a.logger.Warn("Start destination failed: destination not found", "id", c.ID)
-			break
+			return nil, event.StartDestinationFailedEvent{ID: c.ID, Err: fmt.Errorf("destination not found")}, nil
 		}
 
-		repl.StartDestination(state.Destinations[destIndex].URL)
+		dest := state.Destinations[destIndex]
+		doneC := repl.StartDestination(dest.URL)
+		// Destination starts asynchronously, we can't handle the result
+		// immediately.
+		go func() {
+			select {
+			case state := <-doneC:
+				if cmd.clientID != "" && state.Container.Err != nil {
+					a.eventBus.SendTo(cmd.clientID, event.DestinationStreamExitedEvent{Name: dest.Name, Err: state.Container.Err})
+				}
+
+				repl.StopDestination(dest.URL)
+			case <-ctx.Done():
+			}
+		}()
+
+		return event.DestinationStartedEvent{ID: c.ID}, nil, nil //nolint:gosimple
 	case event.CommandStopDestination:
 		destIndex := slices.IndexFunc(state.Destinations, func(d domain.Destination) bool {
 			return d.ID == c.ID
 		})
 		if destIndex == -1 {
 			a.logger.Warn("Start destination failed: destination not found", "id", c.ID)
-			break
+			return nil, event.StopDestinationFailedEvent{ID: c.ID, Err: fmt.Errorf("destination not found")}, nil
 		}
 
 		repl.StopDestination(state.Destinations[destIndex].URL)
+		return event.DestinationStoppedEvent{ID: c.ID}, nil, nil //nolint:gosimple
 	case event.CommandCloseOtherInstance:
 		if err := closeOtherInstances(ctx, containerClient); err != nil {
-			return nil, fmt.Errorf("close other instances: %w", err)
+			return nil, nil, fmt.Errorf("close other instances: %w", err) // TODO: improve error handling
 		}
 
 		startMediaServerC <- struct{}{}
+		return nil, nil, nil //nolint:gosimple
 	case event.CommandKillServer:
-		return nil, errExit
+		return nil, nil, errExit
+	default:
+		return nil, nil, fmt.Errorf("unknown command: %T", cmd.Command)
 	}
-
-	return nil, nil
 }
 
 func isLive(state *domain.AppState, destinationID uuid.UUID) bool {
@@ -435,42 +472,20 @@ func applyServerState(serverState domain.Source, appState *domain.AppState) {
 	appState.Source = serverState
 }
 
-// destinationError holds the information needed to display a destination
-// error.
-type destinationError struct {
-	name string
-	url  string
-	err  error
-}
+// applyReplicatorState applies the current replicator state for a single
+// destination to the app state.
+func applyReplicatorState(appState *domain.AppState, replState replicator.State) {
+	index := slices.IndexFunc(appState.Destinations, func(dest domain.Destination) bool {
+		return dest.URL == replState.URL
+	})
 
-// applyReplicatorState applies the current replicator state to the app state.
-//
-// It returns a list of destination errors that should be displayed to the user.
-func applyReplicatorState(appState *domain.AppState, replState replicator.State) []destinationError {
-	var errorsToDisplay []destinationError
-
-	for i := range appState.Destinations {
-		dest := &appState.Destinations[i]
-
-		if dest.URL != replState.URL {
-			continue
-		}
-
-		if dest.Container.Err == nil && replState.Container.Err != nil {
-			errorsToDisplay = append(errorsToDisplay, destinationError{
-				name: dest.Name,
-				url:  dest.URL,
-				err:  replState.Container.Err,
-			})
-		}
-
-		dest.Container = replState.Container
-		dest.Status = replState.Status
-
-		break
+	if index == -1 {
+		return
 	}
 
-	return errorsToDisplay
+	dest := &appState.Destinations[index]
+	dest.Container = replState.Container
+	dest.Status = replState.Status
 }
 
 // applyPersistentState applies the persistent state to the runtime state. For

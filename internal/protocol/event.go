@@ -12,212 +12,273 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// EventToProto converts an event to a protobuf message.
-func EventToProto(ev event.Event) *pb.Event {
+// EventToWrappedProto converts an event to a wrapped protobuf message (inside pb.Event).
+// Used in the streaming gRPC API.
+// Use specific event helper functions for direct conversion to protobuf messages.
+func EventToWrappedProto(ev event.Event) *pb.Event {
 	switch evt := ev.(type) {
 	case event.AppStateChangedEvent:
-		return buildAppStateChangeEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_AppStateChanged{
+				AppStateChanged: AppStateChangedEventToProto(evt),
+			},
+		}
 	case event.DestinationAddedEvent:
-		return buildDestinationAddedEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_DestinationAdded{
+				DestinationAdded: DestinationAddedEventToProto(evt),
+			},
+		}
 	case event.AddDestinationFailedEvent:
-		return buildAddDestinationFailedEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_AddDestinationFailed{
+				AddDestinationFailed: AddDestinationFailedEventToProto(evt),
+			},
+		}
 	case event.DestinationUpdatedEvent:
-		return buildDestinationUpdatedEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_DestinationUpdated{
+				DestinationUpdated: DestinationUpdatedEventToProto(evt),
+			},
+		}
 	case event.UpdateDestinationFailedEvent:
-		return buildUpdateDestinationFailedEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_UpdateDestinationFailed{
+				UpdateDestinationFailed: UpdateDestinationFailedEventToProto(evt),
+			},
+		}
 	case event.DestinationStreamExitedEvent:
-		return buildDestinationStreamExitedEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_DestinationStreamExited{
+				DestinationStreamExited: DestinationStreamExitedEventToProto(evt),
+			},
+		}
+	case event.DestinationStartedEvent:
+		return &pb.Event{
+			EventType: &pb.Event_DestinationStarted{
+				DestinationStarted: DestinationStartedEventToProto(evt),
+			},
+		}
 	case event.StartDestinationFailedEvent:
-		return buildStartDestinationFailedEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_StartDestinationFailed{
+				StartDestinationFailed: StartDestinationFailedEventToProto(evt),
+			},
+		}
+	case event.DestinationStoppedEvent:
+		return &pb.Event{
+			EventType: &pb.Event_DestinationStopped{
+				DestinationStopped: DestinationStoppedEventToProto(evt),
+			},
+		}
+	case event.StopDestinationFailedEvent:
+		return &pb.Event{
+			EventType: &pb.Event_StopDestinationFailed{
+				StopDestinationFailed: StopDestinationFailedEventToProto(evt),
+			},
+		}
 	case event.DestinationRemovedEvent:
-		return buildDestinationRemovedEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_DestinationRemoved{
+				DestinationRemoved: DestinationRemovedEventToProto(evt),
+			},
+		}
 	case event.RemoveDestinationFailedEvent:
-		return buildRemoveDestinationFailedEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_RemoveDestinationFailed{
+				RemoveDestinationFailed: RemoveDestinationFailedEventToProto(evt),
+			},
+		}
 	case event.FatalErrorOccurredEvent:
-		return buildFatalErrorOccurredEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_FatalError{
+				FatalError: FatalErrorEventToProto(evt),
+			},
+		}
 	case event.OtherInstanceDetectedEvent:
-		return buildOtherInstanceDetectedEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_OtherInstanceDetected{
+				OtherInstanceDetected: OtherInstanceDetectedEventToProto(evt),
+			},
+		}
 	case event.MediaServerStartedEvent:
-		return buildMediaServerStartedEvent(evt)
+		return &pb.Event{
+			EventType: &pb.Event_MediaServerStarted{
+				MediaServerStarted: MediaServerStartedEventToProto(evt),
+			},
+		}
 	default:
-		panic("unknown event type")
+		panic(fmt.Sprintf("unknown event type: %T", ev))
 	}
 }
 
-func buildAppStateChangeEvent(evt event.AppStateChangedEvent) *pb.Event {
+// AppStateChangedEventToProto converts an AppStateChangedEvent to a protobuf message.
+func AppStateChangedEventToProto(evt event.AppStateChangedEvent) *pb.AppStateChangedEvent {
 	var liveChangedAt *timestamppb.Timestamp
 	if !evt.State.Source.LiveChangedAt.IsZero() {
 		liveChangedAt = timestamppb.New(evt.State.Source.LiveChangedAt)
 	}
 
-	return &pb.Event{
-		EventType: &pb.Event_AppStateChanged{
-			AppStateChanged: &pb.AppStateChangedEvent{
-				AppState: &pb.AppState{
-					Source: &pb.Source{
-						Container:     ContainerToProto(evt.State.Source.Container),
-						Live:          evt.State.Source.Live,
-						LiveChangedAt: liveChangedAt,
-						Tracks:        evt.State.Source.Tracks,
-						RtmpUrl:       evt.State.Source.RTMPURL,
-						RtmpsUrl:      evt.State.Source.RTMPSURL,
-						ExitReason:    evt.State.Source.ExitReason,
-					},
-					Destinations: DestinationsToProto(evt.State.Destinations),
-					BuildInfo: &pb.BuildInfo{
-						GoVersion: evt.State.BuildInfo.GoVersion,
-						Version:   evt.State.BuildInfo.Version,
-						Commit:    evt.State.BuildInfo.Commit,
-						Date:      evt.State.BuildInfo.Date,
-					},
-				},
+	return &pb.AppStateChangedEvent{
+		AppState: &pb.AppState{
+			Source: &pb.Source{
+				Container:     ContainerToProto(evt.State.Source.Container),
+				Live:          evt.State.Source.Live,
+				LiveChangedAt: liveChangedAt,
+				Tracks:        evt.State.Source.Tracks,
+				RtmpUrl:       evt.State.Source.RTMPURL,
+				RtmpsUrl:      evt.State.Source.RTMPSURL,
+				ExitReason:    evt.State.Source.ExitReason,
+			},
+			Destinations: DestinationsToProto(evt.State.Destinations),
+			BuildInfo: &pb.BuildInfo{
+				GoVersion: evt.State.BuildInfo.GoVersion,
+				Version:   evt.State.BuildInfo.Version,
+				Commit:    evt.State.BuildInfo.Commit,
+				Date:      evt.State.BuildInfo.Date,
 			},
 		},
 	}
 }
 
-func buildDestinationAddedEvent(evt event.DestinationAddedEvent) *pb.Event {
-	return &pb.Event{
-		EventType: &pb.Event_DestinationAdded{
-			DestinationAdded: &pb.DestinationAddedEvent{Id: evt.ID[:]},
-		},
+// DestinationAddedEventToProto converts a DestinationAddedEvent to a protobuf message.
+func DestinationAddedEventToProto(evt event.DestinationAddedEvent) *pb.DestinationAddedEvent {
+	return &pb.DestinationAddedEvent{Id: evt.ID[:]}
+}
+
+// AddDestinationFailedEventToProto converts an AddDestinationFailedEvent to a protobuf message.
+func AddDestinationFailedEventToProto(evt event.AddDestinationFailedEvent) *pb.AddDestinationFailedEvent {
+	return &pb.AddDestinationFailedEvent{
+		Url:   evt.URL,
+		Error: evt.Err.Error(),
 	}
 }
 
-func buildAddDestinationFailedEvent(evt event.AddDestinationFailedEvent) *pb.Event {
-	return &pb.Event{
-		EventType: &pb.Event_AddDestinationFailed{
-			AddDestinationFailed: &pb.AddDestinationFailedEvent{
-				Url:   evt.URL,
-				Error: evt.Err.Error(),
-			},
-		},
+// DestinationUpdatedEventToProto converts a DestinationUpdatedEvent to a protobuf message.
+func DestinationUpdatedEventToProto(evt event.DestinationUpdatedEvent) *pb.DestinationUpdatedEvent {
+	return &pb.DestinationUpdatedEvent{Id: evt.ID[:]}
+}
+
+// UpdateDestinationFailedEventToProto converts an UpdateDestinationFailedEvent to a protobuf message.
+func UpdateDestinationFailedEventToProto(evt event.UpdateDestinationFailedEvent) *pb.UpdateDestinationFailedEvent {
+	return &pb.UpdateDestinationFailedEvent{
+		Id:    evt.ID[:],
+		Error: evt.Err.Error(),
 	}
 }
 
-func buildDestinationUpdatedEvent(evt event.DestinationUpdatedEvent) *pb.Event {
-	return &pb.Event{
-		EventType: &pb.Event_DestinationUpdated{
-			DestinationUpdated: &pb.DestinationUpdatedEvent{Id: evt.ID[:]},
-		},
+// DestinationStreamExitedEventToProto converts a DestinationStreamExitedEvent to a protobuf message.
+func DestinationStreamExitedEventToProto(evt event.DestinationStreamExitedEvent) *pb.DestinationStreamExitedEvent {
+	return &pb.DestinationStreamExitedEvent{
+		Name:  evt.Name,
+		Error: evt.Err.Error(),
 	}
 }
 
-func buildUpdateDestinationFailedEvent(evt event.UpdateDestinationFailedEvent) *pb.Event {
-	return &pb.Event{
-		EventType: &pb.Event_UpdateDestinationFailed{
-			UpdateDestinationFailed: &pb.UpdateDestinationFailedEvent{
-				Id:    evt.ID[:],
-				Error: evt.Err.Error(),
-			},
-		},
+// DestinationStartedEventToProto converts a DestinationStartedEvent to a protobuf message.
+func DestinationStartedEventToProto(evt event.DestinationStartedEvent) *pb.DestinationStartedEvent {
+	return &pb.DestinationStartedEvent{
+		Id: evt.ID[:],
 	}
 }
 
-func buildDestinationStreamExitedEvent(evt event.DestinationStreamExitedEvent) *pb.Event {
-	return &pb.Event{
-		EventType: &pb.Event_DestinationStreamExited{
-			DestinationStreamExited: &pb.DestinationStreamExitedEvent{
-				Name:  evt.Name,
-				Error: evt.Err.Error(),
-			},
-		},
+// StartDestinationFailedEventToProto converts a StartDestinationFailedEvent to a protobuf message.
+func StartDestinationFailedEventToProto(evt event.StartDestinationFailedEvent) *pb.StartDestinationFailedEvent {
+	return &pb.StartDestinationFailedEvent{
+		Id:    evt.ID[:],
+		Error: evt.Err.Error(),
 	}
 }
 
-func buildStartDestinationFailedEvent(evt event.StartDestinationFailedEvent) *pb.Event {
-	return &pb.Event{
-		EventType: &pb.Event_StartDestinationFailed{
-			StartDestinationFailed: &pb.StartDestinationFailedEvent{
-				Id:      evt.ID[:],
-				Message: evt.Message,
-			},
-		},
+// DestinationStoppedEventToProto converts a DestinationStoppedEvent to a protobuf message.
+func DestinationStoppedEventToProto(evt event.DestinationStoppedEvent) *pb.DestinationStoppedEvent {
+	return &pb.DestinationStoppedEvent{
+		Id: evt.ID[:],
 	}
 }
 
-func buildDestinationRemovedEvent(evt event.DestinationRemovedEvent) *pb.Event {
-	return &pb.Event{
-		EventType: &pb.Event_DestinationRemoved{
-			DestinationRemoved: &pb.DestinationRemovedEvent{
-				Id: evt.ID[:],
-			},
-		},
+// StopDestinationFailedEventToProto converts a StopDestinationFailedEvent to a protobuf message.
+func StopDestinationFailedEventToProto(evt event.StopDestinationFailedEvent) *pb.StopDestinationFailedEvent {
+	return &pb.StopDestinationFailedEvent{
+		Id:    evt.ID[:],
+		Error: evt.Err.Error(),
 	}
 }
 
-func buildRemoveDestinationFailedEvent(evt event.RemoveDestinationFailedEvent) *pb.Event {
-	return &pb.Event{
-		EventType: &pb.Event_RemoveDestinationFailed{
-			RemoveDestinationFailed: &pb.RemoveDestinationFailedEvent{
-				Id:    evt.ID[:],
-				Error: evt.Err.Error(),
-			},
-		},
+// DestinationRemovedEventToProto converts a DestinationRemovedEvent to a protobuf message.
+func DestinationRemovedEventToProto(evt event.DestinationRemovedEvent) *pb.DestinationRemovedEvent {
+	return &pb.DestinationRemovedEvent{
+		Id: evt.ID[:],
 	}
 }
 
-func buildFatalErrorOccurredEvent(evt event.FatalErrorOccurredEvent) *pb.Event {
-	return &pb.Event{
-		EventType: &pb.Event_FatalError{
-			FatalError: &pb.FatalErrorEvent{Message: evt.Message},
-		},
+// RemoveDestinationFailedEventToProto converts a RemoveDestinationFailedEvent to a protobuf message.
+func RemoveDestinationFailedEventToProto(evt event.RemoveDestinationFailedEvent) *pb.RemoveDestinationFailedEvent {
+	return &pb.RemoveDestinationFailedEvent{
+		Id:    evt.ID[:],
+		Error: evt.Err.Error(),
 	}
 }
 
-func buildOtherInstanceDetectedEvent(_ event.OtherInstanceDetectedEvent) *pb.Event {
-	return &pb.Event{
-		EventType: &pb.Event_OtherInstanceDetected{
-			OtherInstanceDetected: &pb.OtherInstanceDetectedEvent{},
-		},
-	}
+// FatalErrorEventToProto converts a FatalErrorOccurredEvent to a protobuf message.
+func FatalErrorEventToProto(evt event.FatalErrorOccurredEvent) *pb.FatalErrorEvent {
+	return &pb.FatalErrorEvent{Message: evt.Message}
 }
 
-func buildMediaServerStartedEvent(event.MediaServerStartedEvent) *pb.Event {
-	return &pb.Event{
-		EventType: &pb.Event_MediaServerStarted{
-			MediaServerStarted: &pb.MediaServerStartedEvent{},
-		},
-	}
+// OtherInstanceDetectedEventToProto converts an OtherInstanceDetectedEvent to a protobuf message.
+func OtherInstanceDetectedEventToProto(_ event.OtherInstanceDetectedEvent) *pb.OtherInstanceDetectedEvent {
+	return &pb.OtherInstanceDetectedEvent{}
 }
 
-// EventFromProto converts a protobuf message to an event.
-func EventFromProto(pbEv *pb.Event) (event.Event, error) {
+// MediaServerStartedEventToProto converts a MediaServerStartedEvent to a protobuf message.
+func MediaServerStartedEventToProto(event.MediaServerStartedEvent) *pb.MediaServerStartedEvent {
+	return &pb.MediaServerStartedEvent{}
+}
+
+// EventFromWrappedProto converts a wrapped protobuf message to an event.
+func EventFromWrappedProto(pbEv *pb.Event) (event.Event, error) {
 	if pbEv == nil || pbEv.EventType == nil {
 		return nil, errors.New("nil or empty pb.Event")
 	}
 
 	switch evt := pbEv.EventType.(type) {
 	case *pb.Event_AppStateChanged:
-		return parseAppStateChangedEvent(evt.AppStateChanged)
+		return EventFromAppStateChangedProto(evt.AppStateChanged)
 	case *pb.Event_DestinationAdded:
-		return parseDestinationAddedEvent(evt.DestinationAdded)
+		return EventFromDestinationAddedProto(evt.DestinationAdded)
 	case *pb.Event_AddDestinationFailed:
-		return parseAddDestinationFailedEvent(evt.AddDestinationFailed)
+		return EventFromAddDestinationFailedProto(evt.AddDestinationFailed)
 	case *pb.Event_DestinationUpdated:
-		return parseDestinationUpdatedEvent(evt.DestinationUpdated)
+		return EventFromDestinationUpdatedProto(evt.DestinationUpdated)
 	case *pb.Event_UpdateDestinationFailed:
-		return parseUpdateDestinationFailedEvent(evt.UpdateDestinationFailed)
+		return EventFromUpdateDestinationFailedProto(evt.UpdateDestinationFailed)
 	case *pb.Event_DestinationStreamExited:
-		return parseDestinationStreamExitedEvent(evt.DestinationStreamExited)
+		return EventFromDestinationStreamExitedProto(evt.DestinationStreamExited)
+	case *pb.Event_DestinationStarted:
+		return EventFromDestinationStartedProto(evt.DestinationStarted)
 	case *pb.Event_StartDestinationFailed:
-		return parseStartDestinationFailedEvent(evt.StartDestinationFailed)
+		return EventFromStartDestinationFailedProto(evt.StartDestinationFailed)
+	case *pb.Event_DestinationStopped:
+		return EventFromDestinationStoppedProto(evt.DestinationStopped)
+	case *pb.Event_StopDestinationFailed:
+		return EventFromStopDestinationFailedProto(evt.StopDestinationFailed)
 	case *pb.Event_DestinationRemoved:
-		return parseDestinationRemovedEvent(evt.DestinationRemoved)
+		return EventFromDestinationRemovedProto(evt.DestinationRemoved)
 	case *pb.Event_RemoveDestinationFailed:
-		return parseRemoveDestinationFailedEvent(evt.RemoveDestinationFailed)
+		return EventFromRemoveDestinationFailedProto(evt.RemoveDestinationFailed)
 	case *pb.Event_FatalError:
-		return parseFatalErrorOccurredEvent(evt.FatalError)
+		return EventFromFatalErrorProto(evt.FatalError)
 	case *pb.Event_OtherInstanceDetected:
-		return parseOtherInstanceDetectedEvent(evt.OtherInstanceDetected), nil
+		return EventFromOtherInstanceDetectedProto(evt.OtherInstanceDetected)
 	case *pb.Event_MediaServerStarted:
-		return parseMediaServerStartedEvent(evt.MediaServerStarted)
+		return EventFromMediaServerStartedProto(evt.MediaServerStarted)
 	default:
 		return nil, fmt.Errorf("unknown event type: %T", evt)
 	}
 }
 
-func parseAppStateChangedEvent(evt *pb.AppStateChangedEvent) (event.Event, error) {
+// EventFromAppStateChangedProto converts a protobuf AppStateChangedEvent to a domain event.
+func EventFromAppStateChangedProto(evt *pb.AppStateChangedEvent) (event.Event, error) {
 	if evt == nil || evt.AppState == nil || evt.AppState.Source == nil {
 		return nil, errors.New("nil or empty AppStateChangedEvent")
 	}
@@ -254,7 +315,8 @@ func parseAppStateChangedEvent(evt *pb.AppStateChangedEvent) (event.Event, error
 	}, nil
 }
 
-func parseDestinationAddedEvent(evt *pb.DestinationAddedEvent) (event.Event, error) {
+// EventFromDestinationAddedProto converts a protobuf DestinationAddedEvent to a domain event.
+func EventFromDestinationAddedProto(evt *pb.DestinationAddedEvent) (event.Event, error) {
 	if evt == nil {
 		return nil, errors.New("nil DestinationAddedEvent")
 	}
@@ -267,7 +329,8 @@ func parseDestinationAddedEvent(evt *pb.DestinationAddedEvent) (event.Event, err
 	return event.DestinationAddedEvent{ID: id}, nil
 }
 
-func parseAddDestinationFailedEvent(evt *pb.AddDestinationFailedEvent) (event.Event, error) {
+// EventFromAddDestinationFailedProto converts a protobuf AddDestinationFailedEvent to a domain event.
+func EventFromAddDestinationFailedProto(evt *pb.AddDestinationFailedEvent) (event.Event, error) {
 	if evt == nil {
 		return nil, errors.New("nil AddDestinationFailedEvent")
 	}
@@ -275,7 +338,8 @@ func parseAddDestinationFailedEvent(evt *pb.AddDestinationFailedEvent) (event.Ev
 	return event.AddDestinationFailedEvent{URL: evt.Url, Err: errors.New(evt.Error)}, nil
 }
 
-func parseDestinationUpdatedEvent(evt *pb.DestinationUpdatedEvent) (event.Event, error) {
+// EventFromDestinationUpdatedProto converts a protobuf DestinationUpdatedEvent to a domain event.
+func EventFromDestinationUpdatedProto(evt *pb.DestinationUpdatedEvent) (event.Event, error) {
 	if evt == nil {
 		return nil, errors.New("nil DestinationUpdatedEvent")
 	}
@@ -288,7 +352,8 @@ func parseDestinationUpdatedEvent(evt *pb.DestinationUpdatedEvent) (event.Event,
 	return event.DestinationUpdatedEvent{ID: id}, nil
 }
 
-func parseUpdateDestinationFailedEvent(evt *pb.UpdateDestinationFailedEvent) (event.Event, error) {
+// EventFromUpdateDestinationFailedProto converts a protobuf UpdateDestinationFailedEvent to a domain event.
+func EventFromUpdateDestinationFailedProto(evt *pb.UpdateDestinationFailedEvent) (event.Event, error) {
 	if evt == nil {
 		return nil, errors.New("nil UpdateDestinationFailedEvent")
 	}
@@ -300,7 +365,9 @@ func parseUpdateDestinationFailedEvent(evt *pb.UpdateDestinationFailedEvent) (ev
 
 	return event.UpdateDestinationFailedEvent{ID: id, Err: errors.New(evt.Error)}, nil
 }
-func parseDestinationStreamExitedEvent(evt *pb.DestinationStreamExitedEvent) (event.Event, error) {
+
+// EventFromDestinationStreamExitedProto converts a protobuf DestinationStreamExitedEvent to a domain event.
+func EventFromDestinationStreamExitedProto(evt *pb.DestinationStreamExitedEvent) (event.Event, error) {
 	if evt == nil {
 		return nil, errors.New("nil DestinationStreamExitedEvent")
 	}
@@ -308,7 +375,22 @@ func parseDestinationStreamExitedEvent(evt *pb.DestinationStreamExitedEvent) (ev
 	return event.DestinationStreamExitedEvent{Name: evt.Name, Err: errors.New(evt.Error)}, nil
 }
 
-func parseStartDestinationFailedEvent(evt *pb.StartDestinationFailedEvent) (event.Event, error) {
+// EventFromDestinationStartedProto converts a protobuf DestinationStartedEvent to a domain event.
+func EventFromDestinationStartedProto(evt *pb.DestinationStartedEvent) (event.Event, error) {
+	if evt == nil {
+		return nil, errors.New("nil DestinationStartedEvent")
+	}
+
+	id, err := uuid.FromBytes(evt.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.DestinationStartedEvent{ID: id}, nil
+}
+
+// EventFromStartDestinationFailedProto converts a protobuf StartDestinationFailedEvent to a domain event.
+func EventFromStartDestinationFailedProto(evt *pb.StartDestinationFailedEvent) (event.Event, error) {
 	if evt == nil {
 		return nil, errors.New("nil StartDestinationFailedEvent")
 	}
@@ -318,10 +400,39 @@ func parseStartDestinationFailedEvent(evt *pb.StartDestinationFailedEvent) (even
 		return nil, fmt.Errorf("parse ID: %w", err)
 	}
 
-	return event.StartDestinationFailedEvent{ID: id, Message: evt.Message}, nil
+	return event.StartDestinationFailedEvent{ID: id, Err: errors.New(evt.Error)}, nil
 }
 
-func parseDestinationRemovedEvent(evt *pb.DestinationRemovedEvent) (event.Event, error) {
+// EventFromDestinationStoppedProto converts a protobuf DestinationStoppedEvent to a domain event.
+func EventFromDestinationStoppedProto(evt *pb.DestinationStoppedEvent) (event.Event, error) {
+	if evt == nil {
+		return nil, errors.New("nil DestinationStoppedEvent")
+	}
+
+	id, err := uuid.FromBytes(evt.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.DestinationStoppedEvent{ID: id}, nil
+}
+
+// EventFromStopDestinationFailedProto converts a protobuf StopDestinationFailedEvent to a domain event.
+func EventFromStopDestinationFailedProto(evt *pb.StopDestinationFailedEvent) (event.Event, error) {
+	if evt == nil {
+		return nil, errors.New("nil StopDestinationFailedEvent")
+	}
+
+	id, err := uuid.FromBytes(evt.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.StopDestinationFailedEvent{ID: id, Err: errors.New(evt.Error)}, nil
+}
+
+// EventFromDestinationRemovedProto converts a protobuf DestinationRemovedEvent to a domain event.
+func EventFromDestinationRemovedProto(evt *pb.DestinationRemovedEvent) (event.Event, error) {
 	if evt == nil {
 		return nil, errors.New("nil DestinationRemovedEvent")
 	}
@@ -334,7 +445,8 @@ func parseDestinationRemovedEvent(evt *pb.DestinationRemovedEvent) (event.Event,
 	return event.DestinationRemovedEvent{ID: id}, nil
 }
 
-func parseRemoveDestinationFailedEvent(evt *pb.RemoveDestinationFailedEvent) (event.Event, error) {
+// EventFromRemoveDestinationFailedProto converts a protobuf RemoveDestinationFailedEvent to a domain event.
+func EventFromRemoveDestinationFailedProto(evt *pb.RemoveDestinationFailedEvent) (event.Event, error) {
 	if evt == nil {
 		return nil, errors.New("nil RemoveDestinationFailedEvent")
 	}
@@ -347,18 +459,21 @@ func parseRemoveDestinationFailedEvent(evt *pb.RemoveDestinationFailedEvent) (ev
 	return event.RemoveDestinationFailedEvent{ID: id, Err: errors.New(evt.Error)}, nil
 }
 
-func parseFatalErrorOccurredEvent(evt *pb.FatalErrorEvent) (event.Event, error) {
+// EventFromFatalErrorProto converts a protobuf FatalErrorEvent to a domain event.
+func EventFromFatalErrorProto(evt *pb.FatalErrorEvent) (event.Event, error) {
 	if evt == nil {
 		return nil, errors.New("nil FatalErrorEvent")
 	}
 	return event.FatalErrorOccurredEvent{Message: evt.Message}, nil
 }
 
-func parseOtherInstanceDetectedEvent(_ *pb.OtherInstanceDetectedEvent) event.Event {
-	return event.OtherInstanceDetectedEvent{}
+// EventFromOtherInstanceDetectedProto converts a protobuf OtherInstanceDetectedEvent to a domain event.
+func EventFromOtherInstanceDetectedProto(_ *pb.OtherInstanceDetectedEvent) (event.Event, error) {
+	return event.OtherInstanceDetectedEvent{}, nil
 }
 
-func parseMediaServerStartedEvent(evt *pb.MediaServerStartedEvent) (event.Event, error) {
+// EventFromMediaServerStartedProto converts a protobuf MediaServerStartedEvent to a domain event.
+func EventFromMediaServerStartedProto(evt *pb.MediaServerStartedEvent) (event.Event, error) {
 	if evt == nil {
 		return nil, errors.New("nil MediaServerStartedEvent")
 	}

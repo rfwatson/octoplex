@@ -8,11 +8,64 @@ import "command.proto";
 
 service InternalAPI {
   rpc Communicate(stream Envelope) returns (stream Envelope);
+  rpc AddDestination(AddDestinationRequest) returns (AddDestinationResponse);
+  rpc UpdateDestination(UpdateDestinationRequest)
+      returns (UpdateDestinationResponse);
+  rpc RemoveDestination(RemoveDestinationRequest)
+      returns (RemoveDestinationResponse);
+  rpc StartDestination(StartDestinationRequest)
+      returns (StartDestinationResponse);
+  rpc StopDestination(StopDestinationRequest) returns (StopDestinationResponse);
 }
 
 message Envelope {
   oneof payload {
     Command command = 1;
     Event event = 2;
+  }
+}
+
+message AddDestinationRequest { AddDestinationCommand command = 1; }
+
+message AddDestinationResponse {
+  oneof result {
+    DestinationAddedEvent ok = 1;
+    AddDestinationFailedEvent error = 2;
+  }
+}
+
+message UpdateDestinationRequest { UpdateDestinationCommand command = 1; }
+
+message UpdateDestinationResponse {
+  oneof result {
+    DestinationUpdatedEvent ok = 1;
+    UpdateDestinationFailedEvent error = 2;
+  }
+}
+
+message RemoveDestinationRequest { RemoveDestinationCommand command = 1; }
+
+message RemoveDestinationResponse {
+  oneof result {
+    DestinationRemovedEvent ok = 2;
+    RemoveDestinationFailedEvent error = 3;
+  }
+}
+
+message StartDestinationRequest { StartDestinationCommand command = 1; }
+
+message StartDestinationResponse {
+  oneof result {
+    DestinationStartedEvent ok = 1;
+    StartDestinationFailedEvent error = 2;
+  }
+}
+
+message StopDestinationRequest { StopDestinationCommand command = 1; }
+
+message StopDestinationResponse {
+  oneof result {
+    DestinationStoppedEvent ok = 1;
+    StopDestinationFailedEvent error = 2;
   }
 }

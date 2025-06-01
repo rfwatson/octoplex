@@ -1,6 +1,9 @@
 package event
 
-import "github.com/google/uuid"
+import (
+	"git.netflux.io/rob/octoplex/internal/optional"
+	"github.com/google/uuid"
+)
 
 // CommandAddDestination adds a destination.
 type CommandAddDestination struct {
@@ -13,11 +16,11 @@ func (c CommandAddDestination) Name() string {
 	return "add_destination"
 }
 
-// CommandUpdateDestination adds a destination.
+// CommandUpdateDestination updates a destination.
 type CommandUpdateDestination struct {
 	ID              uuid.UUID
-	DestinationName string
-	URL             string
+	DestinationName optional.V[string]
+	URL             optional.V[string]
 }
 
 // Name implements the Command interface.

@@ -5,7 +5,9 @@ import (
 
 	"git.netflux.io/rob/octoplex/internal/event"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	"git.netflux.io/rob/octoplex/internal/optional"
 	"git.netflux.io/rob/octoplex/internal/protocol"
+	"git.netflux.io/rob/octoplex/internal/ptr"
 	gocmp "github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -40,15 +42,31 @@ func TestCommandToProto(t *testing.T) {
 			name: "UpdateDestination",
 			in: event.CommandUpdateDestination{
 				ID:              id,
-				DestinationName: "test",
-				URL:             "rtmp://rtmp.example.com",
+				DestinationName: optional.New("test"),
+				URL:             optional.New("rtmp://rtmp.example.com"),
 			},
 			want: &pb.Command{
 				CommandType: &pb.Command_UpdateDestination{
 					UpdateDestination: &pb.UpdateDestinationCommand{
 						Id:   id[:],
-						Name: "test",
-						Url:  "rtmp://rtmp.example.com",
+						Name: ptr.New("test"),
+						Url:  ptr.New("rtmp://rtmp.example.com"),
+					},
+				},
+			},
+		},
+		{
+			name: "UpdateDestination with partial fields",
+			in: event.CommandUpdateDestination{
+				ID:              id,
+				DestinationName: optional.New("test"),
+			},
+			want: &pb.Command{
+				CommandType: &pb.Command_UpdateDestination{
+					UpdateDestination: &pb.UpdateDestinationCommand{
+						Id:   id[:],
+						Name: ptr.New("test"),
+						Url:  nil,
 					},
 				},
 			},
@@ -104,9 +122,148 @@ func TestCommandToProto(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Empty(t, gocmp.Diff(tc.want, protocol.CommandToProto(tc.in), protocmp.Transform()))
+			assert.Empty(t, gocmp.Diff(tc.want, protocol.CommandToWrappedProto(tc.in), protocmp.Transform()))
 		})
 	}
+}
+
+// TestUnwrappedCommandConversion tests the unwrapped command conversion (both to and from proto)
+func TestUnwrappedCommandConversion(t *testing.T) {
+	id := uuid.MustParse("5aefdbf5-95c6-418e-b63a-c95682861db1")
+
+	t.Run("AddDestinationCommand", func(t *testing.T) {
+		domainCmd := event.CommandAddDestination{
+			DestinationName: "test",
+			URL:             "rtmp://rtmp.example.com",
+		}
+
+		// Conversion to proto
+		protoCmd := protocol.AddDestinationCommandToProto(domainCmd)
+		assert.NotNil(t, protoCmd)
+		assert.Equal(t, "test", protoCmd.Name)
+		assert.Equal(t, "rtmp://rtmp.example.com", protoCmd.Url)
+
+		// Conversion from proto
+		resultCmd, err := protocol.CommandFromAddDestinationProto(protoCmd)
+		require.NoError(t, err)
+		assert.IsType(t, event.CommandAddDestination{}, resultCmd)
+		assert.Empty(t, gocmp.Diff(domainCmd, resultCmd))
+	})
+
+	t.Run("UpdateDestinationCommand", func(t *testing.T) {
+		domainCmd := event.CommandUpdateDestination{
+			ID:              id,
+			DestinationName: optional.New("test"),
+			URL:             optional.New("rtmp://rtmp.example.com"),
+		}
+
+		// Conversion to proto
+		protoCmd := protocol.UpdateDestinationCommandToProto(domainCmd)
+		assert.NotNil(t, protoCmd)
+		assert.Equal(t, id[:], protoCmd.Id)
+		assert.Equal(t, "test", *protoCmd.Name)
+		assert.Equal(t, "rtmp://rtmp.example.com", *protoCmd.Url)
+
+		// Conversion from proto
+		resultCmd, err := protocol.CommandFromUpdateDestinationProto(protoCmd)
+		require.NoError(t, err)
+		assert.IsType(t, event.CommandUpdateDestination{}, resultCmd)
+		assert.Empty(t, gocmp.Diff(domainCmd, resultCmd))
+	})
+
+	t.Run("UpdateDestinationCommand with partial fields", func(t *testing.T) {
+		domainCmd := event.CommandUpdateDestination{
+			ID:              id,
+			DestinationName: optional.New("test"),
+			URL:             optional.Empty[string](),
+		}
+
+		// Conversion to proto
+		protoCmd := protocol.UpdateDestinationCommandToProto(domainCmd)
+		assert.NotNil(t, protoCmd)
+		assert.Equal(t, id[:], protoCmd.Id)
+		assert.Equal(t, "test", *protoCmd.Name)
+		assert.Nil(t, protoCmd.Url)
+
+		// Conversion from proto
+		resultCmd, err := protocol.CommandFromUpdateDestinationProto(protoCmd)
+		require.NoError(t, err)
+		assert.IsType(t, event.CommandUpdateDestination{}, resultCmd)
+		assert.Empty(t, gocmp.Diff(domainCmd, resultCmd))
+	})
+
+	t.Run("RemoveDestinationCommand", func(t *testing.T) {
+		domainCmd := event.CommandRemoveDestination{ID: id}
+
+		// Conversion to proto
+		protoCmd := protocol.RemoveDestinationCommandToProto(domainCmd)
+		assert.NotNil(t, protoCmd)
+		assert.Equal(t, id[:], protoCmd.Id)
+
+		// Conversion from proto
+		resultCmd, err := protocol.CommandFromRemoveDestinationProto(protoCmd)
+		require.NoError(t, err)
+		assert.IsType(t, event.CommandRemoveDestination{}, resultCmd)
+		assert.Empty(t, gocmp.Diff(domainCmd, resultCmd))
+	})
+
+	t.Run("StartDestinationCommand", func(t *testing.T) {
+		domainCmd := event.CommandStartDestination{ID: id}
+
+		// Conversion to proto
+		protoCmd := protocol.StartDestinationCommandToProto(domainCmd)
+		assert.NotNil(t, protoCmd)
+		assert.Equal(t, id[:], protoCmd.Id)
+
+		// Conversion from proto
+		resultCmd, err := protocol.CommandFromStartDestinationProto(protoCmd)
+		require.NoError(t, err)
+		assert.IsType(t, event.CommandStartDestination{}, resultCmd)
+		assert.Empty(t, gocmp.Diff(domainCmd, resultCmd))
+	})
+
+	t.Run("StopDestinationCommand", func(t *testing.T) {
+		domainCmd := event.CommandStopDestination{ID: id}
+
+		// Conversion to proto
+		protoCmd := protocol.StopDestinationCommandToProto(domainCmd)
+		assert.NotNil(t, protoCmd)
+		assert.Equal(t, id[:], protoCmd.Id)
+
+		// Conversion from proto
+		resultCmd, err := protocol.CommandFromStopDestinationProto(protoCmd)
+		require.NoError(t, err)
+		assert.IsType(t, event.CommandStopDestination{}, resultCmd)
+		assert.Empty(t, gocmp.Diff(domainCmd, resultCmd))
+	})
+
+	t.Run("CloseOtherInstancesCommand", func(t *testing.T) {
+		domainCmd := event.CommandCloseOtherInstance{}
+
+		// Conversion to proto
+		protoCmd := protocol.CloseOtherInstancesCommandToProto(domainCmd)
+		assert.NotNil(t, protoCmd)
+
+		// Conversion from proto
+		resultCmd, err := protocol.CommandFromCloseOtherInstancesProto(protoCmd)
+		require.NoError(t, err)
+		assert.IsType(t, event.CommandCloseOtherInstance{}, resultCmd)
+		assert.Empty(t, gocmp.Diff(domainCmd, resultCmd))
+	})
+
+	t.Run("KillServerCommand", func(t *testing.T) {
+		domainCmd := event.CommandKillServer{}
+
+		// Conversion to proto
+		protoCmd := protocol.KillServerCommandToProto(domainCmd)
+		assert.NotNil(t, protoCmd)
+
+		// Conversion from proto
+		resultCmd, err := protocol.CommandFromKillServerProto(protoCmd)
+		require.NoError(t, err)
+		assert.IsType(t, event.CommandKillServer{}, resultCmd)
+		assert.Empty(t, gocmp.Diff(domainCmd, resultCmd))
+	})
 }
 
 func TestCommandFromProto(t *testing.T) {
@@ -138,15 +295,31 @@ func TestCommandFromProto(t *testing.T) {
 				CommandType: &pb.Command_UpdateDestination{
 					UpdateDestination: &pb.UpdateDestinationCommand{
 						Id:   id[:],
-						Name: "test",
-						Url:  "rtmp://rtmp.example.com",
+						Name: ptr.New("test"),
+						Url:  ptr.New("rtmp://rtmp.example.com"),
 					},
 				},
 			},
 			want: event.CommandUpdateDestination{
 				ID:              id,
-				DestinationName: "test",
-				URL:             "rtmp://rtmp.example.com",
+				DestinationName: optional.New("test"),
+				URL:             optional.New("rtmp://rtmp.example.com"),
+			},
+		},
+		{
+			name: "UpdateDestination with partial fields",
+			in: &pb.Command{
+				CommandType: &pb.Command_UpdateDestination{
+					UpdateDestination: &pb.UpdateDestinationCommand{
+						Id:   id[:],
+						Name: ptr.New("test"),
+					},
+				},
+			},
+			want: event.CommandUpdateDestination{
+				ID:              id,
+				DestinationName: optional.New("test"),
+				URL:             optional.Empty[string](),
 			},
 		},
 		{
@@ -198,9 +371,9 @@ func TestCommandFromProto(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := protocol.CommandFromProto(tc.in)
-			require.NoError(t, err)
-			assert.Empty(t, gocmp.Diff(tc.want, got))
+			got2, err2 := protocol.CommandFromWrappedProto(tc.in)
+			require.NoError(t, err2)
+			assert.Empty(t, gocmp.Diff(tc.want, got2))
 		})
 	}
 }
