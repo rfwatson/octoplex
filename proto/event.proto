@@ -15,11 +15,14 @@ message Event {
     UpdateDestinationFailedEvent update_destination_failed = 6;
     DestinationRemovedEvent destination_removed = 7;
     RemoveDestinationFailedEvent remove_destination_failed = 8;
-    StartDestinationFailedEvent start_destination_failed = 9;
-    MediaServerStartedEvent media_server_started = 10;
-    OtherInstanceDetectedEvent other_instance_detected = 11;
-    FatalErrorEvent fatal_error = 12;
-    HandshakeCompletedEvent handshake_completed = 13;
+    DestinationStartedEvent destination_started = 9;
+    StartDestinationFailedEvent start_destination_failed = 10;
+    DestinationStoppedEvent destination_stopped = 11;
+    StopDestinationFailedEvent stop_destination_failed = 12;
+    MediaServerStartedEvent media_server_started = 13;
+    OtherInstanceDetectedEvent other_instance_detected = 14;
+    FatalErrorEvent fatal_error = 15;
+    HandshakeCompletedEvent handshake_completed = 16;
   }
 }
 
@@ -51,9 +54,18 @@ message RemoveDestinationFailedEvent {
   string error = 2;
 }
 
+message DestinationStartedEvent { bytes id = 1; }
+
 message StartDestinationFailedEvent {
   bytes id = 1;
-  string message = 2;
+  string error = 2;
+}
+
+message DestinationStoppedEvent { bytes id = 1; }
+
+message StopDestinationFailedEvent {
+  bytes id = 1;
+  string error = 2;
 }
 
 message MediaServerStartedEvent {}

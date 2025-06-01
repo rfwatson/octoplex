@@ -5,86 +5,133 @@ import (
 
 	"git.netflux.io/rob/octoplex/internal/event"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	"git.netflux.io/rob/octoplex/internal/optional"
 	"github.com/google/uuid"
 )
 
-// CommandToProto converts a command to a protobuf message.
-func CommandToProto(command event.Command) *pb.Command {
-	switch evt := command.(type) {
+// CommandToWrappedProto converts a command to a wrapped protobuf message (inside pb.Command).
+// For direct conversion to the specific command type, use the *CommandToProto functions.
+func CommandToWrappedProto(command event.Command) *pb.Command {
+	switch cmd := command.(type) {
 	case event.CommandAddDestination:
-		return buildAddDestinationCommand(evt)
+		return &pb.Command{
+			CommandType: &pb.Command_AddDestination{
+				AddDestination: AddDestinationCommandToProto(cmd),
+			},
+		}
 	case event.CommandUpdateDestination:
-		return buildUpdateDestinationCommand(evt)
+		return &pb.Command{
+			CommandType: &pb.Command_UpdateDestination{
+				UpdateDestination: UpdateDestinationCommandToProto(cmd),
+			},
+		}
 	case event.CommandRemoveDestination:
-		return buildRemoveDestinationCommand(evt)
+		return &pb.Command{
+			CommandType: &pb.Command_RemoveDestination{
+				RemoveDestination: RemoveDestinationCommandToProto(cmd),
+			},
+		}
 	case event.CommandStartDestination:
-		return buildStartDestinationCommand(evt)
+		return &pb.Command{
+			CommandType: &pb.Command_StartDestination{
+				StartDestination: StartDestinationCommandToProto(cmd),
+			},
+		}
 	case event.CommandStopDestination:
-		return buildStopDestinationCommand(evt)
+		return &pb.Command{
+			CommandType: &pb.Command_StopDestination{
+				StopDestination: StopDestinationCommandToProto(cmd),
+			},
+		}
 	case event.CommandCloseOtherInstance:
-		return buildCloseOtherInstanceCommand(evt)
+		return &pb.Command{
+			CommandType: &pb.Command_CloseOtherInstances{
+				CloseOtherInstances: CloseOtherInstancesCommandToProto(cmd),
+			},
+		}
 	case event.CommandKillServer:
-		return buildKillServerCommand(evt)
+		return &pb.Command{
+			CommandType: &pb.Command_KillServer{
+				KillServer: KillServerCommandToProto(cmd),
+			},
+		}
 	default:
 		panic("unknown command type")
 	}
 }
 
-func buildAddDestinationCommand(cmd event.CommandAddDestination) *pb.Command {
-	return &pb.Command{CommandType: &pb.Command_AddDestination{AddDestination: &pb.AddDestinationCommand{Name: cmd.DestinationName, Url: cmd.URL}}}
+// AddDestinationCommandToProto converts an AddDestinationCommand to a protobuf message.
+func AddDestinationCommandToProto(cmd event.CommandAddDestination) *pb.AddDestinationCommand {
+	return &pb.AddDestinationCommand{
+		Name: cmd.DestinationName,
+		Url:  cmd.URL,
+	}
 }
 
-func buildUpdateDestinationCommand(cmd event.CommandUpdateDestination) *pb.Command {
-	return &pb.Command{CommandType: &pb.Command_UpdateDestination{UpdateDestination: &pb.UpdateDestinationCommand{Id: cmd.ID[:], Name: cmd.DestinationName, Url: cmd.URL}}}
+// UpdateDestinationCommandToProto converts an UpdateDestinationCommand to a protobuf message.
+func UpdateDestinationCommandToProto(cmd event.CommandUpdateDestination) *pb.UpdateDestinationCommand {
+	return &pb.UpdateDestinationCommand{
+		Id:   cmd.ID[:],
+		Name: cmd.DestinationName.Ref(),
+		Url:  cmd.URL.Ref(),
+	}
 }
 
-func buildRemoveDestinationCommand(cmd event.CommandRemoveDestination) *pb.Command {
-	return &pb.Command{CommandType: &pb.Command_RemoveDestination{RemoveDestination: &pb.RemoveDestinationCommand{Id: cmd.ID[:]}}}
+// RemoveDestinationCommandToProto converts a RemoveDestinationCommand to a protobuf message.
+func RemoveDestinationCommandToProto(cmd event.CommandRemoveDestination) *pb.RemoveDestinationCommand {
+	return &pb.RemoveDestinationCommand{Id: cmd.ID[:]}
 }
 
-func buildStartDestinationCommand(cmd event.CommandStartDestination) *pb.Command {
-	return &pb.Command{CommandType: &pb.Command_StartDestination{StartDestination: &pb.StartDestinationCommand{Id: cmd.ID[:]}}}
+// StartDestinationCommandToProto converts a StartDestinationCommand to a protobuf message.
+func StartDestinationCommandToProto(cmd event.CommandStartDestination) *pb.StartDestinationCommand {
+	return &pb.StartDestinationCommand{Id: cmd.ID[:]}
 }
 
-func buildStopDestinationCommand(cmd event.CommandStopDestination) *pb.Command {
-	return &pb.Command{CommandType: &pb.Command_StopDestination{StopDestination: &pb.StopDestinationCommand{Id: cmd.ID[:]}}}
+// StopDestinationCommandToProto converts a StopDestinationCommand to a protobuf message.
+func StopDestinationCommandToProto(cmd event.CommandStopDestination) *pb.StopDestinationCommand {
+	return &pb.StopDestinationCommand{Id: cmd.ID[:]}
 }
 
-func buildCloseOtherInstanceCommand(event.CommandCloseOtherInstance) *pb.Command {
-	return &pb.Command{CommandType: &pb.Command_CloseOtherInstances{CloseOtherInstances: &pb.CloseOtherInstancesCommand{}}}
+// CloseOtherInstancesCommandToProto converts a CloseOtherInstanceCommand to a protobuf message.
+func CloseOtherInstancesCommandToProto(event.CommandCloseOtherInstance) *pb.CloseOtherInstancesCommand {
+	return &pb.CloseOtherInstancesCommand{}
 }
 
-func buildKillServerCommand(event.CommandKillServer) *pb.Command {
-	return &pb.Command{CommandType: &pb.Command_KillServer{KillServer: &pb.KillServerCommand{}}}
+// KillServerCommandToProto converts a KillServerCommand to a protobuf message.
+func KillServerCommandToProto(event.CommandKillServer) *pb.KillServerCommand {
+	return &pb.KillServerCommand{}
 }
 
-// CommandFromProto converts a protobuf message to a command.
-func CommandFromProto(pbCmd *pb.Command) (event.Command, error) {
+// CommandFromWrappedProto converts a wrapped protobuf message to a command.
+// This is intended for processing commands from a streaming gRPC API where commands are represented in a oneof.
+// For direct conversion from specific command types, use the CommandFrom*Proto functions.
+func CommandFromWrappedProto(pbCmd *pb.Command) (event.Command, error) {
 	if pbCmd == nil || pbCmd.CommandType == nil {
 		return nil, fmt.Errorf("nil or empty Command")
 	}
 
 	switch cmd := pbCmd.CommandType.(type) {
 	case *pb.Command_AddDestination:
-		return parseAddDestinationCommand(cmd.AddDestination)
+		return CommandFromAddDestinationProto(cmd.AddDestination)
 	case *pb.Command_UpdateDestination:
-		return parseUpdateDestinationCommand(cmd.UpdateDestination)
+		return CommandFromUpdateDestinationProto(cmd.UpdateDestination)
 	case *pb.Command_RemoveDestination:
-		return parseRemoveDestinationCommand(cmd.RemoveDestination)
+		return CommandFromRemoveDestinationProto(cmd.RemoveDestination)
 	case *pb.Command_StartDestination:
-		return parseStartDestinationCommand(cmd.StartDestination)
+		return CommandFromStartDestinationProto(cmd.StartDestination)
 	case *pb.Command_StopDestination:
-		return parseStopDestinationCommand(cmd.StopDestination)
+		return CommandFromStopDestinationProto(cmd.StopDestination)
 	case *pb.Command_CloseOtherInstances:
-		return parseCloseOtherInstanceCommand(cmd.CloseOtherInstances), nil
+		return CommandFromCloseOtherInstancesProto(cmd.CloseOtherInstances)
 	case *pb.Command_KillServer:
-		return parseKillServerCommand(cmd.KillServer), nil
+		return CommandFromKillServerProto(cmd.KillServer)
 	default:
 		return nil, fmt.Errorf("unknown command type: %T", cmd)
 	}
 }
 
-func parseAddDestinationCommand(cmd *pb.AddDestinationCommand) (event.Command, error) {
+// CommandFromAddDestinationProto converts a protobuf AddDestinationCommand to a domain command.
+func CommandFromAddDestinationProto(cmd *pb.AddDestinationCommand) (event.Command, error) {
 	if cmd == nil {
 		return nil, fmt.Errorf("nil AddDestinationCommand")
 	}
@@ -92,7 +139,8 @@ func parseAddDestinationCommand(cmd *pb.AddDestinationCommand) (event.Command, e
 	return event.CommandAddDestination{DestinationName: cmd.Name, URL: cmd.Url}, nil
 }
 
-func parseUpdateDestinationCommand(cmd *pb.UpdateDestinationCommand) (event.Command, error) {
+// CommandFromUpdateDestinationProto converts a protobuf UpdateDestinationCommand to a domain command.
+func CommandFromUpdateDestinationProto(cmd *pb.UpdateDestinationCommand) (event.Command, error) {
 	if cmd == nil {
 		return nil, fmt.Errorf("nil UpdateDestinationCommand")
 	}
@@ -104,12 +152,13 @@ func parseUpdateDestinationCommand(cmd *pb.UpdateDestinationCommand) (event.Comm
 
 	return event.CommandUpdateDestination{
 		ID:              id,
-		DestinationName: cmd.Name,
-		URL:             cmd.Url,
+		DestinationName: optional.Deref(cmd.Name),
+		URL:             optional.Deref(cmd.Url),
 	}, nil
 }
 
-func parseRemoveDestinationCommand(cmd *pb.RemoveDestinationCommand) (event.Command, error) {
+// CommandFromRemoveDestinationProto converts a protobuf RemoveDestinationCommand to a domain command.
+func CommandFromRemoveDestinationProto(cmd *pb.RemoveDestinationCommand) (event.Command, error) {
 	if cmd == nil {
 		return nil, fmt.Errorf("nil RemoveDestinationCommand")
 	}
@@ -122,7 +171,8 @@ func parseRemoveDestinationCommand(cmd *pb.RemoveDestinationCommand) (event.Comm
 	return event.CommandRemoveDestination{ID: id}, nil
 }
 
-func parseStartDestinationCommand(cmd *pb.StartDestinationCommand) (event.Command, error) {
+// CommandFromStartDestinationProto converts a protobuf StartDestinationCommand to a domain command.
+func CommandFromStartDestinationProto(cmd *pb.StartDestinationCommand) (event.Command, error) {
 	if cmd == nil {
 		return nil, fmt.Errorf("nil StartDestinationCommand")
 	}
@@ -135,7 +185,8 @@ func parseStartDestinationCommand(cmd *pb.StartDestinationCommand) (event.Comman
 	return event.CommandStartDestination{ID: id}, nil
 }
 
-func parseStopDestinationCommand(cmd *pb.StopDestinationCommand) (event.Command, error) {
+// CommandFromStopDestinationProto converts a protobuf StopDestinationCommand to a domain command.
+func CommandFromStopDestinationProto(cmd *pb.StopDestinationCommand) (event.Command, error) {
 	if cmd == nil {
 		return nil, fmt.Errorf("nil StopDestinationCommand")
 	}
@@ -148,10 +199,12 @@ func parseStopDestinationCommand(cmd *pb.StopDestinationCommand) (event.Command,
 	return event.CommandStopDestination{ID: id}, nil
 }
 
-func parseCloseOtherInstanceCommand(_ *pb.CloseOtherInstancesCommand) event.Command {
-	return event.CommandCloseOtherInstance{}
+// CommandFromCloseOtherInstancesProto converts a protobuf CloseOtherInstancesCommand to a domain command.
+func CommandFromCloseOtherInstancesProto(_ *pb.CloseOtherInstancesCommand) (event.Command, error) {
+	return event.CommandCloseOtherInstance{}, nil
 }
 
-func parseKillServerCommand(_ *pb.KillServerCommand) event.Command {
-	return event.CommandKillServer{}
+// CommandFromKillServerProto converts a protobuf KillServerCommand to a domain command.
+func CommandFromKillServerProto(_ *pb.KillServerCommand) (event.Command, error) {
+	return event.CommandKillServer{}, nil
 }

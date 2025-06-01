@@ -15,6 +15,7 @@ import (
 
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/event"
+	"git.netflux.io/rob/octoplex/internal/optional"
 	"git.netflux.io/rob/octoplex/internal/shortid"
 	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
@@ -247,8 +248,8 @@ var ErrUserClosed = errors.New("user closed UI")
 // Run runs the user interface. It always returns a non-nil error, which will
 // be [ErrUserClosed] if the user voluntarily closed the UI.
 func (ui *UI) Run(ctx context.Context) error {
-	eventC := ui.eventBus.Register()
-	defer ui.eventBus.Deregister(eventC)
+	clientID, eventC := ui.eventBus.Register()
+	defer ui.eventBus.Deregister(clientID)
 
 	go func() {
 		err := ui.app.Run()
@@ -287,12 +288,11 @@ func (ui *UI) Run(ctx context.Context) error {
 					ui.handleDestinationEventError(evt.Err)
 				case event.OtherInstanceDetectedEvent:
 					ui.handleOtherInstanceDetected(evt)
-				case event.MediaServerStartedEvent:
-					// no-op, consider removing event
 				case event.FatalErrorOccurredEvent:
 					ui.handleFatalErrorOccurred(evt)
 				default:
-					ui.logger.Warn("unhandled event", "event", evt)
+					// Some events are not handled by the UI, so this is normal.
+					ui.logger.Debug("Unhandled event", "event", evt, "type", fmt.Sprintf("%T", evt))
 				}
 			})
 		case <-ctx.Done():
@@ -907,8 +907,8 @@ func (ui *UI) updateDestination() {
 	form.AddButton("Save changes", func() {
 		ui.dispatch(event.CommandUpdateDestination{
 			ID:              destinationID,
-			DestinationName: form.GetFormItemByLabel(formInputLabelName).(*tview.InputField).GetText(),
-			URL:             form.GetFormItemByLabel(formInputLabelURL).(*tview.InputField).GetText(),
+			DestinationName: optional.New(form.GetFormItemByLabel(formInputLabelName).(*tview.InputField).GetText()),
+			URL:             optional.New(form.GetFormItemByLabel(formInputLabelURL).(*tview.InputField).GetText()),
 		})
 	})
 	form.AddButton("Cancel", func() {

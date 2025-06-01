@@ -22,9 +22,10 @@ import (
 type Server struct {
 	pb.UnimplementedInternalAPIServer
 
-	dispatcher func(event.Command)
-	bus        *event.Bus
-	logger     *slog.Logger
+	dispatchSync  func(event.Command) (event.Event, error)
+	dispatchAsync func(event.ClientID, event.Command)
+	bus           *event.Bus
+	logger        *slog.Logger
 
 	mu          sync.Mutex
 	clientCount int
@@ -33,15 +34,17 @@ type Server struct {
 
 // newServer creates a new gRPC server.
 func newServer(
-	dispatcher func(event.Command),
+	dispatchSync func(event.Command) (event.Event, error),
+	dispatchAsync func(event.ClientID, event.Command),
 	bus *event.Bus,
 	logger *slog.Logger,
 ) *Server {
 	return &Server{
-		dispatcher: dispatcher,
-		bus:        bus,
-		clientC:    make(chan struct{}, 1),
-		logger:     logger.With("component", "server"),
+		dispatchSync:  dispatchSync,
+		dispatchAsync: dispatchAsync,
+		bus:           bus,
+		clientC:       make(chan struct{}, 1),
+		logger:        logger.With("component", "server"),
 	}
 }
 
@@ -74,14 +77,14 @@ func (s *Server) Communicate(stream pb.InternalAPI_CommunicateServer) error {
 	default:
 	}
 
+	clientID, eventsC := s.bus.Register()
 	g.Go(func() error {
-		eventsC := s.bus.Register()
-		defer s.bus.Deregister(eventsC)
+		defer s.bus.Deregister(clientID)
 
 		for {
 			select {
 			case evt := <-eventsC:
-				if err := stream.Send(&pb.Envelope{Payload: &pb.Envelope_Event{Event: protocol.EventToProto(evt)}}); err != nil {
+				if err := stream.Send(&pb.Envelope{Payload: &pb.Envelope_Event{Event: protocol.EventToWrappedProto(evt)}}); err != nil {
 					if ctxErr := stream.Context().Err(); ctxErr != nil {
 						err = ctxErr
 					}
@@ -115,12 +118,12 @@ func (s *Server) Communicate(stream pb.InternalAPI_CommunicateServer) error {
 
 			switch pbCmd := in.Payload.(type) {
 			case *pb.Envelope_Command:
-				cmd, err := protocol.CommandFromProto(pbCmd.Command)
+				cmd, err := protocol.CommandFromWrappedProto(pbCmd.Command)
 				if err != nil {
 					return fmt.Errorf("command from proto: %w", err)
 				}
 				s.logger.Debug("Received command from gRPC stream", "command", cmd.Name())
-				s.dispatcher(cmd)
+				s.dispatchAsync(clientID, cmd)
 			default:
 				return fmt.Errorf("expected command but got: %T", pbCmd)
 			}
@@ -157,5 +160,150 @@ func (s *Server) WaitForClient(ctx context.Context) error {
 		return errors.New("timeout")
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+func (s *Server) AddDestination(ctx context.Context, req *pb.AddDestinationRequest) (*pb.AddDestinationResponse, error) {
+	cmd, err := protocol.CommandFromAddDestinationProto(req.Command)
+	if err != nil {
+		return nil, fmt.Errorf("command from proto: %w", err)
+	}
+
+	evt, err := s.dispatchSync(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("dispatch command: %w", err)
+	}
+
+	switch e := evt.(type) {
+	case event.DestinationAddedEvent:
+		return &pb.AddDestinationResponse{
+			Result: &pb.AddDestinationResponse_Ok{
+				Ok: protocol.DestinationAddedEventToProto(e),
+			},
+		}, nil
+	case event.AddDestinationFailedEvent:
+		return &pb.AddDestinationResponse{
+			Result: &pb.AddDestinationResponse_Error{
+				Error: protocol.AddDestinationFailedEventToProto(e),
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("unexpected event type: %T", e)
+	}
+}
+
+func (s *Server) UpdateDestination(ctx context.Context, req *pb.UpdateDestinationRequest) (*pb.UpdateDestinationResponse, error) {
+	cmd, err := protocol.CommandFromUpdateDestinationProto(req.Command)
+	if err != nil {
+		return nil, fmt.Errorf("command from proto: %w", err)
+	}
+
+	evt, err := s.dispatchSync(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("dispatch command: %w", err)
+	}
+
+	switch e := evt.(type) {
+	case event.DestinationUpdatedEvent:
+		return &pb.UpdateDestinationResponse{
+			Result: &pb.UpdateDestinationResponse_Ok{
+				Ok: protocol.DestinationUpdatedEventToProto(e),
+			},
+		}, nil
+	case event.UpdateDestinationFailedEvent:
+		return &pb.UpdateDestinationResponse{
+			Result: &pb.UpdateDestinationResponse_Error{
+				Error: protocol.UpdateDestinationFailedEventToProto(e),
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("unexpected event type: %T", e)
+	}
+}
+
+func (s *Server) RemoveDestination(ctx context.Context, req *pb.RemoveDestinationRequest) (*pb.RemoveDestinationResponse, error) {
+	cmd, err := protocol.CommandFromRemoveDestinationProto(req.Command)
+	if err != nil {
+		return nil, fmt.Errorf("command from proto: %w", err)
+	}
+
+	evt, err := s.dispatchSync(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("dispatch command: %w", err)
+	}
+
+	switch e := evt.(type) {
+	case event.DestinationRemovedEvent:
+		return &pb.RemoveDestinationResponse{
+			Result: &pb.RemoveDestinationResponse_Ok{
+				Ok: protocol.DestinationRemovedEventToProto(e),
+			},
+		}, nil
+	case event.RemoveDestinationFailedEvent:
+		return &pb.RemoveDestinationResponse{
+			Result: &pb.RemoveDestinationResponse_Error{
+				Error: protocol.RemoveDestinationFailedEventToProto(e),
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("unexpected event type: %T", e)
+	}
+}
+
+func (s *Server) StartDestination(ctx context.Context, req *pb.StartDestinationRequest) (*pb.StartDestinationResponse, error) {
+	cmd, err := protocol.CommandFromStartDestinationProto(req.Command)
+	if err != nil {
+		return nil, fmt.Errorf("command from proto: %w", err)
+	}
+
+	evt, err := s.dispatchSync(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("dispatch command: %w", err)
+	}
+
+	switch e := evt.(type) {
+	case event.DestinationStartedEvent:
+		return &pb.StartDestinationResponse{
+			Result: &pb.StartDestinationResponse_Ok{
+				Ok: protocol.DestinationStartedEventToProto(e),
+			},
+		}, nil
+	case event.StartDestinationFailedEvent:
+		return &pb.StartDestinationResponse{
+			Result: &pb.StartDestinationResponse_Error{
+				Error: protocol.StartDestinationFailedEventToProto(e),
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("unexpected event type: %T", e)
+	}
+}
+
+func (s *Server) StopDestination(ctx context.Context, req *pb.StopDestinationRequest) (*pb.StopDestinationResponse, error) {
+	cmd, err := protocol.CommandFromStopDestinationProto(req.Command)
+	if err != nil {
+		return nil, fmt.Errorf("command from proto: %w", err)
+	}
+
+	evt, err := s.dispatchSync(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("dispatch command: %w", err)
+	}
+
+	switch e := evt.(type) {
+	case event.DestinationStoppedEvent:
+		return &pb.StopDestinationResponse{
+			Result: &pb.StopDestinationResponse_Ok{
+				Ok: protocol.DestinationStoppedEventToProto(e),
+			},
+		}, nil
+	case event.StopDestinationFailedEvent:
+		return &pb.StopDestinationResponse{
+			Result: &pb.StopDestinationResponse_Error{
+				Error: protocol.StopDestinationFailedEventToProto(e),
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("unexpected event type: %T", e)
 	}
 }

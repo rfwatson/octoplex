@@ -13,8 +13,8 @@ import (
 func TestBus(t *testing.T) {
 	bus := event.NewBus(testhelpers.NewTestLogger(t))
 
-	ch1 := bus.Register()
-	ch2 := bus.Register()
+	clientID1, ch1 := bus.Register()
+	_, ch2 := bus.Register()
 
 	evt := event.DestinationAddedEvent{ID: uuid.New()}
 
@@ -29,7 +29,7 @@ func TestBus(t *testing.T) {
 	assert.Equal(t, evt, (<-ch2).(event.DestinationAddedEvent))
 	assert.Equal(t, evt, (<-ch2).(event.DestinationAddedEvent))
 
-	bus.Deregister(ch1)
+	bus.Deregister(clientID1)
 
 	_, ok := <-ch1
 	assert.False(t, ok)

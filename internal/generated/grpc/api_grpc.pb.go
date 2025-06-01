@@ -23,6 +23,11 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type InternalAPIClient interface {
 	Communicate(ctx context.Context, opts ...grpc.CallOption) (InternalAPI_CommunicateClient, error)
+	AddDestination(ctx context.Context, in *AddDestinationRequest, opts ...grpc.CallOption) (*AddDestinationResponse, error)
+	UpdateDestination(ctx context.Context, in *UpdateDestinationRequest, opts ...grpc.CallOption) (*UpdateDestinationResponse, error)
+	RemoveDestination(ctx context.Context, in *RemoveDestinationRequest, opts ...grpc.CallOption) (*RemoveDestinationResponse, error)
+	StartDestination(ctx context.Context, in *StartDestinationRequest, opts ...grpc.CallOption) (*StartDestinationResponse, error)
+	StopDestination(ctx context.Context, in *StopDestinationRequest, opts ...grpc.CallOption) (*StopDestinationResponse, error)
 }
 
 type internalAPIClient struct {
@@ -64,11 +69,61 @@ func (x *internalAPICommunicateClient) Recv() (*Envelope, error) {
 	return m, nil
 }
 
+func (c *internalAPIClient) AddDestination(ctx context.Context, in *AddDestinationRequest, opts ...grpc.CallOption) (*AddDestinationResponse, error) {
+	out := new(AddDestinationResponse)
+	err := c.cc.Invoke(ctx, "/api.InternalAPI/AddDestination", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *internalAPIClient) UpdateDestination(ctx context.Context, in *UpdateDestinationRequest, opts ...grpc.CallOption) (*UpdateDestinationResponse, error) {
+	out := new(UpdateDestinationResponse)
+	err := c.cc.Invoke(ctx, "/api.InternalAPI/UpdateDestination", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *internalAPIClient) RemoveDestination(ctx context.Context, in *RemoveDestinationRequest, opts ...grpc.CallOption) (*RemoveDestinationResponse, error) {
+	out := new(RemoveDestinationResponse)
+	err := c.cc.Invoke(ctx, "/api.InternalAPI/RemoveDestination", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *internalAPIClient) StartDestination(ctx context.Context, in *StartDestinationRequest, opts ...grpc.CallOption) (*StartDestinationResponse, error) {
+	out := new(StartDestinationResponse)
+	err := c.cc.Invoke(ctx, "/api.InternalAPI/StartDestination", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *internalAPIClient) StopDestination(ctx context.Context, in *StopDestinationRequest, opts ...grpc.CallOption) (*StopDestinationResponse, error) {
+	out := new(StopDestinationResponse)
+	err := c.cc.Invoke(ctx, "/api.InternalAPI/StopDestination", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // InternalAPIServer is the server API for InternalAPI service.
 // All implementations must embed UnimplementedInternalAPIServer
 // for forward compatibility
 type InternalAPIServer interface {
 	Communicate(InternalAPI_CommunicateServer) error
+	AddDestination(context.Context, *AddDestinationRequest) (*AddDestinationResponse, error)
+	UpdateDestination(context.Context, *UpdateDestinationRequest) (*UpdateDestinationResponse, error)
+	RemoveDestination(context.Context, *RemoveDestinationRequest) (*RemoveDestinationResponse, error)
+	StartDestination(context.Context, *StartDestinationRequest) (*StartDestinationResponse, error)
+	StopDestination(context.Context, *StopDestinationRequest) (*StopDestinationResponse, error)
 	mustEmbedUnimplementedInternalAPIServer()
 }
 
@@ -78,6 +133,21 @@ type UnimplementedInternalAPIServer struct {
 
 func (UnimplementedInternalAPIServer) Communicate(InternalAPI_CommunicateServer) error {
 	return status.Errorf(codes.Unimplemented, "method Communicate not implemented")
+}
+func (UnimplementedInternalAPIServer) AddDestination(context.Context, *AddDestinationRequest) (*AddDestinationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddDestination not implemented")
+}
+func (UnimplementedInternalAPIServer) UpdateDestination(context.Context, *UpdateDestinationRequest) (*UpdateDestinationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateDestination not implemented")
+}
+func (UnimplementedInternalAPIServer) RemoveDestination(context.Context, *RemoveDestinationRequest) (*RemoveDestinationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveDestination not implemented")
+}
+func (UnimplementedInternalAPIServer) StartDestination(context.Context, *StartDestinationRequest) (*StartDestinationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartDestination not implemented")
+}
+func (UnimplementedInternalAPIServer) StopDestination(context.Context, *StopDestinationRequest) (*StopDestinationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopDestination not implemented")
 }
 func (UnimplementedInternalAPIServer) mustEmbedUnimplementedInternalAPIServer() {}
 
@@ -118,13 +188,124 @@ func (x *internalAPICommunicateServer) Recv() (*Envelope, error) {
 	return m, nil
 }
 
+func _InternalAPI_AddDestination_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddDestinationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InternalAPIServer).AddDestination(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.InternalAPI/AddDestination",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InternalAPIServer).AddDestination(ctx, req.(*AddDestinationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InternalAPI_UpdateDestination_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateDestinationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InternalAPIServer).UpdateDestination(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.InternalAPI/UpdateDestination",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InternalAPIServer).UpdateDestination(ctx, req.(*UpdateDestinationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InternalAPI_RemoveDestination_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveDestinationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InternalAPIServer).RemoveDestination(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.InternalAPI/RemoveDestination",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InternalAPIServer).RemoveDestination(ctx, req.(*RemoveDestinationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InternalAPI_StartDestination_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartDestinationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InternalAPIServer).StartDestination(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.InternalAPI/StartDestination",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InternalAPIServer).StartDestination(ctx, req.(*StartDestinationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InternalAPI_StopDestination_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopDestinationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InternalAPIServer).StopDestination(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.InternalAPI/StopDestination",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InternalAPIServer).StopDestination(ctx, req.(*StopDestinationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // InternalAPI_ServiceDesc is the grpc.ServiceDesc for InternalAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var InternalAPI_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "api.InternalAPI",
 	HandlerType: (*InternalAPIServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "AddDestination",
+			Handler:    _InternalAPI_AddDestination_Handler,
+		},
+		{
+			MethodName: "UpdateDestination",
+			Handler:    _InternalAPI_UpdateDestination_Handler,
+		},
+		{
+			MethodName: "RemoveDestination",
+			Handler:    _InternalAPI_RemoveDestination_Handler,
+		},
+		{
+			MethodName: "StartDestination",
+			Handler:    _InternalAPI_StartDestination_Handler,
+		},
+		{
+			MethodName: "StopDestination",
+			Handler:    _InternalAPI_StopDestination_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Communicate",
