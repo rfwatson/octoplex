@@ -46,8 +46,8 @@ macOS: https://docs.docker.com/desktop/setup/install/mac-install/
 Octoplex can be installed using Homebrew on macOS or Linux.
 
 ```
-$ brew tap rfwatson/octoplex
-$ brew install octoplex
+brew tap rfwatson/octoplex
+brew install octoplex
 ```
 
 #### From GitHub
@@ -71,8 +71,8 @@ Mode|Pick this when you...
 
 ### All-in-one
 
-```bash
-$ octoplex run
+```shell
+octoplex run
 ```
 
 Starts the Octoplex server **and** the terminal UI in one process.
@@ -83,23 +83,65 @@ _Docker must be running on the same machine._
 
 1. **Start the server** (on the host that has Docker):
 
-```bash
-$ octoplex server start
+```shell
+octoplex server start
 ```
 
 2. **Connect the client** (from your laptop or any host):
 
-```bash
-$ octoplex client start # --host my.remotehost.com if on a different host
+```shell
+octoplex client start # --host my.remotehost.com if on a different host
 ```
 
 `client start` is a lightweight TUI and **does not need Docker to be installed**.
 
 3. **Stop the server** (and clean up any Docker resources) on the remote host:
 
-```bash
-$ octoplex server stop
+```shell
+octoplex server stop
 ```
+
+## Interacting with Octoplex
+
+### Command-line interface (CLI)
+
+Besides the interactive TUI, you can manage Octoplex with one-off command-line calls.
+
+Don't forget to replace `<PLACEHOLDER>` strings with your own values.
+
+#### Add a destination
+
+```shell
+octoplex client destination add --name "<NAME>" --url "<RTMP_URL>"
+```
+
+Make a note of the destination ID that is printed to the terminal, e.g. `036e2a81-dc85-4758-ab04-303849f35cd3`.
+
+#### Update a destination
+
+```shell
+octoplex client destination update --id "<DESTINATION_ID>" --url "<RTMP_URL>"
+```
+
+#### Start a destination
+
+```shell
+octoplex client destination start --id "<DESTINATION_ID>"
+```
+
+#### Stop a destination
+
+```shell
+octoplex client destination stop --id "<DESTINATION_ID>"
+```
+
+#### Remove a destination
+
+```shell
+octoplex client destination remove --id "<DESTINATION_ID>"
+```
+
+> **:information_source: Tip** Pass `--force` (or `-f`) to remove the destination even if it's live.
 
 ### Subcommand reference
 
@@ -109,6 +151,11 @@ Subcommand|Description
 `octoplex server start`|Start the Octoplex server
 `octoplex server stop`|Stop the Octoplex server
 `octoplex client start`|Start the Octoplex TUI client
+`octoplex client destination add`|Add a destination
+`octoplex client destination update`|Update a destination
+`octoplex client destination remove`|Remove a destination
+`octoplex client destination start`|Start streaming to a destination
+`octoplex client destination stop`|Stop streaming to a destination
 `octoplex version`|Print the version
 `octoplex help`|Print help screen
 
@@ -142,7 +189,7 @@ Flag|Alias|Default|Description
 
 :information_source: When running in all-in-one mode (`octoplex run`) some flags may be overridden or unavailable.
 
-## Usage
+## Restreaming with Octoplex
 
 ### Restreaming with OBS
 
@@ -173,13 +220,13 @@ section above.
 #### RTMP
 
 ```
-$ ffmpeg -i input.mp4 -c copy -f flv rtmp://localhost:1935/live
+ffmpeg -i input.mp4 -c copy -f flv rtmp://localhost:1935/live
 ```
 
 #### RTMPS
 
 ```
-$ ffmpeg -i input.mp4 -c copy -f flv rtmps://localhost:1936/live
+ffmpeg -i input.mp4 -c copy -f flv rtmps://localhost:1936/live
 ```
 
 ## Advanced
@@ -198,7 +245,7 @@ directly on the host rather than in a container.
 
 Run the Octoplex gRPC server on all interfaces (port 50051):
 
-```bash
+```shell
 docker run \
   --name octoplex                              \
   -v octoplex-data:/data                       \
