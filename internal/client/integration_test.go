@@ -19,8 +19,8 @@ import (
 
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/container"
-	"git.netflux.io/rob/octoplex/internal/container/mocks"
 	"git.netflux.io/rob/octoplex/internal/domain"
+	containermocks "git.netflux.io/rob/octoplex/internal/generated/mocks/container"
 	"git.netflux.io/rob/octoplex/internal/server"
 	"git.netflux.io/rob/octoplex/internal/shortid"
 	"git.netflux.io/rob/octoplex/internal/store"
@@ -1158,7 +1158,7 @@ func TestIntegrationDockerClientError(t *testing.T) {
 
 	logger := testhelpers.NewTestLogger(t).With("component", "integration")
 
-	var dockerClient mocks.DockerClient
+	var dockerClient containermocks.DockerClient
 	dockerClient.EXPECT().NetworkCreate(mock.Anything, mock.Anything, mock.Anything).Return(network.CreateResponse{}, errors.New("boom"))
 
 	screen, screenCaptureC, getContents := setupSimulationScreen(t)

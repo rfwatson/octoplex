@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"git.netflux.io/rob/octoplex/internal/mediaserver/mocks"
+	mediaservermocks "git.netflux.io/rob/octoplex/internal/generated/mocks/mediaserver"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -55,7 +55,7 @@ func TestFetchPath(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var httpClient mocks.HTTPClient
+			var httpClient mediaservermocks.HTTPClient
 			httpClient.
 				EXPECT().
 				Do(mock.MatchedBy(func(req *http.Request) bool {

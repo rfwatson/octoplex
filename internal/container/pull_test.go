@@ -6,8 +6,8 @@ import (
 	"io"
 	"testing"
 
-	"git.netflux.io/rob/octoplex/internal/container/mocks"
 	"git.netflux.io/rob/octoplex/internal/domain"
+	containermocks "git.netflux.io/rob/octoplex/internal/generated/mocks/container"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"github.com/docker/docker/api/types/image"
 	"github.com/stretchr/testify/assert"
@@ -24,7 +24,7 @@ func TestHandleImagePull(t *testing.T) {
 	const imageName = "alpine"
 	containerStateC := make(chan domain.Container)
 
-	var dockerClient mocks.DockerClient
+	var dockerClient containermocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
 
 	dockerClient.

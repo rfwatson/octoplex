@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/container"
-	"git.netflux.io/rob/octoplex/internal/container/mocks"
+	containermocks "git.netflux.io/rob/octoplex/internal/generated/mocks/container"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
@@ -32,7 +32,7 @@ func TestClientRunContainer(t *testing.T) {
 	eventsC := make(chan events.Message)
 	eventsErrC := make(chan error)
 
-	var dockerClient mocks.DockerClient
+	var dockerClient containermocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
 
 	dockerClient.
@@ -139,7 +139,7 @@ func TestClientRunContainerWithRestart(t *testing.T) {
 	eventsC := make(chan events.Message)
 	eventsErrC := make(chan error)
 
-	var dockerClient mocks.DockerClient
+	var dockerClient containermocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
 
 	dockerClient.
@@ -249,7 +249,7 @@ func TestClientRunContainerWithRestart(t *testing.T) {
 func TestClientRunContainerErrorStartingContainer(t *testing.T) {
 	logger := testhelpers.NewTestLogger(t)
 
-	var dockerClient mocks.DockerClient
+	var dockerClient containermocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
 
 	dockerClient.
@@ -295,7 +295,7 @@ func TestClientRunContainerErrorStartingContainer(t *testing.T) {
 func TestClientClose(t *testing.T) {
 	logger := testhelpers.NewTestLogger(t)
 
-	var dockerClient mocks.DockerClient
+	var dockerClient containermocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
 
 	dockerClient.
@@ -334,7 +334,7 @@ func TestClientClose(t *testing.T) {
 func TestRemoveUnusedNetworks(t *testing.T) {
 	logger := testhelpers.NewTestLogger(t)
 
-	var dockerClient mocks.DockerClient
+	var dockerClient containermocks.DockerClient
 	defer dockerClient.AssertExpectations(t)
 
 	dockerClient.

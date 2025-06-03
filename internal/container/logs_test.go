@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.netflux.io/rob/octoplex/internal/container/mocks"
+	containermocks "git.netflux.io/rob/octoplex/internal/generated/mocks/container"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	typescontainer "github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/assert"
@@ -13,7 +13,7 @@ import (
 )
 
 func TestGetLogs(t *testing.T) {
-	var dockerClient mocks.DockerClient
+	var dockerClient containermocks.DockerClient
 	dockerClient.
 		EXPECT().
 		ContainerLogs(mock.Anything, "123", typescontainer.LogsOptions{ShowStderr: true, Follow: true}).
