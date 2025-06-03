@@ -27,7 +27,10 @@ message UpdateDestinationCommand {
   optional string url = 3;
 }
 
-message RemoveDestinationCommand { bytes id = 1; }
+message RemoveDestinationCommand {
+  bytes id = 1;
+  bool force = 2;
+}
 
 message StartDestinationCommand { bytes id = 1; }
 

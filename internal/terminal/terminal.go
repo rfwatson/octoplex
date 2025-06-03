@@ -975,7 +975,7 @@ func (ui *UI) removeDestination() {
 		false,
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.dispatch(event.CommandRemoveDestination{ID: destinationID})
+				ui.dispatch(event.CommandRemoveDestination{ID: destinationID, Force: true})
 			}
 		},
 	)

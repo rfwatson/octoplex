@@ -129,7 +129,7 @@ func (a *App) UpdateDestination(ctx context.Context, destinationID string, name,
 	}
 }
 
-func (a *App) RemoveDestination(ctx context.Context, destinationID string) error {
+func (a *App) RemoveDestination(ctx context.Context, destinationID string, force bool) error {
 	id, err := parseID(destinationID)
 	if err != nil {
 		return fmt.Errorf("parse ID: %w", err)
@@ -144,7 +144,7 @@ func (a *App) RemoveDestination(ctx context.Context, destinationID string) error
 	apiClient := pb.NewInternalAPIClient(conn)
 
 	resp, err := apiClient.RemoveDestination(ctx, &pb.RemoveDestinationRequest{
-		Command: &pb.RemoveDestinationCommand{Id: id[:]},
+		Command: &pb.RemoveDestinationCommand{Id: id[:], Force: force},
 	})
 	if err != nil {
 		return fmt.Errorf("call API: %w", err)

@@ -30,7 +30,8 @@ func (c CommandUpdateDestination) Name() string {
 
 // CommandRemoveDestination removes a destination.
 type CommandRemoveDestination struct {
-	ID uuid.UUID
+	ID    uuid.UUID
+	Force bool // Remove the destination even if it is running.
 }
 
 // Name implements the Command interface.

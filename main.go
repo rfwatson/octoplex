@@ -255,6 +255,11 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 										Name:  "id",
 										Usage: "ID of the destination to remove",
 									},
+									&cli.BoolFlag{
+										Name:    "force",
+										Usage:   "Force remove the destination even if it is live",
+										Aliases: []string{"f"},
+									},
 								},
 								Action: func(ctx context.Context, c *cli.Command) error {
 									destID := idFromArgOrFlag(c)
@@ -267,7 +272,7 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 										return fmt.Errorf("build client: %w", err)
 									}
 
-									if err := client.RemoveDestination(ctx, destID); err != nil {
+									if err := client.RemoveDestination(ctx, destID, c.Bool("force")); err != nil {
 										return fmt.Errorf("remove destination: %w", err)
 									} else {
 										os.Stderr.WriteString("OK\n")

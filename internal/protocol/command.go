@@ -79,7 +79,7 @@ func UpdateDestinationCommandToProto(cmd event.CommandUpdateDestination) *pb.Upd
 
 // RemoveDestinationCommandToProto converts a RemoveDestinationCommand to a protobuf message.
 func RemoveDestinationCommandToProto(cmd event.CommandRemoveDestination) *pb.RemoveDestinationCommand {
-	return &pb.RemoveDestinationCommand{Id: cmd.ID[:]}
+	return &pb.RemoveDestinationCommand{Id: cmd.ID[:], Force: cmd.Force}
 }
 
 // StartDestinationCommandToProto converts a StartDestinationCommand to a protobuf message.
@@ -168,7 +168,7 @@ func CommandFromRemoveDestinationProto(cmd *pb.RemoveDestinationCommand) (event.
 		return nil, fmt.Errorf("parse ID: %w", err)
 	}
 
-	return event.CommandRemoveDestination{ID: id}, nil
+	return event.CommandRemoveDestination{ID: id, Force: cmd.Force}, nil
 }
 
 // CommandFromStartDestinationProto converts a protobuf StartDestinationCommand to a domain command.

@@ -384,8 +384,11 @@ func (a *App) handleCommand(
 			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: fmt.Errorf("destination not found")}, nil
 		}
 
-		// TODO: fail early if live?
 		dest := state.Destinations[idx]
+		if dest.Status == domain.DestinationStatusLive && !c.Force {
+			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: errors.New("destination is live")}, nil
+		}
+
 		repl.StopDestination(dest.URL) // no-op if not live
 		newState.Destinations = slices.Delete(newState.Destinations, idx, idx+1)
 

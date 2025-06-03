@@ -73,11 +73,12 @@ func TestCommandToProto(t *testing.T) {
 		},
 		{
 			name: "RemoveDestination",
-			in:   event.CommandRemoveDestination{ID: id},
+			in:   event.CommandRemoveDestination{ID: id, Force: true},
 			want: &pb.Command{
 				CommandType: &pb.Command_RemoveDestination{
 					RemoveDestination: &pb.RemoveDestinationCommand{
-						Id: id[:],
+						Id:    id[:],
+						Force: true,
 					},
 				},
 			},
@@ -193,12 +194,13 @@ func TestUnwrappedCommandConversion(t *testing.T) {
 	})
 
 	t.Run("RemoveDestinationCommand", func(t *testing.T) {
-		domainCmd := event.CommandRemoveDestination{ID: id}
+		domainCmd := event.CommandRemoveDestination{ID: id, Force: true}
 
 		// Conversion to proto
 		protoCmd := protocol.RemoveDestinationCommandToProto(domainCmd)
 		assert.NotNil(t, protoCmd)
 		assert.Equal(t, id[:], protoCmd.Id)
+		assert.True(t, protoCmd.Force)
 
 		// Conversion from proto
 		resultCmd, err := protocol.CommandFromRemoveDestinationProto(protoCmd)
