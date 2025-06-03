@@ -802,13 +802,27 @@ func TestIntegrationUpdateDestination(t *testing.T) {
 			contents := getContents()
 
 			assert.False(c, contentsIncludes(contents, "Save changes"), "expected not to see update destination form")
-			assert.True(c, contentsIncludes(contents, "New name           rtmp://rtmp.example.com/live2           off-air"), "expected to see updated destination")
+			assert.True(c, contentsIncludes(contents, "New name                     off-air"), "expected to see updated destination")
 		},
 		waitTime,
 		time.Second,
 		"expected the destination to be updated",
 	)
 	printScreen(t, getContents, "After updating the destination")
+
+	sendKey(t, screen, tcell.KeyRune, 'e')
+
+	require.EventuallyWithT(
+		t,
+		func(c *assert.CollectT) {
+			contents := getContents()
+			assert.True(c, contentsIncludes(contents, "RTMP URL rtmp://rtmp.example.com/live2"), "expected to see updated destination")
+		},
+		waitTime,
+		time.Second,
+		"expected the destination to be updated",
+	)
+	printScreen(t, getContents, "After reopening the update destination form")
 
 	cancel()
 

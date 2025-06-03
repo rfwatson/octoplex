@@ -80,6 +80,11 @@ type UI struct {
 	lastSelectedDestIndex int
 }
 
+type destination struct {
+	id  uuid.UUID
+	url string
+}
+
 // Screen represents a terminal screen. This includes its desired dimensions,
 // which is required to initialize the tcell.SimulationScreen.
 type Screen struct {
@@ -746,23 +751,21 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 
 	ui.destView.Clear()
 	ui.destView.SetCell(0, 0, headerCell("[grey]"+headerName, 3))
-	ui.destView.SetCell(0, 1, headerCell("[grey]"+headerURL, 3))
-	ui.destView.SetCell(0, 2, headerCell("[grey]"+headerStatus, 2))
-	ui.destView.SetCell(0, 3, headerCell("[grey]"+headerContainer, 2))
-	ui.destView.SetCell(0, 4, headerCell("[grey]"+headerHealth, 2))
-	ui.destView.SetCell(0, 5, headerCell("[grey]"+headerCPU, 1))
-	ui.destView.SetCell(0, 6, headerCell("[grey]"+headerMem, 1))
-	ui.destView.SetCell(0, 7, headerCell("[grey]"+headerTx, 1))
+	ui.destView.SetCell(0, 1, headerCell("[grey]"+headerStatus, 2))
+	ui.destView.SetCell(0, 2, headerCell("[grey]"+headerContainer, 2))
+	ui.destView.SetCell(0, 3, headerCell("[grey]"+headerHealth, 2))
+	ui.destView.SetCell(0, 4, headerCell("[grey]"+headerCPU, 1))
+	ui.destView.SetCell(0, 5, headerCell("[grey]"+headerMem, 1))
+	ui.destView.SetCell(0, 6, headerCell("[grey]"+headerTx, 1))
 
 	for i, dest := range state.Destinations {
-		ui.destView.SetCell(i+1, 0, tview.NewTableCell(dest.Name).SetReference(dest.ID).SetMaxWidth(20))
-		ui.destView.SetCell(i+1, 1, tview.NewTableCell(dest.URL))
+		ui.destView.SetCell(i+1, 0, tview.NewTableCell(dest.Name).SetReference(destination{dest.ID, dest.URL}).SetMaxWidth(20))
 		const statusLen = 10
 		switch dest.Status {
 		case domain.DestinationStatusLive:
 			ui.destView.SetCell(
 				i+1,
-				2,
+				1,
 				tview.NewTableCell(rightPad("sending", statusLen)).
 					SetTextColor(tcell.ColorBlack).
 					SetBackgroundColor(tcell.ColorGreen).
@@ -774,34 +777,34 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 					),
 			)
 		default:
-			ui.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+rightPad("off-air", statusLen)))
+			ui.destView.SetCell(i+1, 1, tview.NewTableCell("[white]"+rightPad("off-air", statusLen)))
 		}
 
-		ui.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+rightPad(cmp.Or(dest.Container.Status, dash), 10)))
+		ui.destView.SetCell(i+1, 2, tview.NewTableCell("[white]"+rightPad(cmp.Or(dest.Container.Status, dash), 10)))
 
 		healthState := dash
 		if dest.Status == domain.DestinationStatusLive {
 			healthState = "healthy"
 		}
-		ui.destView.SetCell(i+1, 4, tview.NewTableCell("[white]"+rightPad(healthState, 7)))
+		ui.destView.SetCell(i+1, 3, tview.NewTableCell("[white]"+rightPad(healthState, 7)))
 
 		cpuPercent := dash
 		if dest.Container.Status == domain.ContainerStatusRunning {
 			cpuPercent = fmt.Sprintf("%.1f", dest.Container.CPUPercent)
 		}
-		ui.destView.SetCell(i+1, 5, tview.NewTableCell("[white]"+rightPad(cpuPercent, 4)))
+		ui.destView.SetCell(i+1, 4, tview.NewTableCell("[white]"+rightPad(cpuPercent, 4)))
 
 		memoryUsage := dash
 		if dest.Container.Status == domain.ContainerStatusRunning {
 			memoryUsage = fmt.Sprintf("%.1f", float64(dest.Container.MemoryUsageBytes)/1000/1000)
 		}
-		ui.destView.SetCell(i+1, 6, tview.NewTableCell("[white]"+rightPad(memoryUsage, 4)))
+		ui.destView.SetCell(i+1, 5, tview.NewTableCell("[white]"+rightPad(memoryUsage, 4)))
 
 		txRate := dash
 		if dest.Container.Status == domain.ContainerStatusRunning {
 			txRate = "[white]" + rightPad(strconv.Itoa(dest.Container.TxRate), 4)
 		}
-		ui.destView.SetCell(i+1, 7, tview.NewTableCell(txRate))
+		ui.destView.SetCell(i+1, 6, tview.NewTableCell(txRate))
 	}
 
 	// actions view
@@ -881,10 +884,10 @@ func (ui *UI) updateDestination() {
 		return
 	}
 
-	destinationID := ui.destView.GetCell(row, 0).GetReference().(uuid.UUID)
+	dest := ui.destView.GetCell(row, 0).GetReference().(destination)
 	var isLive bool
 	ui.mu.Lock()
-	isLive = ui.destinationIDsToStartState[destinationID] != startStateNotStarted
+	isLive = ui.destinationIDsToStartState[dest.id] != startStateNotStarted
 	ui.mu.Unlock()
 
 	if isLive {
@@ -900,13 +903,12 @@ func (ui *UI) updateDestination() {
 	}
 
 	name := ui.destView.GetCell(row, 0).Text
-	url := ui.destView.GetCell(row, 1).Text
 
-	form := ui.buildDestinationForm(name, url)
+	form := ui.buildDestinationForm(name, dest.url)
 	form.SetTitle("Edit destination")
 	form.AddButton("Save changes", func() {
 		ui.dispatch(event.CommandUpdateDestination{
-			ID:              destinationID,
+			ID:              dest.id,
 			DestinationName: optional.New(form.GetFormItemByLabel(formInputLabelName).(*tview.InputField).GetText()),
 			URL:             optional.New(form.GetFormItemByLabel(formInputLabelURL).(*tview.InputField).GetText()),
 		})
@@ -953,14 +955,14 @@ func (ui *UI) buildDestinationForm(nameValue, urlValue string) *tview.Form {
 
 func (ui *UI) removeDestination() {
 	row, _ := ui.destView.GetSelection()
-	destinationID, ok := ui.destView.GetCell(row, 0).GetReference().(uuid.UUID)
+	dest, ok := ui.destView.GetCell(row, 0).GetReference().(destination)
 	if !ok {
 		return
 	}
 
 	var started bool
 	ui.mu.Lock()
-	started = ui.destinationIDsToStartState[destinationID] != startStateNotStarted
+	started = ui.destinationIDsToStartState[dest.id] != startStateNotStarted
 	ui.mu.Unlock()
 
 	text := "Are you sure you want to remove the destination?"
@@ -975,7 +977,7 @@ func (ui *UI) removeDestination() {
 		false,
 		func(buttonIndex int, _ string) {
 			if buttonIndex == 0 {
-				ui.dispatch(event.CommandRemoveDestination{ID: destinationID, Force: true})
+				ui.dispatch(event.CommandRemoveDestination{ID: dest.id, Force: true})
 			}
 		},
 	)
@@ -1035,7 +1037,7 @@ func (ui *UI) closeUpdateDestinationForm() {
 
 func (ui *UI) toggleDestination() {
 	row, _ := ui.destView.GetSelection()
-	destinationID, ok := ui.destView.GetCell(row, 0).GetReference().(uuid.UUID)
+	dest, ok := ui.destView.GetCell(row, 0).GetReference().(destination)
 	if !ok {
 		return
 	}
@@ -1055,16 +1057,16 @@ func (ui *UI) toggleDestination() {
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
-	ss := ui.destinationIDsToStartState[destinationID]
+	ss := ui.destinationIDsToStartState[dest.id]
 	switch ss {
 	case startStateNotStarted:
-		ui.destinationIDsToStartState[destinationID] = startStateStarting
-		ui.dispatch(event.CommandStartDestination{ID: destinationID})
+		ui.destinationIDsToStartState[dest.id] = startStateStarting
+		ui.dispatch(event.CommandStartDestination{ID: dest.id})
 	case startStateStarting:
 		// do nothing
 		return
 	case startStateStarted:
-		ui.dispatch(event.CommandStopDestination{ID: destinationID})
+		ui.dispatch(event.CommandStopDestination{ID: dest.id})
 	}
 }
 
