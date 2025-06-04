@@ -70,12 +70,12 @@ var (
 )
 
 func main() {
-	if err := run(context.Background(), os.Stderr, os.Args); err != nil {
+	if err := run(context.Background(), os.Stdout, os.Stderr, os.Args); err != nil {
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, stderr io.Writer, args []string) error {
+func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 	app := &cli.Command{
 		Name:  "octoplex",
 		Usage: "Live video restreamer for Docker",
@@ -194,7 +194,7 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 									if id, err := client.AddDestination(ctx, c.String("name"), c.String("url")); err != nil {
 										return fmt.Errorf("add destination: %w", err)
 									} else {
-										os.Stderr.WriteString(id + "\n")
+										stdout.Write([]byte(id + "\n"))
 										return nil
 									}
 								},
@@ -241,7 +241,7 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 									if err := client.UpdateDestination(ctx, destID, name, url); err != nil {
 										return fmt.Errorf("update destination: %w", err)
 									} else {
-										os.Stderr.WriteString("OK\n")
+										stdout.Write([]byte("OK\n"))
 										return nil
 									}
 								},
@@ -275,7 +275,7 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 									if err := client.RemoveDestination(ctx, destID, c.Bool("force")); err != nil {
 										return fmt.Errorf("remove destination: %w", err)
 									} else {
-										os.Stderr.WriteString("OK\n")
+										stdout.Write([]byte("OK\n"))
 										return nil
 									}
 								},
@@ -304,7 +304,7 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 									if err := client.StartDestination(ctx, destID); err != nil {
 										return fmt.Errorf("start destination: %w", err)
 									} else {
-										os.Stderr.WriteString("OK\n")
+										stdout.Write([]byte("OK\n"))
 										return nil
 									}
 								},
@@ -333,7 +333,7 @@ func run(ctx context.Context, stderr io.Writer, args []string) error {
 									if err := client.StopDestination(ctx, destID); err != nil {
 										return fmt.Errorf("stop destination: %w", err)
 									} else {
-										os.Stderr.WriteString("OK\n")
+										stdout.Write([]byte("OK\n"))
 										return nil
 									}
 								},

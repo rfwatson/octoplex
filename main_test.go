@@ -77,13 +77,13 @@ func TestIntegrationRunServer(t *testing.T) {
 			var err error
 			done := make(chan struct{})
 
-			var stderr concurrentBuffer
+			var stdout, stderr concurrentBuffer
 
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
 			go func() {
-				err = run(ctx, &stderr, tc.args)
+				err = run(ctx, &stdout, &stderr, tc.args)
 
 				done <- struct{}{}
 			}()

@@ -399,16 +399,16 @@ func (a *App) handleCommand(
 		a.handlePersistentStateUpdate(state)
 		return event.DestinationRemovedEvent{ID: c.ID}, nil, nil //nolint:gosimple
 	case event.CommandStartDestination:
-		if !state.Source.Live {
-			return nil, event.StartDestinationFailedEvent{ID: c.ID, Err: errors.New("source not live")}, nil
-		}
-
 		destIndex := slices.IndexFunc(state.Destinations, func(d domain.Destination) bool {
 			return d.ID == c.ID
 		})
 		if destIndex == -1 {
 			a.logger.Warn("Start destination failed: destination not found", "id", c.ID)
 			return nil, event.StartDestinationFailedEvent{ID: c.ID, Err: fmt.Errorf("destination not found")}, nil
+		}
+
+		if !state.Source.Live {
+			return nil, event.StartDestinationFailedEvent{ID: c.ID, Err: errors.New("source not live")}, nil
 		}
 
 		dest := state.Destinations[destIndex]
