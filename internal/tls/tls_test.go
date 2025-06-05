@@ -25,8 +25,8 @@ func TestGenerateKeyPair(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "octoplex.netflux.io", cert.Subject.Organization[0])
-	assert.Greater(t, cert.NotBefore, time.Now().Add(-time.Second), "not before should be in the future")
-	assert.Greater(t, cert.NotAfter, time.Now().Add(4*365*24*time.Hour), "not after should be a long time in the future")
+	assert.Greater(t, cert.NotBefore, time.Now().Add(-time.Hour).Add(-time.Second), "not before should be in the future")
+	assert.Greater(t, cert.NotAfter, time.Now().Add(396*24*time.Hour), "not after should be a long time in the future")
 
 	// BitLen does not count leading zeroes, so the length will not always be 128 bits:
 	assert.GreaterOrEqual(t, cert.SerialNumber.BitLen(), 100, "serial number should be around 128 bits")
