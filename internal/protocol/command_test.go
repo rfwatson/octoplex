@@ -24,6 +24,15 @@ func TestCommandToProto(t *testing.T) {
 		want *pb.Command
 	}{
 		{
+			name: "ListDestinations",
+			in:   event.CommandListDestinations{},
+			want: &pb.Command{
+				CommandType: &pb.Command_ListDestinations{
+					ListDestinations: &pb.ListDestinationsCommand{},
+				},
+			},
+		},
+		{
 			name: "AddDestination",
 			in: event.CommandAddDestination{
 				DestinationName: "test",
@@ -276,6 +285,15 @@ func TestCommandFromProto(t *testing.T) {
 		in   *pb.Command
 		want event.Command
 	}{
+		{
+			name: "ListDestinations",
+			in: &pb.Command{
+				CommandType: &pb.Command_ListDestinations{
+					ListDestinations: &pb.ListDestinationsCommand{},
+				},
+			},
+			want: event.CommandListDestinations{},
+		},
 		{
 			name: "AddDestination",
 			in: &pb.Command{

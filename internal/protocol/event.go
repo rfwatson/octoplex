@@ -23,6 +23,18 @@ func EventToWrappedProto(ev event.Event) *pb.Event {
 				AppStateChanged: AppStateChangedEventToProto(evt),
 			},
 		}
+	case event.DestinationsListedEvent:
+		return &pb.Event{
+			EventType: &pb.Event_DestinationsListed{
+				DestinationsListed: DestinationsListedEventToProto(evt),
+			},
+		}
+	case event.ListDestinationsFailedEvent:
+		return &pb.Event{
+			EventType: &pb.Event_ListDestinationsFailed{
+				ListDestinationsFailed: ListDestinationsFailedEventToProto(evt),
+			},
+		}
 	case event.DestinationAddedEvent:
 		return &pb.Event{
 			EventType: &pb.Event_DestinationAdded{
@@ -109,6 +121,23 @@ func EventToWrappedProto(ev event.Event) *pb.Event {
 		}
 	default:
 		panic(fmt.Sprintf("unknown event type: %T", ev))
+	}
+}
+
+// DestinationsListedEventToProto converts a DestinationsListedEvent to a protobuf message.
+func DestinationsListedEventToProto(evt event.DestinationsListedEvent) *pb.DestinationsListedEvent {
+	destinations := make([]*pb.Destination, len(evt.Destinations))
+	for i, dest := range evt.Destinations {
+		destinations[i] = DestinationToProto(dest)
+	}
+
+	return &pb.DestinationsListedEvent{Destinations: destinations}
+}
+
+// ListDestinationsFailedEventToProto converts a ListDestinationsFailedEvent to a protobuf message.
+func ListDestinationsFailedEventToProto(evt event.ListDestinationsFailedEvent) *pb.ListDestinationsFailedEvent {
+	return &pb.ListDestinationsFailedEvent{
+		Error: evt.Err.Error(),
 	}
 }
 
@@ -244,6 +273,10 @@ func EventFromWrappedProto(pbEv *pb.Event) (event.Event, error) {
 	switch evt := pbEv.EventType.(type) {
 	case *pb.Event_AppStateChanged:
 		return EventFromAppStateChangedProto(evt.AppStateChanged)
+	case *pb.Event_DestinationsListed:
+		return EventFromDestinationsListedProto(evt.DestinationsListed)
+	case *pb.Event_ListDestinationsFailed:
+		return EventFromListDestinationsFailedProto(evt.ListDestinationsFailed)
 	case *pb.Event_DestinationAdded:
 		return EventFromDestinationAddedProto(evt.DestinationAdded)
 	case *pb.Event_AddDestinationFailed:
@@ -275,6 +308,33 @@ func EventFromWrappedProto(pbEv *pb.Event) (event.Event, error) {
 	default:
 		return nil, fmt.Errorf("unknown event type: %T", evt)
 	}
+}
+
+// EventFromDestinationsListedProto converts a protobuf DestinationsListedEvent to a domain event.
+func EventFromDestinationsListedProto(evt *pb.DestinationsListedEvent) (event.Event, error) {
+	if evt == nil {
+		return nil, fmt.Errorf("nil DestinationsListedEvent")
+	}
+
+	destinations, err := ProtoToDestinations(evt.Destinations)
+	if err != nil {
+		return nil, fmt.Errorf("convert destinations: %w", err)
+	}
+
+	return event.DestinationsListedEvent{
+		Destinations: destinations,
+	}, nil
+}
+
+// EventFromListDestinationsFailedProto converts a protobuf ListDestinationsFailedEvent to a domain event.
+func EventFromListDestinationsFailedProto(evt *pb.ListDestinationsFailedEvent) (event.Event, error) {
+	if evt == nil {
+		return nil, fmt.Errorf("nil ListDestinationsFailedEvent")
+	}
+
+	return event.ListDestinationsFailedEvent{
+		Err: fmt.Errorf("%s", evt.Error),
+	}, nil
 }
 
 // EventFromAppStateChangedProto converts a protobuf AppStateChangedEvent to a domain event.

@@ -3,11 +3,13 @@ syntax = "proto3";
 option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc";
 package api;
 
-import "event.proto";
 import "command.proto";
+import "event.proto";
 
 service InternalAPI {
   rpc Communicate(stream Envelope) returns (stream Envelope);
+  rpc ListDestinations(ListDestinationsRequest)
+      returns (ListDestinationsResponse);
   rpc AddDestination(AddDestinationRequest) returns (AddDestinationResponse);
   rpc UpdateDestination(UpdateDestinationRequest)
       returns (UpdateDestinationResponse);
@@ -22,6 +24,15 @@ message Envelope {
   oneof payload {
     Command command = 1;
     Event event = 2;
+  }
+}
+
+message ListDestinationsRequest { ListDestinationsCommand command = 1; }
+
+message ListDestinationsResponse {
+  oneof result {
+    DestinationsListedEvent ok = 1;
+    ListDestinationsFailedEvent error = 2;
   }
 }
 

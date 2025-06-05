@@ -13,6 +13,12 @@ import (
 // For direct conversion to the specific command type, use the *CommandToProto functions.
 func CommandToWrappedProto(command event.Command) *pb.Command {
 	switch cmd := command.(type) {
+	case event.CommandListDestinations:
+		return &pb.Command{
+			CommandType: &pb.Command_ListDestinations{
+				ListDestinations: ListDestinationsCommandToProto(cmd),
+			},
+		}
 	case event.CommandAddDestination:
 		return &pb.Command{
 			CommandType: &pb.Command_AddDestination{
@@ -58,6 +64,11 @@ func CommandToWrappedProto(command event.Command) *pb.Command {
 	default:
 		panic("unknown command type")
 	}
+}
+
+// ListDestinationsCommandToProto converts a ListDestinationsCommand to a protobuf message.
+func ListDestinationsCommandToProto(event.CommandListDestinations) *pb.ListDestinationsCommand {
+	return &pb.ListDestinationsCommand{}
 }
 
 // AddDestinationCommandToProto converts an AddDestinationCommand to a protobuf message.
@@ -111,6 +122,8 @@ func CommandFromWrappedProto(pbCmd *pb.Command) (event.Command, error) {
 	}
 
 	switch cmd := pbCmd.CommandType.(type) {
+	case *pb.Command_ListDestinations:
+		return CommandFromListDestinationsProto(cmd.ListDestinations)
 	case *pb.Command_AddDestination:
 		return CommandFromAddDestinationProto(cmd.AddDestination)
 	case *pb.Command_UpdateDestination:
@@ -128,6 +141,11 @@ func CommandFromWrappedProto(pbCmd *pb.Command) (event.Command, error) {
 	default:
 		return nil, fmt.Errorf("unknown command type: %T", cmd)
 	}
+}
+
+// CommandFromListDestinationsProto converts a protobuf ListDestinationsCommand to a domain command.
+func CommandFromListDestinationsProto(_ *pb.ListDestinationsCommand) (event.Command, error) {
+	return event.CommandListDestinations{}, nil
 }
 
 // CommandFromAddDestinationProto converts a protobuf AddDestinationCommand to a domain command.

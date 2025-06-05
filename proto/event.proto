@@ -23,6 +23,8 @@ message Event {
     OtherInstanceDetectedEvent other_instance_detected = 14;
     FatalErrorEvent fatal_error = 15;
     HandshakeCompletedEvent handshake_completed = 16;
+    DestinationsListedEvent destinations_listed = 17;
+    ListDestinationsFailedEvent list_destinations_failed = 18;
   }
 }
 
@@ -32,6 +34,10 @@ message DestinationStreamExitedEvent {
   string name = 1;
   string error = 2;
 }
+
+message DestinationsListedEvent { repeated Destination destinations = 1; }
+
+message ListDestinationsFailedEvent { string error = 1; }
 
 message DestinationAddedEvent { bytes id = 1; }
 

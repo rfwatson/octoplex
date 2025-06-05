@@ -109,6 +109,12 @@ Besides the interactive TUI, you can manage Octoplex with one-off command-line c
 
 Don't forget to replace `<PLACEHOLDER>` strings with your own values.
 
+#### List destinations
+
+```shell
+octoplex client destination list
+```
+
 #### Add a destination
 
 ```shell
@@ -151,6 +157,7 @@ Subcommand|Description
 `octoplex server start`|Start the Octoplex server
 `octoplex server stop`|Stop the Octoplex server
 `octoplex client start`|Start the Octoplex TUI client
+`octoplex client destination list`|List existing destinations
 `octoplex client destination add`|Add a destination
 `octoplex client destination update`|Update a destination
 `octoplex client destination remove`|Remove a destination

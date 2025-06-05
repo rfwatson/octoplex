@@ -43,6 +43,8 @@ type Event struct {
 	//	*Event_OtherInstanceDetected
 	//	*Event_FatalError
 	//	*Event_HandshakeCompleted
+	//	*Event_DestinationsListed
+	//	*Event_ListDestinationsFailed
 	EventType isEvent_EventType `protobuf_oneof:"event_type"`
 }
 
@@ -197,6 +199,20 @@ func (x *Event) GetHandshakeCompleted() *HandshakeCompletedEvent {
 	return nil
 }
 
+func (x *Event) GetDestinationsListed() *DestinationsListedEvent {
+	if x, ok := x.GetEventType().(*Event_DestinationsListed); ok {
+		return x.DestinationsListed
+	}
+	return nil
+}
+
+func (x *Event) GetListDestinationsFailed() *ListDestinationsFailedEvent {
+	if x, ok := x.GetEventType().(*Event_ListDestinationsFailed); ok {
+		return x.ListDestinationsFailed
+	}
+	return nil
+}
+
 type isEvent_EventType interface {
 	isEvent_EventType()
 }
@@ -265,6 +281,14 @@ type Event_HandshakeCompleted struct {
 	HandshakeCompleted *HandshakeCompletedEvent `protobuf:"bytes,16,opt,name=handshake_completed,json=handshakeCompleted,proto3,oneof"`
 }
 
+type Event_DestinationsListed struct {
+	DestinationsListed *DestinationsListedEvent `protobuf:"bytes,17,opt,name=destinations_listed,json=destinationsListed,proto3,oneof"`
+}
+
+type Event_ListDestinationsFailed struct {
+	ListDestinationsFailed *ListDestinationsFailedEvent `protobuf:"bytes,18,opt,name=list_destinations_failed,json=listDestinationsFailed,proto3,oneof"`
+}
+
 func (*Event_AppStateChanged) isEvent_EventType() {}
 
 func (*Event_DestinationStreamExited) isEvent_EventType() {}
@@ -296,6 +320,10 @@ func (*Event_OtherInstanceDetected) isEvent_EventType() {}
 func (*Event_FatalError) isEvent_EventType() {}
 
 func (*Event_HandshakeCompleted) isEvent_EventType() {}
+
+func (*Event_DestinationsListed) isEvent_EventType() {}
+
+func (*Event_ListDestinationsFailed) isEvent_EventType() {}
 
 type AppStateChangedEvent struct {
 	state         protoimpl.MessageState
@@ -399,6 +427,100 @@ func (x *DestinationStreamExitedEvent) GetError() string {
 	return ""
 }
 
+type DestinationsListedEvent struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Destinations []*Destination `protobuf:"bytes,1,rep,name=destinations,proto3" json:"destinations,omitempty"`
+}
+
+func (x *DestinationsListedEvent) Reset() {
+	*x = DestinationsListedEvent{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_event_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *DestinationsListedEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DestinationsListedEvent) ProtoMessage() {}
+
+func (x *DestinationsListedEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_event_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DestinationsListedEvent.ProtoReflect.Descriptor instead.
+func (*DestinationsListedEvent) Descriptor() ([]byte, []int) {
+	return file_event_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *DestinationsListedEvent) GetDestinations() []*Destination {
+	if x != nil {
+		return x.Destinations
+	}
+	return nil
+}
+
+type ListDestinationsFailedEvent struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Error string `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+}
+
+func (x *ListDestinationsFailedEvent) Reset() {
+	*x = ListDestinationsFailedEvent{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_event_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ListDestinationsFailedEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDestinationsFailedEvent) ProtoMessage() {}
+
+func (x *ListDestinationsFailedEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_event_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDestinationsFailedEvent.ProtoReflect.Descriptor instead.
+func (*ListDestinationsFailedEvent) Descriptor() ([]byte, []int) {
+	return file_event_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListDestinationsFailedEvent) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 type DestinationAddedEvent struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -410,7 +532,7 @@ type DestinationAddedEvent struct {
 func (x *DestinationAddedEvent) Reset() {
 	*x = DestinationAddedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[3]
+		mi := &file_event_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -423,7 +545,7 @@ func (x *DestinationAddedEvent) String() string {
 func (*DestinationAddedEvent) ProtoMessage() {}
 
 func (x *DestinationAddedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[3]
+	mi := &file_event_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -436,7 +558,7 @@ func (x *DestinationAddedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestinationAddedEvent.ProtoReflect.Descriptor instead.
 func (*DestinationAddedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{3}
+	return file_event_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DestinationAddedEvent) GetId() []byte {
@@ -458,7 +580,7 @@ type AddDestinationFailedEvent struct {
 func (x *AddDestinationFailedEvent) Reset() {
 	*x = AddDestinationFailedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[4]
+		mi := &file_event_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -471,7 +593,7 @@ func (x *AddDestinationFailedEvent) String() string {
 func (*AddDestinationFailedEvent) ProtoMessage() {}
 
 func (x *AddDestinationFailedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[4]
+	mi := &file_event_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -484,7 +606,7 @@ func (x *AddDestinationFailedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddDestinationFailedEvent.ProtoReflect.Descriptor instead.
 func (*AddDestinationFailedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{4}
+	return file_event_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *AddDestinationFailedEvent) GetUrl() string {
@@ -512,7 +634,7 @@ type DestinationUpdatedEvent struct {
 func (x *DestinationUpdatedEvent) Reset() {
 	*x = DestinationUpdatedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[5]
+		mi := &file_event_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -525,7 +647,7 @@ func (x *DestinationUpdatedEvent) String() string {
 func (*DestinationUpdatedEvent) ProtoMessage() {}
 
 func (x *DestinationUpdatedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[5]
+	mi := &file_event_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -538,7 +660,7 @@ func (x *DestinationUpdatedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestinationUpdatedEvent.ProtoReflect.Descriptor instead.
 func (*DestinationUpdatedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{5}
+	return file_event_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *DestinationUpdatedEvent) GetId() []byte {
@@ -560,7 +682,7 @@ type UpdateDestinationFailedEvent struct {
 func (x *UpdateDestinationFailedEvent) Reset() {
 	*x = UpdateDestinationFailedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[6]
+		mi := &file_event_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -573,7 +695,7 @@ func (x *UpdateDestinationFailedEvent) String() string {
 func (*UpdateDestinationFailedEvent) ProtoMessage() {}
 
 func (x *UpdateDestinationFailedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[6]
+	mi := &file_event_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -586,7 +708,7 @@ func (x *UpdateDestinationFailedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateDestinationFailedEvent.ProtoReflect.Descriptor instead.
 func (*UpdateDestinationFailedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{6}
+	return file_event_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *UpdateDestinationFailedEvent) GetId() []byte {
@@ -614,7 +736,7 @@ type DestinationRemovedEvent struct {
 func (x *DestinationRemovedEvent) Reset() {
 	*x = DestinationRemovedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[7]
+		mi := &file_event_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -627,7 +749,7 @@ func (x *DestinationRemovedEvent) String() string {
 func (*DestinationRemovedEvent) ProtoMessage() {}
 
 func (x *DestinationRemovedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[7]
+	mi := &file_event_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -640,7 +762,7 @@ func (x *DestinationRemovedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestinationRemovedEvent.ProtoReflect.Descriptor instead.
 func (*DestinationRemovedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{7}
+	return file_event_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DestinationRemovedEvent) GetId() []byte {
@@ -662,7 +784,7 @@ type RemoveDestinationFailedEvent struct {
 func (x *RemoveDestinationFailedEvent) Reset() {
 	*x = RemoveDestinationFailedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[8]
+		mi := &file_event_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -675,7 +797,7 @@ func (x *RemoveDestinationFailedEvent) String() string {
 func (*RemoveDestinationFailedEvent) ProtoMessage() {}
 
 func (x *RemoveDestinationFailedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[8]
+	mi := &file_event_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -688,7 +810,7 @@ func (x *RemoveDestinationFailedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveDestinationFailedEvent.ProtoReflect.Descriptor instead.
 func (*RemoveDestinationFailedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{8}
+	return file_event_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RemoveDestinationFailedEvent) GetId() []byte {
@@ -716,7 +838,7 @@ type DestinationStartedEvent struct {
 func (x *DestinationStartedEvent) Reset() {
 	*x = DestinationStartedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[9]
+		mi := &file_event_proto_msgTypes[11]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -729,7 +851,7 @@ func (x *DestinationStartedEvent) String() string {
 func (*DestinationStartedEvent) ProtoMessage() {}
 
 func (x *DestinationStartedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[9]
+	mi := &file_event_proto_msgTypes[11]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -742,7 +864,7 @@ func (x *DestinationStartedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestinationStartedEvent.ProtoReflect.Descriptor instead.
 func (*DestinationStartedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{9}
+	return file_event_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DestinationStartedEvent) GetId() []byte {
@@ -764,7 +886,7 @@ type StartDestinationFailedEvent struct {
 func (x *StartDestinationFailedEvent) Reset() {
 	*x = StartDestinationFailedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[10]
+		mi := &file_event_proto_msgTypes[12]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -777,7 +899,7 @@ func (x *StartDestinationFailedEvent) String() string {
 func (*StartDestinationFailedEvent) ProtoMessage() {}
 
 func (x *StartDestinationFailedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[10]
+	mi := &file_event_proto_msgTypes[12]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -790,7 +912,7 @@ func (x *StartDestinationFailedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartDestinationFailedEvent.ProtoReflect.Descriptor instead.
 func (*StartDestinationFailedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{10}
+	return file_event_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *StartDestinationFailedEvent) GetId() []byte {
@@ -818,7 +940,7 @@ type DestinationStoppedEvent struct {
 func (x *DestinationStoppedEvent) Reset() {
 	*x = DestinationStoppedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[11]
+		mi := &file_event_proto_msgTypes[13]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -831,7 +953,7 @@ func (x *DestinationStoppedEvent) String() string {
 func (*DestinationStoppedEvent) ProtoMessage() {}
 
 func (x *DestinationStoppedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[11]
+	mi := &file_event_proto_msgTypes[13]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -844,7 +966,7 @@ func (x *DestinationStoppedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestinationStoppedEvent.ProtoReflect.Descriptor instead.
 func (*DestinationStoppedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{11}
+	return file_event_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *DestinationStoppedEvent) GetId() []byte {
@@ -866,7 +988,7 @@ type StopDestinationFailedEvent struct {
 func (x *StopDestinationFailedEvent) Reset() {
 	*x = StopDestinationFailedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[12]
+		mi := &file_event_proto_msgTypes[14]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -879,7 +1001,7 @@ func (x *StopDestinationFailedEvent) String() string {
 func (*StopDestinationFailedEvent) ProtoMessage() {}
 
 func (x *StopDestinationFailedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[12]
+	mi := &file_event_proto_msgTypes[14]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -892,7 +1014,7 @@ func (x *StopDestinationFailedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopDestinationFailedEvent.ProtoReflect.Descriptor instead.
 func (*StopDestinationFailedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{12}
+	return file_event_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *StopDestinationFailedEvent) GetId() []byte {
@@ -918,7 +1040,7 @@ type MediaServerStartedEvent struct {
 func (x *MediaServerStartedEvent) Reset() {
 	*x = MediaServerStartedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[13]
+		mi := &file_event_proto_msgTypes[15]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -931,7 +1053,7 @@ func (x *MediaServerStartedEvent) String() string {
 func (*MediaServerStartedEvent) ProtoMessage() {}
 
 func (x *MediaServerStartedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[13]
+	mi := &file_event_proto_msgTypes[15]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -944,7 +1066,7 @@ func (x *MediaServerStartedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MediaServerStartedEvent.ProtoReflect.Descriptor instead.
 func (*MediaServerStartedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{13}
+	return file_event_proto_rawDescGZIP(), []int{15}
 }
 
 type OtherInstanceDetectedEvent struct {
@@ -956,7 +1078,7 @@ type OtherInstanceDetectedEvent struct {
 func (x *OtherInstanceDetectedEvent) Reset() {
 	*x = OtherInstanceDetectedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[14]
+		mi := &file_event_proto_msgTypes[16]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -969,7 +1091,7 @@ func (x *OtherInstanceDetectedEvent) String() string {
 func (*OtherInstanceDetectedEvent) ProtoMessage() {}
 
 func (x *OtherInstanceDetectedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[14]
+	mi := &file_event_proto_msgTypes[16]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -982,7 +1104,7 @@ func (x *OtherInstanceDetectedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OtherInstanceDetectedEvent.ProtoReflect.Descriptor instead.
 func (*OtherInstanceDetectedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{14}
+	return file_event_proto_rawDescGZIP(), []int{16}
 }
 
 type FatalErrorEvent struct {
@@ -996,7 +1118,7 @@ type FatalErrorEvent struct {
 func (x *FatalErrorEvent) Reset() {
 	*x = FatalErrorEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[15]
+		mi := &file_event_proto_msgTypes[17]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1009,7 +1131,7 @@ func (x *FatalErrorEvent) String() string {
 func (*FatalErrorEvent) ProtoMessage() {}
 
 func (x *FatalErrorEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[15]
+	mi := &file_event_proto_msgTypes[17]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1022,7 +1144,7 @@ func (x *FatalErrorEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FatalErrorEvent.ProtoReflect.Descriptor instead.
 func (*FatalErrorEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{15}
+	return file_event_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *FatalErrorEvent) GetMessage() string {
@@ -1041,7 +1163,7 @@ type HandshakeCompletedEvent struct {
 func (x *HandshakeCompletedEvent) Reset() {
 	*x = HandshakeCompletedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_event_proto_msgTypes[16]
+		mi := &file_event_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1054,7 +1176,7 @@ func (x *HandshakeCompletedEvent) String() string {
 func (*HandshakeCompletedEvent) ProtoMessage() {}
 
 func (x *HandshakeCompletedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_event_proto_msgTypes[16]
+	mi := &file_event_proto_msgTypes[18]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1067,7 +1189,7 @@ func (x *HandshakeCompletedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandshakeCompletedEvent.ProtoReflect.Descriptor instead.
 func (*HandshakeCompletedEvent) Descriptor() ([]byte, []int) {
-	return file_event_proto_rawDescGZIP(), []int{16}
+	return file_event_proto_rawDescGZIP(), []int{18}
 }
 
 var File_event_proto protoreflect.FileDescriptor
@@ -1075,7 +1197,7 @@ var File_event_proto protoreflect.FileDescriptor
 var file_event_proto_rawDesc = []byte{
 	0x0a, 0x0b, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x03, 0x61,
 	0x70, 0x69, 0x1a, 0x0c, 0x64, 0x6f, 0x6d, 0x61, 0x69, 0x6e, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x22, 0xd8, 0x0a, 0x0a, 0x05, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x47, 0x0a, 0x11, 0x61, 0x70,
+	0x22, 0x87, 0x0c, 0x0a, 0x05, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x47, 0x0a, 0x11, 0x61, 0x70,
 	0x70, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x5f, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x64, 0x18,
 	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41, 0x70, 0x70, 0x53,
 	0x74, 0x61, 0x74, 0x65, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74,
@@ -1159,64 +1281,83 @@ var file_event_proto_rawDesc = []byte{
 	0x74, 0x65, 0x64, 0x18, 0x10, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1c, 0x2e, 0x61, 0x70, 0x69, 0x2e,
 	0x48, 0x61, 0x6e, 0x64, 0x73, 0x68, 0x61, 0x6b, 0x65, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74,
 	0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x12, 0x68, 0x61, 0x6e, 0x64, 0x73,
-	0x68, 0x61, 0x6b, 0x65, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x42, 0x0c, 0x0a,
-	0x0a, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x22, 0x42, 0x0a, 0x14, 0x41,
-	0x70, 0x70, 0x53, 0x74, 0x61, 0x74, 0x65, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x64, 0x45, 0x76,
-	0x65, 0x6e, 0x74, 0x12, 0x2a, 0x0a, 0x09, 0x61, 0x70, 0x70, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41, 0x70, 0x70,
-	0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x08, 0x61, 0x70, 0x70, 0x53, 0x74, 0x61, 0x74, 0x65, 0x22,
-	0x48, 0x0a, 0x1c, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74,
-	0x72, 0x65, 0x61, 0x6d, 0x45, 0x78, 0x69, 0x74, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12,
-	0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e,
-	0x61, 0x6d, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x27, 0x0a, 0x15, 0x44, 0x65, 0x73,
-	0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x41, 0x64, 0x64, 0x65, 0x64, 0x45, 0x76, 0x65,
-	0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x02,
-	0x69, 0x64, 0x22, 0x43, 0x0a, 0x19, 0x41, 0x64, 0x64, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61,
-	0x74, 0x69, 0x6f, 0x6e, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12,
-	0x10, 0x0a, 0x03, 0x75, 0x72, 0x6c, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x75, 0x72,
-	0x6c, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x29, 0x0a, 0x17, 0x44, 0x65, 0x73, 0x74, 0x69,
-	0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x45, 0x76, 0x65,
-	0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x02,
-	0x69, 0x64, 0x22, 0x44, 0x0a, 0x1c, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x44, 0x65, 0x73, 0x74,
-	0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x45, 0x76, 0x65,
-	0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x02,
-	0x69, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x29, 0x0a, 0x17, 0x44, 0x65, 0x73, 0x74,
-	0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x64, 0x45, 0x76,
-	0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52,
-	0x02, 0x69, 0x64, 0x22, 0x44, 0x0a, 0x1c, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x44, 0x65, 0x73,
-	0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x45, 0x76,
-	0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52,
-	0x02, 0x69, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x29, 0x0a, 0x17, 0x44, 0x65, 0x73,
-	0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x72, 0x74, 0x65, 0x64, 0x45,
-	0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c,
-	0x52, 0x02, 0x69, 0x64, 0x22, 0x43, 0x0a, 0x1b, 0x53, 0x74, 0x61, 0x72, 0x74, 0x44, 0x65, 0x73,
-	0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x45, 0x76,
-	0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52,
-	0x02, 0x69, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x29, 0x0a, 0x17, 0x44, 0x65, 0x73,
-	0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x6f, 0x70, 0x70, 0x65, 0x64, 0x45,
-	0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c,
-	0x52, 0x02, 0x69, 0x64, 0x22, 0x42, 0x0a, 0x1a, 0x53, 0x74, 0x6f, 0x70, 0x44, 0x65, 0x73, 0x74,
-	0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x45, 0x76, 0x65,
-	0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x02,
-	0x69, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x19, 0x0a, 0x17, 0x4d, 0x65, 0x64, 0x69,
-	0x61, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x53, 0x74, 0x61, 0x72, 0x74, 0x65, 0x64, 0x45, 0x76,
-	0x65, 0x6e, 0x74, 0x22, 0x1c, 0x0a, 0x1a, 0x4f, 0x74, 0x68, 0x65, 0x72, 0x49, 0x6e, 0x73, 0x74,
-	0x61, 0x6e, 0x63, 0x65, 0x44, 0x65, 0x74, 0x65, 0x63, 0x74, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e,
-	0x74, 0x22, 0x2b, 0x0a, 0x0f, 0x46, 0x61, 0x74, 0x61, 0x6c, 0x45, 0x72, 0x72, 0x6f, 0x72, 0x45,
-	0x76, 0x65, 0x6e, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0x19,
-	0x0a, 0x17, 0x48, 0x61, 0x6e, 0x64, 0x73, 0x68, 0x61, 0x6b, 0x65, 0x43, 0x6f, 0x6d, 0x70, 0x6c,
-	0x65, 0x74, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x42, 0x35, 0x5a, 0x33, 0x67, 0x69, 0x74,
-	0x2e, 0x6e, 0x65, 0x74, 0x66, 0x6c, 0x75, 0x78, 0x2e, 0x69, 0x6f, 0x2f, 0x72, 0x6f, 0x62, 0x2f,
-	0x6f, 0x63, 0x74, 0x6f, 0x70, 0x6c, 0x65, 0x78, 0x2f, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61,
-	0x6c, 0x2f, 0x67, 0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x64, 0x2f, 0x67, 0x72, 0x70, 0x63,
-	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x68, 0x61, 0x6b, 0x65, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x12, 0x4f, 0x0a,
+	0x13, 0x64, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x5f, 0x6c, 0x69,
+	0x73, 0x74, 0x65, 0x64, 0x18, 0x11, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1c, 0x2e, 0x61, 0x70, 0x69,
+	0x2e, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x4c, 0x69, 0x73,
+	0x74, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x12, 0x64, 0x65, 0x73, 0x74,
+	0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x4c, 0x69, 0x73, 0x74, 0x65, 0x64, 0x12, 0x5c,
+	0x0a, 0x18, 0x6c, 0x69, 0x73, 0x74, 0x5f, 0x64, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x73, 0x5f, 0x66, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x18, 0x12, 0x20, 0x01, 0x28, 0x0b,
+	0x32, 0x20, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x44, 0x65, 0x73, 0x74, 0x69,
+	0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x45, 0x76, 0x65,
+	0x6e, 0x74, 0x48, 0x00, 0x52, 0x16, 0x6c, 0x69, 0x73, 0x74, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x42, 0x0c, 0x0a, 0x0a,
+	0x65, 0x76, 0x65, 0x6e, 0x74, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x22, 0x42, 0x0a, 0x14, 0x41, 0x70,
+	0x70, 0x53, 0x74, 0x61, 0x74, 0x65, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x64, 0x45, 0x76, 0x65,
+	0x6e, 0x74, 0x12, 0x2a, 0x0a, 0x09, 0x61, 0x70, 0x70, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41, 0x70, 0x70, 0x53,
+	0x74, 0x61, 0x74, 0x65, 0x52, 0x08, 0x61, 0x70, 0x70, 0x53, 0x74, 0x61, 0x74, 0x65, 0x22, 0x48,
+	0x0a, 0x1c, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x72,
+	0x65, 0x61, 0x6d, 0x45, 0x78, 0x69, 0x74, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x12,
+	0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61,
+	0x6d, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x4f, 0x0a, 0x17, 0x44, 0x65, 0x73, 0x74,
+	0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x4c, 0x69, 0x73, 0x74, 0x65, 0x64, 0x45, 0x76,
+	0x65, 0x6e, 0x74, 0x12, 0x34, 0x0a, 0x0c, 0x64, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x61, 0x70, 0x69, 0x2e,
+	0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x0c, 0x64, 0x65, 0x73,
+	0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x22, 0x33, 0x0a, 0x1b, 0x4c, 0x69, 0x73,
+	0x74, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x46, 0x61, 0x69,
+	0x6c, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f,
+	0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x27,
+	0x0a, 0x15, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x41, 0x64, 0x64,
+	0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0c, 0x52, 0x02, 0x69, 0x64, 0x22, 0x43, 0x0a, 0x19, 0x41, 0x64, 0x64, 0x44, 0x65,
+	0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x45,
+	0x76, 0x65, 0x6e, 0x74, 0x12, 0x10, 0x0a, 0x03, 0x75, 0x72, 0x6c, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x03, 0x75, 0x72, 0x6c, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x29, 0x0a, 0x17,
+	0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x55, 0x70, 0x64, 0x61, 0x74,
+	0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0c, 0x52, 0x02, 0x69, 0x64, 0x22, 0x44, 0x0a, 0x1c, 0x55, 0x70, 0x64, 0x61, 0x74,
+	0x65, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x46, 0x61, 0x69, 0x6c,
+	0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0c, 0x52, 0x02, 0x69, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x29, 0x0a,
+	0x17, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x6d, 0x6f,
+	0x76, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0c, 0x52, 0x02, 0x69, 0x64, 0x22, 0x44, 0x0a, 0x1c, 0x52, 0x65, 0x6d, 0x6f,
+	0x76, 0x65, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x46, 0x61, 0x69,
+	0x6c, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0c, 0x52, 0x02, 0x69, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f,
+	0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x29,
+	0x0a, 0x17, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61,
+	0x72, 0x74, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x02, 0x69, 0x64, 0x22, 0x43, 0x0a, 0x1b, 0x53, 0x74, 0x61,
+	0x72, 0x74, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x46, 0x61, 0x69,
+	0x6c, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0c, 0x52, 0x02, 0x69, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f,
+	0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x29,
+	0x0a, 0x17, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x6f,
+	0x70, 0x70, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x02, 0x69, 0x64, 0x22, 0x42, 0x0a, 0x1a, 0x53, 0x74, 0x6f,
+	0x70, 0x44, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x46, 0x61, 0x69, 0x6c,
+	0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0c, 0x52, 0x02, 0x69, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x19, 0x0a,
+	0x17, 0x4d, 0x65, 0x64, 0x69, 0x61, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x53, 0x74, 0x61, 0x72,
+	0x74, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x22, 0x1c, 0x0a, 0x1a, 0x4f, 0x74, 0x68, 0x65,
+	0x72, 0x49, 0x6e, 0x73, 0x74, 0x61, 0x6e, 0x63, 0x65, 0x44, 0x65, 0x74, 0x65, 0x63, 0x74, 0x65,
+	0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x22, 0x2b, 0x0a, 0x0f, 0x46, 0x61, 0x74, 0x61, 0x6c, 0x45,
+	0x72, 0x72, 0x6f, 0x72, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73,
+	0x73, 0x61, 0x67, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73,
+	0x61, 0x67, 0x65, 0x22, 0x19, 0x0a, 0x17, 0x48, 0x61, 0x6e, 0x64, 0x73, 0x68, 0x61, 0x6b, 0x65,
+	0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x42, 0x35,
+	0x5a, 0x33, 0x67, 0x69, 0x74, 0x2e, 0x6e, 0x65, 0x74, 0x66, 0x6c, 0x75, 0x78, 0x2e, 0x69, 0x6f,
+	0x2f, 0x72, 0x6f, 0x62, 0x2f, 0x6f, 0x63, 0x74, 0x6f, 0x70, 0x6c, 0x65, 0x78, 0x2f, 0x69, 0x6e,
+	0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x2f, 0x67, 0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x64,
+	0x2f, 0x67, 0x72, 0x70, 0x63, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1231,50 +1372,56 @@ func file_event_proto_rawDescGZIP() []byte {
 	return file_event_proto_rawDescData
 }
 
-var file_event_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_event_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_event_proto_goTypes = []interface{}{
 	(*Event)(nil),                        // 0: api.Event
 	(*AppStateChangedEvent)(nil),         // 1: api.AppStateChangedEvent
 	(*DestinationStreamExitedEvent)(nil), // 2: api.DestinationStreamExitedEvent
-	(*DestinationAddedEvent)(nil),        // 3: api.DestinationAddedEvent
-	(*AddDestinationFailedEvent)(nil),    // 4: api.AddDestinationFailedEvent
-	(*DestinationUpdatedEvent)(nil),      // 5: api.DestinationUpdatedEvent
-	(*UpdateDestinationFailedEvent)(nil), // 6: api.UpdateDestinationFailedEvent
-	(*DestinationRemovedEvent)(nil),      // 7: api.DestinationRemovedEvent
-	(*RemoveDestinationFailedEvent)(nil), // 8: api.RemoveDestinationFailedEvent
-	(*DestinationStartedEvent)(nil),      // 9: api.DestinationStartedEvent
-	(*StartDestinationFailedEvent)(nil),  // 10: api.StartDestinationFailedEvent
-	(*DestinationStoppedEvent)(nil),      // 11: api.DestinationStoppedEvent
-	(*StopDestinationFailedEvent)(nil),   // 12: api.StopDestinationFailedEvent
-	(*MediaServerStartedEvent)(nil),      // 13: api.MediaServerStartedEvent
-	(*OtherInstanceDetectedEvent)(nil),   // 14: api.OtherInstanceDetectedEvent
-	(*FatalErrorEvent)(nil),              // 15: api.FatalErrorEvent
-	(*HandshakeCompletedEvent)(nil),      // 16: api.HandshakeCompletedEvent
-	(*AppState)(nil),                     // 17: api.AppState
+	(*DestinationsListedEvent)(nil),      // 3: api.DestinationsListedEvent
+	(*ListDestinationsFailedEvent)(nil),  // 4: api.ListDestinationsFailedEvent
+	(*DestinationAddedEvent)(nil),        // 5: api.DestinationAddedEvent
+	(*AddDestinationFailedEvent)(nil),    // 6: api.AddDestinationFailedEvent
+	(*DestinationUpdatedEvent)(nil),      // 7: api.DestinationUpdatedEvent
+	(*UpdateDestinationFailedEvent)(nil), // 8: api.UpdateDestinationFailedEvent
+	(*DestinationRemovedEvent)(nil),      // 9: api.DestinationRemovedEvent
+	(*RemoveDestinationFailedEvent)(nil), // 10: api.RemoveDestinationFailedEvent
+	(*DestinationStartedEvent)(nil),      // 11: api.DestinationStartedEvent
+	(*StartDestinationFailedEvent)(nil),  // 12: api.StartDestinationFailedEvent
+	(*DestinationStoppedEvent)(nil),      // 13: api.DestinationStoppedEvent
+	(*StopDestinationFailedEvent)(nil),   // 14: api.StopDestinationFailedEvent
+	(*MediaServerStartedEvent)(nil),      // 15: api.MediaServerStartedEvent
+	(*OtherInstanceDetectedEvent)(nil),   // 16: api.OtherInstanceDetectedEvent
+	(*FatalErrorEvent)(nil),              // 17: api.FatalErrorEvent
+	(*HandshakeCompletedEvent)(nil),      // 18: api.HandshakeCompletedEvent
+	(*AppState)(nil),                     // 19: api.AppState
+	(*Destination)(nil),                  // 20: api.Destination
 }
 var file_event_proto_depIdxs = []int32{
 	1,  // 0: api.Event.app_state_changed:type_name -> api.AppStateChangedEvent
 	2,  // 1: api.Event.destination_stream_exited:type_name -> api.DestinationStreamExitedEvent
-	3,  // 2: api.Event.destination_added:type_name -> api.DestinationAddedEvent
-	4,  // 3: api.Event.add_destination_failed:type_name -> api.AddDestinationFailedEvent
-	5,  // 4: api.Event.destination_updated:type_name -> api.DestinationUpdatedEvent
-	6,  // 5: api.Event.update_destination_failed:type_name -> api.UpdateDestinationFailedEvent
-	7,  // 6: api.Event.destination_removed:type_name -> api.DestinationRemovedEvent
-	8,  // 7: api.Event.remove_destination_failed:type_name -> api.RemoveDestinationFailedEvent
-	9,  // 8: api.Event.destination_started:type_name -> api.DestinationStartedEvent
-	10, // 9: api.Event.start_destination_failed:type_name -> api.StartDestinationFailedEvent
-	11, // 10: api.Event.destination_stopped:type_name -> api.DestinationStoppedEvent
-	12, // 11: api.Event.stop_destination_failed:type_name -> api.StopDestinationFailedEvent
-	13, // 12: api.Event.media_server_started:type_name -> api.MediaServerStartedEvent
-	14, // 13: api.Event.other_instance_detected:type_name -> api.OtherInstanceDetectedEvent
-	15, // 14: api.Event.fatal_error:type_name -> api.FatalErrorEvent
-	16, // 15: api.Event.handshake_completed:type_name -> api.HandshakeCompletedEvent
-	17, // 16: api.AppStateChangedEvent.app_state:type_name -> api.AppState
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	5,  // 2: api.Event.destination_added:type_name -> api.DestinationAddedEvent
+	6,  // 3: api.Event.add_destination_failed:type_name -> api.AddDestinationFailedEvent
+	7,  // 4: api.Event.destination_updated:type_name -> api.DestinationUpdatedEvent
+	8,  // 5: api.Event.update_destination_failed:type_name -> api.UpdateDestinationFailedEvent
+	9,  // 6: api.Event.destination_removed:type_name -> api.DestinationRemovedEvent
+	10, // 7: api.Event.remove_destination_failed:type_name -> api.RemoveDestinationFailedEvent
+	11, // 8: api.Event.destination_started:type_name -> api.DestinationStartedEvent
+	12, // 9: api.Event.start_destination_failed:type_name -> api.StartDestinationFailedEvent
+	13, // 10: api.Event.destination_stopped:type_name -> api.DestinationStoppedEvent
+	14, // 11: api.Event.stop_destination_failed:type_name -> api.StopDestinationFailedEvent
+	15, // 12: api.Event.media_server_started:type_name -> api.MediaServerStartedEvent
+	16, // 13: api.Event.other_instance_detected:type_name -> api.OtherInstanceDetectedEvent
+	17, // 14: api.Event.fatal_error:type_name -> api.FatalErrorEvent
+	18, // 15: api.Event.handshake_completed:type_name -> api.HandshakeCompletedEvent
+	3,  // 16: api.Event.destinations_listed:type_name -> api.DestinationsListedEvent
+	4,  // 17: api.Event.list_destinations_failed:type_name -> api.ListDestinationsFailedEvent
+	19, // 18: api.AppStateChangedEvent.app_state:type_name -> api.AppState
+	20, // 19: api.DestinationsListedEvent.destinations:type_name -> api.Destination
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_event_proto_init() }
@@ -1321,7 +1468,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DestinationAddedEvent); i {
+			switch v := v.(*DestinationsListedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1333,7 +1480,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AddDestinationFailedEvent); i {
+			switch v := v.(*ListDestinationsFailedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1345,7 +1492,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DestinationUpdatedEvent); i {
+			switch v := v.(*DestinationAddedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1357,7 +1504,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*UpdateDestinationFailedEvent); i {
+			switch v := v.(*AddDestinationFailedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1369,7 +1516,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DestinationRemovedEvent); i {
+			switch v := v.(*DestinationUpdatedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1381,7 +1528,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveDestinationFailedEvent); i {
+			switch v := v.(*UpdateDestinationFailedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1393,7 +1540,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DestinationStartedEvent); i {
+			switch v := v.(*DestinationRemovedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1405,7 +1552,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StartDestinationFailedEvent); i {
+			switch v := v.(*RemoveDestinationFailedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1417,7 +1564,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DestinationStoppedEvent); i {
+			switch v := v.(*DestinationStartedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1429,7 +1576,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StopDestinationFailedEvent); i {
+			switch v := v.(*StartDestinationFailedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1441,7 +1588,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*MediaServerStartedEvent); i {
+			switch v := v.(*DestinationStoppedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1453,7 +1600,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*OtherInstanceDetectedEvent); i {
+			switch v := v.(*StopDestinationFailedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1465,7 +1612,7 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*FatalErrorEvent); i {
+			switch v := v.(*MediaServerStartedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1477,6 +1624,30 @@ func file_event_proto_init() {
 			}
 		}
 		file_event_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*OtherInstanceDetectedEvent); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_event_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*FatalErrorEvent); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_event_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*HandshakeCompletedEvent); i {
 			case 0:
 				return &v.state
@@ -1506,6 +1677,8 @@ func file_event_proto_init() {
 		(*Event_OtherInstanceDetected)(nil),
 		(*Event_FatalError)(nil),
 		(*Event_HandshakeCompleted)(nil),
+		(*Event_DestinationsListed)(nil),
+		(*Event_ListDestinationsFailed)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1513,7 +1686,7 @@ func file_event_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_event_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

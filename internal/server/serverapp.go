@@ -332,6 +332,11 @@ func (a *App) handleCommand(
 	a.logger.Debug("Command received in handler", "cmd", cmd.Name())
 
 	switch c := cmd.Command.(type) {
+	case event.CommandListDestinations:
+		// Listing destinations isn't really an error.
+		// Probably errEvt should be renamed, it's just an event only sent to the
+		// client which triggered the command.
+		return nil, event.DestinationsListedEvent{Destinations: slices.Clone(state.Destinations)}, nil
 	case event.CommandAddDestination:
 		destinationID := uuid.New()
 		newState := a.store.Get()

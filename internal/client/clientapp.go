@@ -59,6 +59,33 @@ func New(params NewParams) *App {
 	}
 }
 
+// ListDestinations retrieves the list of destinations from the server.
+func (a *App) ListDestinations(ctx context.Context) (_ []domain.Destination, err error) {
+	conn, err := a.buildClientConn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("build client conn: %w", err)
+	}
+	defer conn.Close()
+
+	apiClient := pb.NewInternalAPIClient(conn)
+
+	resp, err := apiClient.ListDestinations(ctx, &pb.ListDestinationsRequest{
+		Command: &pb.ListDestinationsCommand{},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("call API: %w", err)
+	}
+
+	switch evt := resp.Result.(type) {
+	case *pb.ListDestinationsResponse_Ok:
+		return protocol.ProtoToDestinations(evt.Ok.Destinations)
+	case *pb.ListDestinationsResponse_Error:
+		return nil, fmt.Errorf("list destinations failed: %s", evt.Error.Error)
+	default:
+		panic("unreachable")
+	}
+}
+
 // AddDestination adds a new destination to the server.
 func (a *App) AddDestination(ctx context.Context, name, url string) (id string, err error) {
 	conn, err := a.buildClientConn(ctx)
