@@ -1078,7 +1078,7 @@ func (ui *UI) copySourceURLToClipboard(url string) {
 			ui.logger.Error("Error copying to clipboard", "err", err)
 			text = "Unable to copy to clipboard. Select and copy instead:\n\n" + url
 		} else {
-			text = "URL copied to clipboard:\n\n" + url
+			text = "Source URL copied to clipboard:\n\n" + url
 		}
 	} else {
 		text = "Copy to clipboard not available:\n\n" + url
