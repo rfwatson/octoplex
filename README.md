@@ -15,6 +15,10 @@ Octoplex is a Docker-native live video restreamer.
 * Terminal UI with live metrics and health status
 * Powered by FFmpeg, Docker & other open source tools
 
+:warning: **Security warning:** Octoplex's security hardening is a
+work-in-progress. For now it is only suitable for running on localhost or
+behind a trusted private network.
+
 ## How it works
 
 ```
@@ -126,7 +130,7 @@ Make a note of the destination ID that is printed to the terminal, e.g. `036e2a8
 #### Update a destination
 
 ```shell
-octoplex client destination update --id "<DESTINATION_ID>" --url "<RTMP_URL>"
+octoplex client destination update --id "<DESTINATION_ID>" --name "<NAME>" --url "<RTMP_URL>"
 ```
 
 #### Start a destination
