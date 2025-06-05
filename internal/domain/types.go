@@ -51,6 +51,20 @@ const (
 	DestinationStatusLive
 )
 
+// String implements the fmt.Stringer interface for DestinationStatus.
+func (s DestinationStatus) String() string {
+	switch s {
+	case DestinationStatusOffAir:
+		return "off-air"
+	case DestinationStatusStarting:
+		return "starting"
+	case DestinationStatusLive:
+		return "live"
+	default:
+		return "unknown"
+	}
+}
+
 // Destination is a single destination.
 type Destination struct {
 	Container Container

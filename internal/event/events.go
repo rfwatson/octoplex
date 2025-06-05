@@ -9,6 +9,8 @@ type Name string
 
 const (
 	EventNameAppStateChanged         Name = "app_state_changed"
+	EventNameDestinationsListed      Name = "destinations_listed"
+	EventNameListDestinationsFailed  Name = "list_destinations_failed"
 	EventNameDestinationAdded        Name = "destination_added"
 	EventNameAddDestinationFailed    Name = "add_destination_failed"
 	EventNameDestinationUpdated      Name = "destination_updated"
@@ -37,6 +39,26 @@ type AppStateChangedEvent struct {
 
 func (e AppStateChangedEvent) EventName() Name {
 	return EventNameAppStateChanged
+}
+
+// DestinationsListedEvent is emitted when the list of destinations is
+// successfully retrieved.
+type DestinationsListedEvent struct {
+	Destinations []domain.Destination
+}
+
+func (e DestinationsListedEvent) EventName() Name {
+	return EventNameDestinationsListed
+}
+
+// ListDestinationsFailedEvent is emitted when the list of destinations fails
+// to be retrieved.
+type ListDestinationsFailedEvent struct {
+	Err error
+}
+
+func (e ListDestinationsFailedEvent) EventName() Name {
+	return EventNameListDestinationsFailed
 }
 
 // DestinationAddedEvent is emitted when a destination is successfully added.

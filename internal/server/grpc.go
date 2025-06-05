@@ -163,6 +163,35 @@ func (s *Server) WaitForClient(ctx context.Context) error {
 	}
 }
 
+func (s *Server) ListDestinations(ctx context.Context, req *pb.ListDestinationsRequest) (*pb.ListDestinationsResponse, error) {
+	cmd, err := protocol.CommandFromListDestinationsProto(req.Command)
+	if err != nil {
+		return nil, fmt.Errorf("command from proto: %w", err)
+	}
+
+	evt, err := s.dispatchSync(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("dispatch command: %w", err)
+	}
+
+	switch e := evt.(type) {
+	case event.DestinationsListedEvent:
+		return &pb.ListDestinationsResponse{
+			Result: &pb.ListDestinationsResponse_Ok{
+				Ok: protocol.DestinationsListedEventToProto(e),
+			},
+		}, nil
+	case event.ListDestinationsFailedEvent:
+		return &pb.ListDestinationsResponse{
+			Result: &pb.ListDestinationsResponse_Error{
+				Error: protocol.ListDestinationsFailedEventToProto(e),
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("unexpected event type: %T", e)
+	}
+}
+
 func (s *Server) AddDestination(ctx context.Context, req *pb.AddDestinationRequest) (*pb.AddDestinationResponse, error) {
 	cmd, err := protocol.CommandFromAddDestinationProto(req.Command)
 	if err != nil {

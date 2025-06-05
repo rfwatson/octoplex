@@ -23,6 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type InternalAPIClient interface {
 	Communicate(ctx context.Context, opts ...grpc.CallOption) (InternalAPI_CommunicateClient, error)
+	ListDestinations(ctx context.Context, in *ListDestinationsRequest, opts ...grpc.CallOption) (*ListDestinationsResponse, error)
 	AddDestination(ctx context.Context, in *AddDestinationRequest, opts ...grpc.CallOption) (*AddDestinationResponse, error)
 	UpdateDestination(ctx context.Context, in *UpdateDestinationRequest, opts ...grpc.CallOption) (*UpdateDestinationResponse, error)
 	RemoveDestination(ctx context.Context, in *RemoveDestinationRequest, opts ...grpc.CallOption) (*RemoveDestinationResponse, error)
@@ -67,6 +68,15 @@ func (x *internalAPICommunicateClient) Recv() (*Envelope, error) {
 		return nil, err
 	}
 	return m, nil
+}
+
+func (c *internalAPIClient) ListDestinations(ctx context.Context, in *ListDestinationsRequest, opts ...grpc.CallOption) (*ListDestinationsResponse, error) {
+	out := new(ListDestinationsResponse)
+	err := c.cc.Invoke(ctx, "/api.InternalAPI/ListDestinations", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *internalAPIClient) AddDestination(ctx context.Context, in *AddDestinationRequest, opts ...grpc.CallOption) (*AddDestinationResponse, error) {
@@ -119,6 +129,7 @@ func (c *internalAPIClient) StopDestination(ctx context.Context, in *StopDestina
 // for forward compatibility
 type InternalAPIServer interface {
 	Communicate(InternalAPI_CommunicateServer) error
+	ListDestinations(context.Context, *ListDestinationsRequest) (*ListDestinationsResponse, error)
 	AddDestination(context.Context, *AddDestinationRequest) (*AddDestinationResponse, error)
 	UpdateDestination(context.Context, *UpdateDestinationRequest) (*UpdateDestinationResponse, error)
 	RemoveDestination(context.Context, *RemoveDestinationRequest) (*RemoveDestinationResponse, error)
@@ -133,6 +144,9 @@ type UnimplementedInternalAPIServer struct {
 
 func (UnimplementedInternalAPIServer) Communicate(InternalAPI_CommunicateServer) error {
 	return status.Errorf(codes.Unimplemented, "method Communicate not implemented")
+}
+func (UnimplementedInternalAPIServer) ListDestinations(context.Context, *ListDestinationsRequest) (*ListDestinationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListDestinations not implemented")
 }
 func (UnimplementedInternalAPIServer) AddDestination(context.Context, *AddDestinationRequest) (*AddDestinationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddDestination not implemented")
@@ -186,6 +200,24 @@ func (x *internalAPICommunicateServer) Recv() (*Envelope, error) {
 		return nil, err
 	}
 	return m, nil
+}
+
+func _InternalAPI_ListDestinations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDestinationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InternalAPIServer).ListDestinations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.InternalAPI/ListDestinations",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InternalAPIServer).ListDestinations(ctx, req.(*ListDestinationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _InternalAPI_AddDestination_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -285,6 +317,10 @@ var InternalAPI_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "api.InternalAPI",
 	HandlerType: (*InternalAPIServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListDestinations",
+			Handler:    _InternalAPI_ListDestinations_Handler,
+		},
 		{
 			MethodName: "AddDestination",
 			Handler:    _InternalAPI_AddDestination_Handler,

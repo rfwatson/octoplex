@@ -5,6 +5,14 @@ import (
 	"github.com/google/uuid"
 )
 
+// CommandListDestinations lists all destinations.
+type CommandListDestinations struct{}
+
+// Name implements the Command interface.
+func (c CommandListDestinations) Name() string {
+	return "list_destinations"
+}
+
 // CommandAddDestination adds a destination.
 type CommandAddDestination struct {
 	DestinationName string

@@ -16,6 +16,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"syscall"
+	"text/tabwriter"
 
 	"git.netflux.io/rob/octoplex/internal/client"
 	"git.netflux.io/rob/octoplex/internal/config"
@@ -164,9 +165,41 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 						},
 					},
 					{
-						Name:  "destination",
-						Usage: "Manage destinations",
+						Name:    "destination",
+						Usage:   "Manage destinations",
+						Aliases: []string{"dest", "destinations"},
 						Commands: []*cli.Command{
+							{
+								Name:        "list",
+								Usage:       "List existing destinations",
+								Description: "List existing destinations on the server.",
+								Action: func(ctx context.Context, c *cli.Command) error {
+									client, err := buildClient(ctx, c)
+									if err != nil {
+										return fmt.Errorf("build client: %w", err)
+									}
+
+									if destinations, err := client.ListDestinations(ctx); err != nil {
+										return fmt.Errorf("list destinations: %w", err)
+									} else {
+										w := tabwriter.NewWriter(stdout, 0, 8, 2, ' ', 0)
+										fmt.Fprintf(w, "ID\tName\tURL\tStatus\n")
+										for _, dest := range destinations {
+											fmt.Fprintf(
+												w,
+												"%s\t%s\t%s\t%s\n",
+												dest.ID,
+												dest.Name,
+												dest.URL,
+												dest.Status.String(),
+											)
+										}
+										w.Flush()
+
+										return nil
+									}
+								},
+							},
 							{
 								Name:        "add",
 								Usage:       "Add a new destination",

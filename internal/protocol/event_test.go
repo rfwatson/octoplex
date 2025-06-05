@@ -77,6 +77,48 @@ func TestEventToProto(t *testing.T) {
 			},
 		},
 		{
+			name: "DestinationsListed",
+			in: event.DestinationsListedEvent{
+				Destinations: []domain.Destination{
+					{
+						ID:   destinationID,
+						Name: "dest1",
+						URL:  "rtmp://dest1.example.com",
+						Container: domain.Container{
+							ID: "container1",
+						},
+					},
+				},
+			},
+			want: &pb.Event{
+				EventType: &pb.Event_DestinationsListed{
+					DestinationsListed: &pb.DestinationsListedEvent{
+						Destinations: []*pb.Destination{
+							{
+								Id:   destinationID[:],
+								Name: "dest1",
+								Url:  "rtmp://dest1.example.com",
+								Container: &pb.Container{
+									Id: "container1",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ListDestinationsFailed",
+			in:   event.ListDestinationsFailedEvent{Err: errors.New("failed to list destinations")},
+			want: &pb.Event{
+				EventType: &pb.Event_ListDestinationsFailed{
+					ListDestinationsFailed: &pb.ListDestinationsFailedEvent{
+						Error: "failed to list destinations",
+					},
+				},
+			},
+		},
+		{
 			name: "DestinationAdded",
 			in:   event.DestinationAddedEvent{ID: destinationID},
 			want: &pb.Event{
@@ -512,6 +554,52 @@ func TestUnwrappedEventConversion(t *testing.T) {
 		assert.IsType(t, event.MediaServerStartedEvent{}, resultEvent)
 		assert.Empty(t, gocmp.Diff(domainEvent, resultEvent))
 	})
+
+	t.Run("DestinationsListedEvent", func(t *testing.T) {
+		domainEvent := event.DestinationsListedEvent{
+			Destinations: []domain.Destination{
+				{
+					ID:   destinationID,
+					Name: "dest1",
+					URL:  "rtmp://dest1.example.com",
+					Container: domain.Container{
+						ID: "container1",
+					},
+				},
+			},
+		}
+
+		// Conversion to proto
+		protoEvent := protocol.DestinationsListedEventToProto(domainEvent)
+		assert.NotNil(t, protoEvent)
+		assert.Len(t, protoEvent.Destinations, 1)
+		assert.Equal(t, destinationID[:], protoEvent.Destinations[0].Id)
+		assert.Equal(t, "dest1", protoEvent.Destinations[0].Name)
+		assert.Equal(t, "rtmp://dest1.example.com", protoEvent.Destinations[0].Url)
+
+		// Conversion from proto
+		resultEvent, err := protocol.EventFromDestinationsListedProto(protoEvent)
+		require.NoError(t, err)
+		assert.IsType(t, event.DestinationsListedEvent{}, resultEvent)
+		assert.Empty(t, gocmp.Diff(domainEvent, resultEvent))
+	})
+
+	t.Run("ListDestinationsFailedEvent", func(t *testing.T) {
+		domainEvent := event.ListDestinationsFailedEvent{
+			Err: errors.New("failed to list destinations"),
+		}
+
+		// Conversion to proto
+		protoEvent := protocol.ListDestinationsFailedEventToProto(domainEvent)
+		assert.NotNil(t, protoEvent)
+		assert.Equal(t, "failed to list destinations", protoEvent.Error)
+
+		// Conversion from proto
+		resultEvent, err := protocol.EventFromListDestinationsFailedProto(protoEvent)
+		require.NoError(t, err)
+		assert.IsType(t, event.ListDestinationsFailedEvent{}, resultEvent)
+		assert.Equal(t, domainEvent.Err.Error(), resultEvent.(event.ListDestinationsFailedEvent).Err.Error())
+	})
 }
 
 // TestEventFromProto tests the wrapped event conversion
@@ -573,6 +661,48 @@ func TestEventFromProto(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name: "DestinationsListed",
+			in: &pb.Event{
+				EventType: &pb.Event_DestinationsListed{
+					DestinationsListed: &pb.DestinationsListedEvent{
+						Destinations: []*pb.Destination{
+							{
+								Id:   destinationID[:],
+								Name: "dest1",
+								Url:  "rtmp://dest1.example.com",
+								Container: &pb.Container{
+									Id: "container1",
+								},
+							},
+						},
+					},
+				},
+			},
+			want: event.DestinationsListedEvent{
+				Destinations: []domain.Destination{
+					{
+						ID:   destinationID,
+						Name: "dest1",
+						URL:  "rtmp://dest1.example.com",
+						Container: domain.Container{
+							ID: "container1",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ListDestinationsFailed",
+			in: &pb.Event{
+				EventType: &pb.Event_ListDestinationsFailed{
+					ListDestinationsFailed: &pb.ListDestinationsFailedEvent{
+						Error: "failed to list destinations",
+					},
+				},
+			},
+			want: event.ListDestinationsFailedEvent{Err: errors.New("failed to list destinations")},
 		},
 		{
 			name: "DestinationAdded",
