@@ -26,17 +26,18 @@ func GenerateKeyPair(dnsNames ...string) (domain.KeyPair, error) {
 		return domain.KeyPair{}, err
 	}
 
+	// TODO: further reduce NotAfter.
+	// https://www.digicert.com/blog/tls-certificate-lifetimes-will-officially-reduce-to-47-days
 	now := time.Now()
 	template := x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject: pkix.Name{
-			Organization: []string{"octoplex.netflux.io"},
-		},
-		NotBefore:             now,
-		NotAfter:              now.Add(5 * 365 * 24 * time.Hour),
+		SerialNumber:          serialNumber,
+		Subject:               pkix.Name{Organization: []string{"octoplex.netflux.io"}},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.Add(397 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
+		IsCA:                  false,
 		DNSNames:              dnsNames,
 	}
 
