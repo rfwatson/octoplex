@@ -7,14 +7,20 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/event"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
 	"git.netflux.io/rob/octoplex/internal/protocol"
+	"git.netflux.io/rob/octoplex/internal/token"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
 
 // Server is the gRPC server that handles incoming commands and outgoing
@@ -335,4 +341,67 @@ func (s *Server) StopDestination(ctx context.Context, req *pb.StopDestinationReq
 	default:
 		return nil, fmt.Errorf("unexpected event type: %T", e)
 	}
+}
+
+func authInterceptorUnary(credentials apiCredentials, logger *slog.Logger) grpc.UnaryServerInterceptor {
+	if credentials.hashedToken == "" && !credentials.disabled {
+		panic("API authentication is enabled but no token is configured")
+	}
+
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if ok, err := isAuthenticated(ctx, credentials, logger); err != nil {
+			return nil, fmt.Errorf("authenticate: %w", err)
+		} else if !ok {
+			return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
+		}
+
+		return handler(ctx, req)
+	}
+}
+
+func authInterceptorStream(credentials apiCredentials, logger *slog.Logger) grpc.StreamServerInterceptor {
+	if credentials.hashedToken == "" && !credentials.disabled {
+		panic("API authentication is enabled but no token is configured")
+	}
+
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if ok, err := isAuthenticated(ss.Context(), credentials, logger); err != nil {
+			return fmt.Errorf("authenticate: %w", err)
+		} else if !ok {
+			return status.Errorf(codes.Unauthenticated, "invalid credentials")
+		}
+
+		return handler(srv, ss)
+	}
+}
+
+func isAuthenticated(ctx context.Context, credentials apiCredentials, logger *slog.Logger) (bool, error) {
+	if credentials.disabled {
+		return true, nil
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return false, status.Errorf(codes.Unauthenticated, "missing metadata")
+	}
+
+	authHeader := md.Get("authorization")
+	if len(authHeader) < 1 {
+		return false, status.Errorf(codes.Unauthenticated, "authorization token not supplied")
+	}
+
+	authHeaderValue := authHeader[0]
+	if !strings.HasPrefix(authHeaderValue, "Bearer ") {
+		return false, status.Errorf(codes.Unauthenticated, "invalid authorization format")
+	}
+	rawToken := strings.TrimPrefix(authHeaderValue, "Bearer ")
+
+	if isValid, err := token.Compare(token.RawToken(rawToken), credentials.hashedToken); err != nil || !isValid {
+		if err != nil {
+			logger.Error("Error authenticating", "err", err, "raw_token", rawToken)
+		}
+		return false, status.Errorf(codes.Unauthenticated, "invalid credentials")
+	}
+
+	return true, nil
 }

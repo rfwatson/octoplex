@@ -66,6 +66,8 @@ func (e errInterrupt) ExitCode() int {
 var (
 	serverListenAddr    string
 	serverHostname      string
+	serverAuthMode      string
+	insecureAllowNoAuth bool
 	clientHost          string
 	clientTLSSkipVerify bool
 )
@@ -143,6 +145,10 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 						Usage:       "Skip TLS verification (insecure)",
 						DefaultText: "false",
 						Destination: &clientTLSSkipVerify,
+					},
+					&cli.StringFlag{
+						Name:  "api-token",
+						Usage: "API token for authentication with the server",
 					},
 					&cli.StringFlag{
 						Name:      "log-file",
@@ -443,6 +449,24 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Hidden:   clientAndServerMode,
 		},
 		&cli.StringFlag{
+			Name:        "auth",
+			Usage:       "Authentication mode for the server",
+			Category:    "Server",
+			DefaultText: "auto",
+			Sources:     cli.EnvVars("OCTO_AUTH"),
+			Destination: &serverAuthMode,
+			Hidden:      clientAndServerMode,
+		},
+		&cli.BoolFlag{
+			Name:        "insecure-allow-no-auth",
+			Usage:       "DANGER: Allow unauthenticated access to the server.",
+			Category:    "Server",
+			DefaultText: "false",
+			Sources:     cli.EnvVars("OCTO_INSECURE_ALLOW_NO_AUTH"),
+			Destination: &insecureAllowNoAuth,
+			Hidden:      clientAndServerMode,
+		},
+		&cli.StringFlag{
 			Name:      "tls-cert",
 			Usage:     "Path to a TLS certificate",
 			Category:  "Server",
@@ -526,7 +550,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 }
 
 // runClient runs the client.
-func runClient(ctx context.Context, _ *cli.Command, logger *slog.Logger) error {
+func runClient(ctx context.Context, c *cli.Command, logger *slog.Logger) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -540,6 +564,7 @@ func runClient(ctx context.Context, _ *cli.Command, logger *slog.Logger) error {
 	app := client.New(client.NewParams{
 		ServerAddr:         clientHost,
 		InsecureSkipVerify: clientTLSSkipVerify,
+		APIToken:           c.String("api-token"),
 		ClipboardAvailable: !clipboard.Unsupported,
 		BuildInfo: domain.BuildInfo{
 			GoVersion: buildInfo.GoVersion,
@@ -570,6 +595,7 @@ func buildClient(ctx context.Context, c *cli.Command) (*client.App, error) {
 	return client.New(client.NewParams{
 		ServerAddr:         clientHost,
 		InsecureSkipVerify: clientTLSSkipVerify,
+		APIToken:           c.String("api-token"),
 		ClipboardAvailable: !clipboard.Unsupported,
 		BuildInfo: domain.BuildInfo{
 			GoVersion: buildInfo.GoVersion,
@@ -641,11 +667,19 @@ func runServer(ctx context.Context, c *cli.Command, cfg config.Config, serverCfg
 		if errors.Is(err, context.Canceled) && errors.Is(context.Cause(ctx), errInterrupt{}) {
 			return context.Cause(ctx)
 		}
+
 		if errors.Is(err, server.ErrOtherInstanceDetected) {
 			msg := "Another instance of the server may be running.\n" +
 				"To stop the server, run `octoplex server stop`."
 			return cli.Exit(msg, 1)
 		}
+
+		if errors.Is(err, server.ErrAuthenticationCannotBeDisabled) {
+			msg := "Running with --auth none is not permitted with a non-loopback listen address.\n" +
+				"Either set `--auth token`, or run the server with `--insecure-allow-no-auth` to disable authentication completely."
+			return cli.Exit(msg, 2)
+		}
+
 		return err
 	}
 
@@ -660,8 +694,10 @@ func runClientAndServer(ctx context.Context, c *cli.Command) error {
 	}
 
 	// Override CLI flags:
-	serverListenAddr = fmt.Sprintf(":%d", lis.Addr().(*net.TCPAddr).Port)    // listen on all interfaces
-	serverHostname = "localhost"                                             // DNS name
+	serverListenAddr = fmt.Sprintf("127.0.0.1:%d", lis.Addr().(*net.TCPAddr).Port) // listen on all interfaces
+	serverHostname = "localhost"                                                   // DNS name
+	serverAuthMode = "none"
+	insecureAllowNoAuth = true
 	clientHost = fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port) // point client at the correct port
 	clientTLSSkipVerify = true                                               // override default TLS verification
 
@@ -725,6 +761,18 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 		dataDir = appStateDir
 	}
 
+	var authMode config.AuthMode
+	switch serverAuthMode {
+	case "", "auto":
+		authMode = config.AuthModeAuto
+	case "none":
+		authMode = config.AuthModeNone
+	case "token":
+		authMode = config.AuthModeToken
+	default:
+		return config.Config{}, fmt.Errorf("invalid auth mode: %s", c.String("auth"))
+	}
+
 	logToFileEnabled := c.Bool("log-to-file")
 	logFile := c.String("log-file")
 
@@ -735,11 +783,13 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 	}
 
 	cfg := config.Config{
-		ListenAddr: cmp.Or(serverListenAddr, defaultListenAddr),
-		Host:       cmp.Or(serverHostname, defaultHostname),
-		InDocker:   c.Bool("in-docker"),
-		Debug:      c.Bool("debug"),
-		DataDir:    dataDir,
+		ListenAddr:          cmp.Or(serverListenAddr, defaultListenAddr),
+		Host:                cmp.Or(serverHostname, defaultHostname),
+		AuthMode:            authMode,
+		InsecureAllowNoAuth: insecureAllowNoAuth,
+		InDocker:            c.Bool("in-docker"),
+		Debug:               c.Bool("debug"),
+		DataDir:             dataDir,
 		LogFile: config.LogFile{
 			Enabled: logToFileEnabled,
 			Path:    logFile,

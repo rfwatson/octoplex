@@ -55,14 +55,25 @@ type Sources struct {
 	MediaServer MediaServerSource
 }
 
+// AuthMode defines the authentication mode for the API.
+type AuthMode string
+
+const (
+	AuthModeAuto  AuthMode = "auto"
+	AuthModeNone  AuthMode = "none"
+	AuthModeToken AuthMode = "token"
+)
+
 // Config holds the configuration for the application.
 type Config struct {
-	ListenAddr string
-	Host       string
-	TLS        *TLS
-	InDocker   bool
-	Debug      bool // deprecated
-	DataDir    string
-	LogFile    LogFile
-	Sources    Sources
+	ListenAddr          string
+	Host                string
+	TLS                 *TLS
+	AuthMode            AuthMode
+	InsecureAllowNoAuth bool // DANGER: no authentication even for non-loopback addresses.
+	InDocker            bool
+	Debug               bool // deprecated
+	DataDir             string
+	LogFile             LogFile
+	Sources             Sources
 }

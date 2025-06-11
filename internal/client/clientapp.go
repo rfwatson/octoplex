@@ -20,6 +20,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 )
 
 // DefaultServerAddr is the default address for the client to connect to.
@@ -30,6 +31,7 @@ type App struct {
 	bus                *event.Bus
 	serverAddr         string
 	insecureSkipVerify bool
+	apiToken           string
 	clipboardAvailable bool
 	buildInfo          domain.BuildInfo
 	screen             *terminal.Screen
@@ -41,6 +43,7 @@ type NewParams struct {
 	ClipboardAvailable bool
 	ServerAddr         string
 	InsecureSkipVerify bool
+	APIToken           string
 	BuildInfo          domain.BuildInfo
 	Screen             *terminal.Screen
 	Logger             *slog.Logger
@@ -52,6 +55,7 @@ func New(params NewParams) *App {
 		bus:                event.NewBus(params.Logger),
 		serverAddr:         cmp.Or(params.ServerAddr, DefaultServerAddr),
 		insecureSkipVerify: params.InsecureSkipVerify,
+		apiToken:           params.APIToken,
 		clipboardAvailable: params.ClipboardAvailable,
 		buildInfo:          params.BuildInfo,
 		screen:             params.Screen,
@@ -370,9 +374,9 @@ func (a *App) buildClientConn(ctx context.Context) (*grpc.ClientConn, error) {
 
 	conn, err := grpc.NewClient(
 		a.serverAddr,
-		grpc.WithTransportCredentials(
-			credentials.NewTLS(tlsConfig),
-		),
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+		grpc.WithUnaryInterceptor(authInterceptorUnary(a.apiToken)),
+		grpc.WithStreamInterceptor(authInterceptorStream(a.apiToken)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("new gRPC client: %w", err)
@@ -395,6 +399,34 @@ func (a *App) doHandshake(stream pb.InternalAPI_CommunicateClient) error {
 	}
 
 	return nil
+}
+
+func authInterceptorUnary(apiToken string) grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, next grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		return next(contextWithAuth(ctx, apiToken), method, req, reply, cc, opts...)
+	}
+}
+
+func authInterceptorStream(apiToken string) grpc.StreamClientInterceptor {
+	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		return streamer(contextWithAuth(ctx, apiToken), desc, cc, method, opts...)
+	}
+}
+
+func contextWithAuth(ctx context.Context, apiToken string) context.Context {
+	if apiToken == "" {
+		return ctx
+	}
+
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	} else {
+		md = md.Copy()
+	}
+
+	md.Set("authorization", "Bearer "+apiToken)
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 func parseID(id string) (uuid.UUID, error) {

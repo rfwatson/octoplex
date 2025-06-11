@@ -12,7 +12,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/tls"
 )
 
-// buildKeyPairs builds TLS key pairs for the given custom TLS configuration.
+// generateKeyPairs builds TLS key pairs for the given custom TLS configuration.
 //
 // It generates a self-signed certificate (valid for localhost, and any
 // provided customHost unless a custom key pair is provided) and loads any
@@ -20,7 +20,7 @@ import (
 // provided).
 //
 // TODO: verify that the custom cert is valid for the custom host
-func buildKeyPairs(customHost string, tlsCfg *config.TLS, dataDir string) (_ domain.KeyPairs, err error) {
+func generateKeyPairs(customHost string, tlsCfg *config.TLS, dataDir string) (_ domain.KeyPairs, err error) {
 	dnsNames := []string{"localhost"}
 	if customHost != "" && tlsCfg == nil {
 		dnsNames = append(dnsNames, customHost)
