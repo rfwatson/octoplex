@@ -19,6 +19,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/mediaserver"
 	"git.netflux.io/rob/octoplex/internal/replicator"
 	"git.netflux.io/rob/octoplex/internal/store"
+	"git.netflux.io/rob/octoplex/internal/token"
 	"github.com/docker/docker/client"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -34,10 +35,16 @@ type command struct {
 	doneC    chan event.Event // may be nil, if the command is asynchronous
 }
 
+type apiCredentials struct {
+	disabled    bool // if true, no authentication is required
+	hashedToken string
+}
+
 // App is an instance of the app.
 type App struct {
 	cfg           config.Config
 	store         *store.FileStore
+	credentials   apiCredentials
 	eventBus      *event.Bus
 	dispatchC     chan command
 	dockerClient  container.DockerClient
@@ -61,26 +68,39 @@ type Params struct {
 // defaultChanSize is the default size of the dispatch channel.
 const defaultChanSize = 64
 
-// ErrOtherInstanceDetected is returned when another instance of the app is
-// detected on startup.
-var ErrOtherInstanceDetected = errors.New("another instance is currently running")
+var (
+	// ErrOtherInstanceDetected is returned when another instance of the app is
+	// detected on startup.
+	ErrOtherInstanceDetected = errors.New("another instance is currently running")
+
+	// ErrAuthenticationCannotBeDisabled is returned when it is not permitted for
+	// authentication mode to be "none".
+	ErrAuthenticationCannotBeDisabled = errors.New("authentication cannot be disabled")
+)
 
 // New creates a new application instance.
 func New(params Params) (*App, error) {
 	cfg := params.Config
+
+	credentials, err := buildCredentials(cfg, params.Logger)
+	if err != nil {
+		return nil, fmt.Errorf("build credentials: %w", err)
+	}
+
+	keyPairs, err := generateKeyPairs(cfg.Host, cfg.TLS, cfg.DataDir)
+	if err != nil {
+		return nil, fmt.Errorf("build key pairs: %w", err)
+	}
+
 	listenerFunc := params.ListenerFunc
 	if listenerFunc == nil {
 		listenerFunc = Listener(cfg.ListenAddr)
 	}
 
-	keyPairs, err := buildKeyPairs(cfg.Host, cfg.TLS, cfg.DataDir)
-	if err != nil {
-		return nil, fmt.Errorf("build key pairs: %w", err)
-	}
-
 	return &App{
 		cfg:           cfg,
 		store:         params.Store,
+		credentials:   credentials,
 		eventBus:      event.NewBus(params.Logger.With("component", "event_bus")),
 		dispatchC:     make(chan command, cmp.Or(params.ChanSize, defaultChanSize)),
 		dockerClient:  params.DockerClient,
@@ -112,14 +132,16 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load TLS cert: %w", err)
 	}
-	grpcServer := grpc.NewServer(grpc.Creds(credentials.NewTLS(&cryptotls.Config{
-		Certificates: []cryptotls.Certificate{cert},
-		MinVersion:   config.TLSMinVersion,
-	})))
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(authInterceptorUnary(a.credentials, a.logger)),
+		grpc.StreamInterceptor(authInterceptorStream(a.credentials, a.logger)),
+		grpc.Creds(credentials.NewTLS(&cryptotls.Config{Certificates: []cryptotls.Certificate{cert}, MinVersion: config.TLSMinVersion})),
+	)
 
 	grpcDone := make(chan error, 1)
 	internalAPI := newServer(a.DispatchSync, a.DispatchAsync, a.eventBus, a.logger)
 	pb.RegisterInternalAPIServer(grpcServer, internalAPI)
+
 	go func() {
 		a.logger.Info("gRPC server started", "listen-addr", lis.Addr().String())
 		grpcDone <- grpcServer.Serve(lis)
@@ -568,4 +590,65 @@ func (a *App) Stop(ctx context.Context) error {
 	defer containerClient.Close()
 
 	return closeOtherInstances(ctx, containerClient)
+}
+
+// buildCredentials builds the API credentials based on the configuration.
+//
+// It either returns a valid set of active credentials, a set of disabled
+// credentials, or an error.
+func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, error) {
+	if cfg.ListenAddr == "" {
+		return apiCredentials{}, fmt.Errorf("listen address cannot be empty")
+	}
+
+	var addr *net.TCPAddr
+	addr, err := net.ResolveTCPAddr("tcp", cfg.ListenAddr)
+	if err != nil {
+		return apiCredentials{}, fmt.Errorf("resolve listen address: %w", err)
+	}
+	isLoopback := addr.IP.IsLoopback()
+
+	hashedToken, err := token.Read(cfg.DataDir)
+	if err != nil && !errors.Is(err, token.ErrTokenNotFound) {
+		return apiCredentials{}, fmt.Errorf("load token: %w", err)
+	}
+	tokenExists := hashedToken != ""
+
+	// If auth mode is set to none, and insecure allow no auth is set, and it's a
+	// loopback address - allow no authentication regardless of whether a token
+	// exists. This is mostly for all-in-one mode.
+	if cfg.AuthMode == config.AuthModeNone && cfg.InsecureAllowNoAuth && isLoopback {
+		return apiCredentials{disabled: true}, nil
+	}
+
+	// Next, if a token exists, we always use it, regardless of the requested mode.
+	if tokenExists {
+		logger.Info("Found existing API token, enabling authentication", "listen-addr", cfg.ListenAddr)
+		return apiCredentials{hashedToken: hashedToken}, nil
+	}
+
+	// Next handle auth mode none, which is not allowed for non-loopback
+	// addresses unless explicitly enabled.
+	if cfg.AuthMode == config.AuthModeNone {
+		if !isLoopback && !cfg.InsecureAllowNoAuth {
+			return apiCredentials{}, ErrAuthenticationCannotBeDisabled
+		}
+
+		logger.Warn("WARNING: API authentication disabled. This is not recommended for production use.", "listen-addr", cfg.ListenAddr)
+		return apiCredentials{disabled: true}, nil
+	}
+
+	// If the listen address is a loopback address, and auth mode is set to auto, we disable authentication
+	if cfg.AuthMode == config.AuthModeAuto && isLoopback {
+		logger.Info("No authentication required for loopback address", "listen-addr", cfg.ListenAddr)
+		return apiCredentials{disabled: true}, nil
+	}
+
+	// Otherwise, generate a new token and require it.
+	rawToken, hashedToken, err := token.Write(cfg.DataDir)
+	if err != nil {
+		return apiCredentials{}, fmt.Errorf("write token: %w", err)
+	}
+	logger.Info(fmt.Sprintf("New API token generated. Store it now - it will not be shown again. TOKEN: %s", rawToken))
+	return apiCredentials{hashedToken: hashedToken}, nil
 }

@@ -15,9 +15,11 @@ Octoplex is a Docker-native live video restreamer.
 * Terminal UI with live metrics and health status
 * Powered by FFmpeg, Docker & other open source tools
 
-:warning: **Security warning:** Octoplex's security hardening is a
-work-in-progress. For now it is only suitable for running on localhost or
-behind a trusted private network.
+:warning: **Warning - alpha software:** Octoplex is still in active
+development. Features and configuration settings may change between releases.
+Double-check your security configuration and exercise extra caution before
+deploying to public-facing networks. See the [Security](#security) section for
+more.
 
 ## How it works
 
@@ -178,6 +180,8 @@ Flag|Alias|Modes|Env var|Default|Description
 `--data-dir`||`server` `all-in-one`|`OCTO_DATA_DIR`|`$HOME/.local/state/octoplex` (Linux) or`$HOME/Library/Caches/octoplex` (macOS)|Directory for storing persistent state and logs
 `--listen-addr`|`-a`|`server`|`OCTO_LISTEN_ADDR`|`127.0.0.1:50051`|Listen address for gRPC API.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. Use `0:0.0.0:50051` to bind to all network interfaces.
 `--hostname`|`-H`|`server`|`OCTO_HOSTNAME`|`localhost`|DNS name of server
+`--auth`||`server`|`OCTO_AUTH`|`auto`|Authentication mode for clients, one of `none`, `auto` and `token`. See [Security](#security).
+`--insecure-allow-no-auth`||`server`|`OCTO_INSECURE_ALLOW_NO_AUTH`|`false`|Allow `--auth=none` when bound to non-local addresses. See [Security](#security).
 `--tls-cert`||`server` `all-in-one`|`OCTO_TLS_CERT`||Path to custom TLS certifcate (PEM-encoded, must be valid for `hostname`). Used for gRPC and RTMPS connections.
 `--tls-key`||`server` `all-in-one`|`OCTO_TLS_KEY`||Path to custom TLS key (PEM-encoded, must be valid for `hostname`). Used for gRPC and RTMPS connections.
 `--in-docker`||`server`|`OCTO_DOCKER`|`false`|Configure Octoplex to run inside Docker
@@ -194,11 +198,45 @@ Flag|Alias|Default|Description
 `--help`|`-h`|All|||Show help
 `--host`|`-H`|`localhost:50051`|Remote Octoplex server to connect to
 `--tls-skip-verify`||`false`|Skip TLS certificate verification (insecure)
+`--api-token`|||API token. See [Security](#security).
 `--log-file`|||Path to log file
 
 ### All-in-one mode
 
 :information_source: When running in all-in-one mode (`octoplex run`) some flags may be overridden or unavailable.
+
+## Security
+
+Read this section before putting Octoplex on any network you don't fully control.
+
+### API tokens
+
+Octoplex automatically protects its internal API whenever it binds to anything other
+than localhost.
+
+When you run `octoplex server start`:
+
+* `--auth=auto` (the default): if the API listen address is bound only to **localhost/loopback**, Octoplex requires no authentication; if it's bound to **any other network interface** the server generates a long random API token, logs it once on startup, hashes it to disk, and requires every client call to include `--api-token "<API_TOKEN>"`.
+* `--auth=token`: always require an API token, even on loopback.
+* `--auth=none`: disable authentication completely, **but only for localhost binds**. If you set `--auth=none` with `--listen-addr:0.0.0.0:50051` or any other non-localhost address you must also pass `--insecure-allow-no-auth` to acknowledge the risk; otherwise the server refuses to start.
+
+The API is **always** served over TLS; if you don't supply a certificate
+Octoplex generates a self-signed one, so the token is never sent in clear-text.
+
+> **:information_source: Tip** To regenerate a new API token, delete `token.txt` from the Octoplex data directory, and restart the server. See the `--data-dir` option in [server flags](#server-flags).
+
+### Incoming streams
+
+Octoplex also listens for source streams (RTMP/RTMPS on ports 1935/1936 by
+default). These are **not** covered by the API token. To stop anyone from pushing
+an unsolicited feed, start the server with a unique stream key:
+
+```sh
+octoplex server start --stream-key "<YOUR_UNIQUE_STREAM_KEY>" ...
+# or, set OCTO_STREAM_KEY=...
+```
+
+See [server flags](#server-flags) for more.
 
 ## Restreaming with Octoplex
 
@@ -223,7 +261,7 @@ If you see the error
 > "The RTMP server sent an invalid SSL certificate."
 
 then either install a CA‑signed TLS certificate for your RTMPS host, or import
-your self‑signed cert into your OS’s trusted store. See the [server flags](#server-flags)
+your self‑signed cert into your OS's trusted store. See the [server flags](#server-flags)
 section above.
 
 ### Restreaming with FFmpeg
@@ -249,8 +287,12 @@ ffmpeg -i input.mp4 -c copy -f flv rtmps://localhost:1936/live
 :warning: By design, Octoplex needs to launch and terminate Docker containers
 on your host. If you run Octoplex inside Docker with a bind-mounted Docker
 socket, it effectively has root-level access to your server. Evaluate the
-security trade-offs carefully. If you’re unsure, consider running Octoplex
+security trade-offs carefully. If you're unsure, consider running Octoplex
 directly on the host rather than in a container.
+
+:information_source: Note: Running the TUI client from Docker is not
+recommended. Install Octoplex natively via Homebrew or download a release from
+GitHub instead. See [Installation](#Installation) for details.
 
 #### `docker run`
 
@@ -266,11 +308,6 @@ docker run \
   --restart unless-stopped                     \
   ghcr.io/rfwatson/octoplex:latest
 ```
-
-:information_source: Note: Running the client &mdash; or the all-in-one server
-mode &mdash; from Docker is not recommended. Install Octoplex natively via Homebrew or
-download a release from GitHub instead. See [Installation](#Installation) for
-details.
 
 #### `docker-compose`
 

@@ -11,8 +11,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -23,7 +21,6 @@ import (
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/server"
-	"git.netflux.io/rob/octoplex/internal/shortid"
 	"git.netflux.io/rob/octoplex/internal/store"
 	"git.netflux.io/rob/octoplex/internal/terminal"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
@@ -69,6 +66,8 @@ func buildClientServer(
 	logger *slog.Logger,
 	opts ...buildOpt,
 ) (*client.App, *server.App) {
+	tempDir := t.TempDir()
+
 	options := buildClientServerOptions{ // defaults
 		listenerFunc:       server.Listener("[::]:0"), // ipv6 required for GitHub actions
 		insecureSkipVerify: true,
@@ -79,9 +78,7 @@ func buildClientServer(
 
 	// isolate test data
 	if cfg.DataDir == "" {
-		cfg.DataDir = filepath.Join(os.TempDir(), "octoplex-test-data-"+shortid.New().String())
-		require.NoError(t, os.MkdirAll(cfg.DataDir, 0700))
-		t.Cleanup(func() { os.RemoveAll(cfg.DataDir) })
+		cfg.DataDir = tempDir
 	}
 
 	// Set up listener first, avoid timing issues connecting to the server.
