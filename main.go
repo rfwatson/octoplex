@@ -450,7 +450,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Name:        "auth",
 			Usage:       "Authentication mode for the server",
 			Category:    "Server",
-			DefaultText: "token",
+			DefaultText: "auto",
 			Sources:     cli.EnvVars("OCTO_AUTH"),
 			Hidden:      clientAndServerMode,
 		},
@@ -748,7 +748,9 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 	}
 
 	var authMode config.AuthMode
-	switch cmp.Or(c.String("auth"), "token") {
+	switch c.String("auth") {
+	case "", "auto":
+		authMode = config.AuthModeAuto
 	case "none":
 		authMode = config.AuthModeNone
 	case "token":

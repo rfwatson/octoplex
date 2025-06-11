@@ -43,14 +43,12 @@ type Server struct {
 func newServer(
 	dispatchSync func(event.Command) (event.Event, error),
 	dispatchAsync func(event.ClientID, event.Command),
-	credentials apiCredentials,
 	bus *event.Bus,
 	logger *slog.Logger,
 ) *Server {
 	return &Server{
 		dispatchSync:  dispatchSync,
 		dispatchAsync: dispatchAsync,
-		credentials:   credentials,
 		bus:           bus,
 		clientC:       make(chan struct{}, 1),
 		logger:        logger.With("component", "server"),

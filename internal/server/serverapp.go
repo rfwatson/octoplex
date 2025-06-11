@@ -132,7 +132,7 @@ func (a *App) Run(ctx context.Context) error {
 	)
 
 	grpcDone := make(chan error, 1)
-	internalAPI := newServer(a.DispatchSync, a.DispatchAsync, a.credentials, a.eventBus, a.logger)
+	internalAPI := newServer(a.DispatchSync, a.DispatchAsync, a.eventBus, a.logger)
 	pb.RegisterInternalAPIServer(grpcServer, internalAPI)
 	go func() {
 		a.logger.Info("gRPC server started", "listen-addr", lis.Addr().String())

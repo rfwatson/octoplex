@@ -40,17 +40,16 @@ func TestGenerateAndCompareToken(t *testing.T) {
 	require.False(t, isEqual)
 }
 
-func TestLoadToken(t *testing.T) {
+func TestWriteToken(t *testing.T) {
 	tempDir := t.TempDir()
-	rawToken, storedToken, err := token.Load(tempDir)
+	rawToken, storedToken, err := token.Write(tempDir)
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, rawToken)
 	assert.NotEmpty(t, storedToken)
 
-	rawToken2, storedToken2, err := token.Load(tempDir) // should return the same token
+	storedToken2, err := token.Read(tempDir) // should return the same token
 	require.NoError(t, err)
-	assert.Empty(t, rawToken2)
 	assert.Equal(t, storedToken, storedToken2)
 
 	fi, err := os.Stat(filepath.Join(tempDir, "token.txt"))
