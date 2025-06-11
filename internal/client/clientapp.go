@@ -20,6 +20,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 )
 
 // DefaultServerAddr is the default address for the client to connect to.
@@ -30,6 +31,7 @@ type App struct {
 	bus                *event.Bus
 	serverAddr         string
 	insecureSkipVerify bool
+	apiKey             string
 	clipboardAvailable bool
 	buildInfo          domain.BuildInfo
 	screen             *terminal.Screen
@@ -41,6 +43,7 @@ type NewParams struct {
 	ClipboardAvailable bool
 	ServerAddr         string
 	InsecureSkipVerify bool
+	APIKey             string
 	BuildInfo          domain.BuildInfo
 	Screen             *terminal.Screen
 	Logger             *slog.Logger
@@ -52,6 +55,7 @@ func New(params NewParams) *App {
 		bus:                event.NewBus(params.Logger),
 		serverAddr:         cmp.Or(params.ServerAddr, DefaultServerAddr),
 		insecureSkipVerify: params.InsecureSkipVerify,
+		apiKey:             params.APIKey,
 		clipboardAvailable: params.ClipboardAvailable,
 		buildInfo:          params.BuildInfo,
 		screen:             params.Screen,
@@ -370,9 +374,8 @@ func (a *App) buildClientConn(ctx context.Context) (*grpc.ClientConn, error) {
 
 	conn, err := grpc.NewClient(
 		a.serverAddr,
-		grpc.WithTransportCredentials(
-			credentials.NewTLS(tlsConfig),
-		),
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+		grpc.WithUnaryInterceptor(authInterceptor(a.apiKey)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("new gRPC client: %w", err)
@@ -395,6 +398,17 @@ func (a *App) doHandshake(stream pb.InternalAPI_CommunicateClient) error {
 	}
 
 	return nil
+}
+
+func authInterceptor(apiKey string) grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, next grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		if apiKey != "" {
+			md := metadata.Pairs("authorization", "Bearer "+apiKey)
+			ctx = metadata.NewOutgoingContext(ctx, md)
+		}
+
+		return next(ctx, method, req, reply, cc, opts...)
+	}
 }
 
 func parseID(id string) (uuid.UUID, error) {

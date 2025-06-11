@@ -7,14 +7,20 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/event"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
 	"git.netflux.io/rob/octoplex/internal/protocol"
+	"git.netflux.io/rob/octoplex/internal/token"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
 
 // Server is the gRPC server that handles incoming commands and outgoing
@@ -24,6 +30,7 @@ type Server struct {
 
 	dispatchSync  func(event.Command) (event.Event, error)
 	dispatchAsync func(event.ClientID, event.Command)
+	credentials   apiCredentials
 	bus           *event.Bus
 	logger        *slog.Logger
 
@@ -36,12 +43,14 @@ type Server struct {
 func newServer(
 	dispatchSync func(event.Command) (event.Event, error),
 	dispatchAsync func(event.ClientID, event.Command),
+	credentials apiCredentials,
 	bus *event.Bus,
 	logger *slog.Logger,
 ) *Server {
 	return &Server{
 		dispatchSync:  dispatchSync,
 		dispatchAsync: dispatchAsync,
+		credentials:   credentials,
 		bus:           bus,
 		clientC:       make(chan struct{}, 1),
 		logger:        logger.With("component", "server"),
@@ -334,5 +343,39 @@ func (s *Server) StopDestination(ctx context.Context, req *pb.StopDestinationReq
 		}, nil
 	default:
 		return nil, fmt.Errorf("unexpected event type: %T", e)
+	}
+}
+
+func authInterceptor(credentials apiCredentials) grpc.UnaryServerInterceptor {
+	if credentials.storedToken == "" && !credentials.disabled {
+		panic("API authentication is enabled but no token is configured")
+	}
+
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if credentials.disabled {
+			return handler(ctx, req)
+		}
+
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			return nil, status.Errorf(codes.Unauthenticated, "missing metadata")
+		}
+
+		authHeader := md["authorization"]
+		if len(authHeader) < 1 {
+			return nil, status.Errorf(codes.Unauthenticated, "authorization token not supplied")
+		}
+
+		authHeaderValue := authHeader[0]
+		if !strings.HasPrefix(authHeaderValue, "Bearer ") {
+			return nil, status.Errorf(codes.Unauthenticated, "invalid authorization format")
+		}
+		rawToken := strings.TrimPrefix(authHeaderValue, "Bearer ")
+
+		if isValid, err := token.Compare(token.RawToken(rawToken), credentials.storedToken); err != nil || !isValid {
+			return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
+		}
+
+		return handler(ctx, req)
 	}
 }

@@ -145,6 +145,10 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 						Destination: &clientTLSSkipVerify,
 					},
 					&cli.StringFlag{
+						Name:  "api-key",
+						Usage: "API key for authentication with the server",
+					},
+					&cli.StringFlag{
 						Name:      "log-file",
 						Usage:     "Path to the log file",
 						TakesFile: true,
@@ -443,6 +447,22 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Hidden:   clientAndServerMode,
 		},
 		&cli.StringFlag{
+			Name:        "auth",
+			Usage:       "Authentication mode for the server",
+			Category:    "Server",
+			DefaultText: "token",
+			Sources:     cli.EnvVars("OCTO_AUTH"),
+			Hidden:      clientAndServerMode,
+		},
+		&cli.BoolFlag{
+			Name:        "insecure-allow-no-auth",
+			Usage:       "DANGER: Allow unauthenticated access to the server.",
+			Category:    "Server",
+			DefaultText: "false",
+			Sources:     cli.EnvVars("OCTO_INSECURE_ALLOW_NO_AUTH"),
+			Hidden:      clientAndServerMode,
+		},
+		&cli.StringFlag{
 			Name:      "tls-cert",
 			Usage:     "Path to a TLS certificate",
 			Category:  "Server",
@@ -526,7 +546,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 }
 
 // runClient runs the client.
-func runClient(ctx context.Context, _ *cli.Command, logger *slog.Logger) error {
+func runClient(ctx context.Context, c *cli.Command, logger *slog.Logger) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -540,6 +560,7 @@ func runClient(ctx context.Context, _ *cli.Command, logger *slog.Logger) error {
 	app := client.New(client.NewParams{
 		ServerAddr:         clientHost,
 		InsecureSkipVerify: clientTLSSkipVerify,
+		APIKey:             c.String("api-key"),
 		ClipboardAvailable: !clipboard.Unsupported,
 		BuildInfo: domain.BuildInfo{
 			GoVersion: buildInfo.GoVersion,
@@ -570,6 +591,7 @@ func buildClient(ctx context.Context, c *cli.Command) (*client.App, error) {
 	return client.New(client.NewParams{
 		ServerAddr:         clientHost,
 		InsecureSkipVerify: clientTLSSkipVerify,
+		APIKey:             c.String("api-key"),
 		ClipboardAvailable: !clipboard.Unsupported,
 		BuildInfo: domain.BuildInfo{
 			GoVersion: buildInfo.GoVersion,
@@ -725,6 +747,16 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 		dataDir = appStateDir
 	}
 
+	var authMode config.AuthMode
+	switch cmp.Or(c.String("auth"), "token") {
+	case "none":
+		authMode = config.AuthModeNone
+	case "token":
+		authMode = config.AuthModeToken
+	default:
+		return config.Config{}, fmt.Errorf("invalid auth mode: %s", c.String("auth"))
+	}
+
 	logToFileEnabled := c.Bool("log-to-file")
 	logFile := c.String("log-file")
 
@@ -735,11 +767,13 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 	}
 
 	cfg := config.Config{
-		ListenAddr: cmp.Or(serverListenAddr, defaultListenAddr),
-		Host:       cmp.Or(serverHostname, defaultHostname),
-		InDocker:   c.Bool("in-docker"),
-		Debug:      c.Bool("debug"),
-		DataDir:    dataDir,
+		ListenAddr:          cmp.Or(serverListenAddr, defaultListenAddr),
+		Host:                cmp.Or(serverHostname, defaultHostname),
+		AuthMode:            authMode,
+		InsecureAllowNoAuth: c.Bool("insecure-allow-no-auth"),
+		InDocker:            c.Bool("in-docker"),
+		Debug:               c.Bool("debug"),
+		DataDir:             dataDir,
 		LogFile: config.LogFile{
 			Enabled: logToFileEnabled,
 			Path:    logFile,
