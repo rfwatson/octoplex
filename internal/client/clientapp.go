@@ -375,7 +375,8 @@ func (a *App) buildClientConn(ctx context.Context) (*grpc.ClientConn, error) {
 	conn, err := grpc.NewClient(
 		a.serverAddr,
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
-		grpc.WithUnaryInterceptor(authInterceptor(a.apiKey)),
+		grpc.WithUnaryInterceptor(authInterceptorUnary(a.apiKey)),
+		grpc.WithStreamInterceptor(authInterceptorStream(a.apiKey)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("new gRPC client: %w", err)
@@ -400,15 +401,32 @@ func (a *App) doHandshake(stream pb.InternalAPI_CommunicateClient) error {
 	return nil
 }
 
-func authInterceptor(apiKey string) grpc.UnaryClientInterceptor {
+func authInterceptorUnary(apiKey string) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, next grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		if apiKey != "" {
-			md := metadata.Pairs("authorization", "Bearer "+apiKey)
-			ctx = metadata.NewOutgoingContext(ctx, md)
-		}
-
-		return next(ctx, method, req, reply, cc, opts...)
+		return next(authenticate(ctx, apiKey), method, req, reply, cc, opts...)
 	}
+}
+
+func authInterceptorStream(apiKey string) grpc.StreamClientInterceptor {
+	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		return streamer(authenticate(ctx, apiKey), desc, cc, method, opts...)
+	}
+}
+
+func authenticate(ctx context.Context, apiKey string) context.Context {
+	if apiKey == "" {
+		return ctx
+	}
+
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	} else {
+		md = md.Copy()
+	}
+
+	md.Set("authorization", "Bearer "+apiKey)
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 func parseID(id string) (uuid.UUID, error) {

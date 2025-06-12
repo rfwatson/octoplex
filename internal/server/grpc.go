@@ -344,36 +344,62 @@ func (s *Server) StopDestination(ctx context.Context, req *pb.StopDestinationReq
 	}
 }
 
-func authInterceptor(credentials apiCredentials) grpc.UnaryServerInterceptor {
+func authInterceptorUnary(credentials apiCredentials) grpc.UnaryServerInterceptor {
 	if credentials.storedToken == "" && !credentials.disabled {
 		panic("API authentication is enabled but no token is configured")
 	}
 
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		if credentials.disabled {
-			return handler(ctx, req)
-		}
-
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			return nil, status.Errorf(codes.Unauthenticated, "missing metadata")
-		}
-
-		authHeader := md["authorization"]
-		if len(authHeader) < 1 {
-			return nil, status.Errorf(codes.Unauthenticated, "authorization token not supplied")
-		}
-
-		authHeaderValue := authHeader[0]
-		if !strings.HasPrefix(authHeaderValue, "Bearer ") {
-			return nil, status.Errorf(codes.Unauthenticated, "invalid authorization format")
-		}
-		rawToken := strings.TrimPrefix(authHeaderValue, "Bearer ")
-
-		if isValid, err := token.Compare(token.RawToken(rawToken), credentials.storedToken); err != nil || !isValid {
+		if ok, err := authenticate(ctx, credentials); err != nil {
+			return nil, fmt.Errorf("authenticate: %w", err)
+		} else if !ok {
 			return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
 		}
 
 		return handler(ctx, req)
 	}
+}
+
+func authInterceptorStream(credentials apiCredentials) grpc.StreamServerInterceptor {
+	if credentials.storedToken == "" && !credentials.disabled {
+		panic("API authentication is enabled but no token is configured")
+	}
+
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if ok, err := authenticate(ss.Context(), credentials); err != nil {
+			return fmt.Errorf("authenticate: %w", err)
+		} else if !ok {
+			return status.Errorf(codes.Unauthenticated, "invalid credentials")
+		}
+
+		return handler(srv, ss)
+	}
+}
+
+func authenticate(ctx context.Context, credentials apiCredentials) (bool, error) {
+	if credentials.disabled {
+		return true, nil
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return false, status.Errorf(codes.Unauthenticated, "missing metadata")
+	}
+
+	authHeader := md.Get("authorization")
+	if len(authHeader) < 1 {
+		return false, status.Errorf(codes.Unauthenticated, "authorization token not supplied")
+	}
+
+	authHeaderValue := authHeader[0]
+	if !strings.HasPrefix(authHeaderValue, "Bearer ") {
+		return false, status.Errorf(codes.Unauthenticated, "invalid authorization format")
+	}
+	rawToken := strings.TrimPrefix(authHeaderValue, "Bearer ")
+
+	if isValid, err := token.Compare(token.RawToken(rawToken), credentials.storedToken); err != nil || !isValid {
+		return false, status.Errorf(codes.Unauthenticated, "invalid credentials")
+	}
+
+	return true, nil
 }

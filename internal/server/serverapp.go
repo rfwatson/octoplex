@@ -127,7 +127,8 @@ func (a *App) Run(ctx context.Context) error {
 		return fmt.Errorf("load TLS cert: %w", err)
 	}
 	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(authInterceptor(a.credentials)),
+		grpc.UnaryInterceptor(authInterceptorUnary(a.credentials)),
+		grpc.StreamInterceptor(authInterceptorStream(a.credentials)),
 		grpc.Creds(credentials.NewTLS(&cryptotls.Config{Certificates: []cryptotls.Certificate{cert}, MinVersion: config.TLSMinVersion})),
 	)
 
