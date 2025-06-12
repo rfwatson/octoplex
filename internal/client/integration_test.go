@@ -124,7 +124,11 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 
 	client, server := buildClientServer(
 		t,
-		config.Config{Sources: config.Sources{MediaServer: mediaServerConfig}},
+		config.Config{
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			Sources:             config.Sources{MediaServer: mediaServerConfig},
+		},
 		dockerClient,
 		screen,
 		screenCaptureC,
@@ -302,7 +306,9 @@ func TestIntegrationCustomHost(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			Host: "rtmp.example.com",
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			Host:                "rtmp.example.com",
 			Sources: config.Sources{
 				MediaServer: config.MediaServerSource{
 					RTMP: config.RTMPSource{Enabled: true},
@@ -378,8 +384,10 @@ func TestIntegrationTLSCerts(t *testing.T) {
 	client, srv := buildClientServer(
 		t,
 		config.Config{
-			DataDir: dataDir,
-			Sources: config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.RTMPSource{Enabled: true}}},
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			DataDir:             dataDir,
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.RTMPSource{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -426,8 +434,10 @@ func TestIntegrationTLSCerts(t *testing.T) {
 	client, srv = buildClientServer(
 		t,
 		config.Config{
-			DataDir: dataDir,
-			Sources: config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.RTMPSource{Enabled: true}}},
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			DataDir:             dataDir,
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.RTMPSource{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -478,6 +488,8 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
 			TLS: &config.TLS{
 				CertPath: "testdata/server.crt",
 				KeyPath:  "testdata/server.key",
@@ -553,6 +565,8 @@ func TestIntegrationCustomTLSNoInsecureSkipVerify(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
 			TLS: &config.TLS{
 				CertPath: "testdata/server.crt",
 				KeyPath:  "testdata/server.key",
@@ -601,7 +615,11 @@ func TestIntegrationRestartDestination(t *testing.T) {
 
 	client, server := buildClientServer(
 		t,
-		config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}},
+		config.Config{
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+		},
 		dockerClient,
 		screen,
 		screenCaptureC,
@@ -745,7 +763,11 @@ func TestIntegrationUpdateDestination(t *testing.T) {
 
 	client, server := buildClientServer(
 		t,
-		config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}},
+		config.Config{
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+		},
 		dockerClient,
 		screen,
 		screenCaptureC,
@@ -843,7 +865,11 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 
 	client, server := buildClientServer(
 		t,
-		config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}},
+		config.Config{
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+		},
 		dockerClient,
 		screen,
 		screenCaptureC,
@@ -923,7 +949,11 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 
 	client, server := buildClientServer(
 		t,
-		config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{StreamKey: "live", RTMP: config.RTMPSource{Enabled: true}}}},
+		config.Config{
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{StreamKey: "live", RTMP: config.RTMPSource{Enabled: true}}},
+		},
 		dockerClient,
 		screen,
 		screenCaptureC,
@@ -1067,7 +1097,11 @@ func TestIntegrationStartupCheck(t *testing.T) {
 
 	client, server := buildClientServer(
 		t,
-		config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}},
+		config.Config{
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+		},
 		dockerClient,
 		screen,
 		screenCaptureC,
@@ -1138,7 +1172,11 @@ func TestIntegrationMediaServerError(t *testing.T) {
 
 	client, server := buildClientServer(
 		t,
-		config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}},
+		config.Config{
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+		},
 		dockerClient,
 		screen,
 		screenCaptureC,
@@ -1179,7 +1217,11 @@ func TestIntegrationDockerClientError(t *testing.T) {
 
 	client, server := buildClientServer(
 		t,
-		config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}},
+		config.Config{
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+		},
 		&dockerClient,
 		screen,
 		screenCaptureC,
@@ -1219,7 +1261,11 @@ func TestIntegrationDockerConnectionError(t *testing.T) {
 
 	client, server := buildClientServer(
 		t,
-		config.Config{Sources: config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}}},
+		config.Config{
+			AuthMode:            config.AuthModeNone,
+			InsecureAllowNoAuth: true,
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+		},
 		dockerClient,
 		screen,
 		screenCaptureC,
@@ -1316,7 +1362,11 @@ func TestIntegrationCopyURLs(t *testing.T) {
 
 			client, server := buildClientServer(
 				t,
-				config.Config{Sources: config.Sources{MediaServer: tc.mediaServerConfig}},
+				config.Config{
+					AuthMode:            config.AuthModeNone,
+					InsecureAllowNoAuth: true,
+					Sources:             config.Sources{MediaServer: tc.mediaServerConfig},
+				},
 				dockerClient,
 				screen,
 				screenCaptureC,
