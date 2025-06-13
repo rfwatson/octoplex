@@ -18,55 +18,62 @@ func TestBuildCredentials(t *testing.T) {
 		listenAddr          string
 		authMode            config.AuthMode
 		insecureAllowNoAuth bool
-		wantCredentials     bool
+		wantAuthRequired    bool
 		wantErr             string
 	}{
 		{
-			name:            "existing token, auth mode token",
-			existingToken:   "s3cr3t",
-			authMode:        config.AuthModeToken,
-			wantCredentials: true,
+			name:             "existing token, auth mode token",
+			existingToken:    "s3cr3t",
+			authMode:         config.AuthModeToken,
+			wantAuthRequired: true,
 		},
 		{
-			name:            "existing token, auth mode none",
-			existingToken:   "s3cr3t",
-			authMode:        config.AuthModeNone,
-			wantCredentials: true,
+			name:             "existing token, auth mode none",
+			existingToken:    "s3cr3t",
+			authMode:         config.AuthModeNone,
+			wantAuthRequired: true,
 		},
 		{
-			name:     "no existing token, auth mode none, no insecure allow no auth",
-			authMode: config.AuthModeNone,
-			wantErr:  "no token found and authentication is required, please run the server with --insecure-allow-no-auth to disable authentication",
+			name:             "no existing token, auth mode none, localhost, no insecure allow no auth",
+			listenAddr:       "127.0.0.1:50051",
+			authMode:         config.AuthModeNone,
+			wantAuthRequired: false,
 		},
 		{
-			name:                "no existing token, auth mode none, insecure allow no auth",
+			name:       "no existing token, auth mode none, non-localhost, no insecure allow no auth",
+			listenAddr: "0.0.0.0:50051",
+			authMode:   config.AuthModeNone,
+			wantErr:    "authentication is disabled but detected non-local listen address, please run the server with --insecure-allow-no-auth to disable authentication",
+		},
+		{
+			name:                "no existing token, auth mode none, non-localhost, insecure allow no auth",
 			authMode:            config.AuthModeNone,
 			insecureAllowNoAuth: true,
-			wantCredentials:     false,
+			wantAuthRequired:    false,
 		},
 		{
-			name:            "no existing token, auth mode auto, localhost address",
-			listenAddr:      "127.0.0.1:50051",
-			authMode:        config.AuthModeAuto,
-			wantCredentials: false,
+			name:             "no existing token, auth mode auto, localhost address",
+			listenAddr:       "127.0.0.1:50051",
+			authMode:         config.AuthModeAuto,
+			wantAuthRequired: false,
 		},
 		{
-			name:            "no existing token, auth mode auto, non-localhost address",
-			listenAddr:      "192.168.1.100:50051",
-			authMode:        config.AuthModeAuto,
-			wantCredentials: true,
+			name:             "no existing token, auth mode auto, non-localhost address",
+			listenAddr:       "192.168.1.100:50051",
+			authMode:         config.AuthModeAuto,
+			wantAuthRequired: true,
 		},
 		{
-			name:            "no existing token, auth mode token, localhost address",
-			listenAddr:      "127.0.0.1:50051",
-			authMode:        config.AuthModeToken,
-			wantCredentials: true,
+			name:             "no existing token, auth mode token, localhost address",
+			listenAddr:       "127.0.0.1:50051",
+			authMode:         config.AuthModeToken,
+			wantAuthRequired: true,
 		},
 		{
-			name:            "no existing token, auth mode token, non-localhost address",
-			listenAddr:      "192.168.1.100:50051",
-			authMode:        config.AuthModeToken,
-			wantCredentials: true,
+			name:             "no existing token, auth mode token, non-localhost address",
+			listenAddr:       "192.168.1.100:50051",
+			authMode:         config.AuthModeToken,
+			wantAuthRequired: true,
 		},
 	}
 
@@ -91,7 +98,7 @@ func TestBuildCredentials(t *testing.T) {
 				assert.EqualError(t, err, tc.wantErr)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tc.wantCredentials, !got.disabled)
+				assert.Equal(t, tc.wantAuthRequired, !got.disabled)
 			}
 		})
 	}

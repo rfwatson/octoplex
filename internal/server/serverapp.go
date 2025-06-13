@@ -601,9 +601,16 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, e
 		return apiCredentials{storedToken: storedToken}, nil
 	}
 
+	var addr *net.TCPAddr
+	addr, err = net.ResolveTCPAddr("tcp", cfg.ListenAddr)
+	if err != nil {
+		return apiCredentials{}, fmt.Errorf("resolve listen address: %w", err)
+	}
+	isLoopback := addr.IP.IsLoopback()
+
 	if cfg.AuthMode == config.AuthModeNone {
-		if !cfg.InsecureAllowNoAuth {
-			return apiCredentials{}, fmt.Errorf("no token found and authentication is required, please run the server with --insecure-allow-no-auth to disable authentication")
+		if !isLoopback && !cfg.InsecureAllowNoAuth {
+			return apiCredentials{}, fmt.Errorf("authentication is disabled but detected non-local listen address, please run the server with --insecure-allow-no-auth to disable authentication")
 		}
 
 		logger.Warn("WARNING: API authentication disabled. This is not recommended for production use.", "listen-addr", cfg.ListenAddr)
@@ -611,16 +618,9 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, e
 	}
 
 	// If the listen address is a loopback address, and auth mode is set to auto, we disable authentication
-	if cfg.AuthMode == config.AuthModeAuto {
-		var addr *net.TCPAddr
-		addr, err = net.ResolveTCPAddr("tcp", cfg.ListenAddr)
-		if err != nil {
-			return apiCredentials{}, fmt.Errorf("resolve listen address: %w", err)
-		}
-		if addr.IP.IsLoopback() {
-			logger.Info("No authentication required for loopback address", "listen-addr", cfg.ListenAddr)
-			return apiCredentials{disabled: true}, nil
-		}
+	if cfg.AuthMode == config.AuthModeAuto && isLoopback {
+		logger.Info("No authentication required for loopback address", "listen-addr", cfg.ListenAddr)
+		return apiCredentials{disabled: true}, nil
 	}
 
 	// Otherwise, generate a new token and require it.

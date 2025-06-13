@@ -30,7 +30,6 @@ type Server struct {
 
 	dispatchSync  func(event.Command) (event.Event, error)
 	dispatchAsync func(event.ClientID, event.Command)
-	credentials   apiCredentials
 	bus           *event.Bus
 	logger        *slog.Logger
 
