@@ -60,7 +60,7 @@ type AuthMode string
 
 const (
 	AuthModeAuto  AuthMode = ""
-	AuthModeNone  AuthMode = "none" // DANGER: no authentication even for loopback addresses.
+	AuthModeNone  AuthMode = "none"
 	AuthModeToken AuthMode = "token"
 )
 
