@@ -590,24 +590,38 @@ func (a *App) Stop(ctx context.Context) error {
 // It either returns a valid set of active credentials, a set of disabled
 // credentials, or an error.
 func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, error) {
-	storedToken, err := token.Read(cfg.DataDir)
-	if err != nil && !errors.Is(err, token.ErrTokenNotFound) {
-		return apiCredentials{}, fmt.Errorf("load token: %w", err)
-	}
-
-	tokenExists := storedToken != ""
-	if tokenExists {
-		logger.Info("Enabled authentication, using existing API token")
-		return apiCredentials{storedToken: storedToken}, nil
+	if cfg.ListenAddr == "" {
+		return apiCredentials{}, fmt.Errorf("listen address cannot be empty")
 	}
 
 	var addr *net.TCPAddr
-	addr, err = net.ResolveTCPAddr("tcp", cfg.ListenAddr)
+	addr, err := net.ResolveTCPAddr("tcp", cfg.ListenAddr)
 	if err != nil {
 		return apiCredentials{}, fmt.Errorf("resolve listen address: %w", err)
 	}
 	isLoopback := addr.IP.IsLoopback()
 
+	storedToken, err := token.Read(cfg.DataDir)
+	if err != nil && !errors.Is(err, token.ErrTokenNotFound) {
+		return apiCredentials{}, fmt.Errorf("load token: %w", err)
+	}
+	tokenExists := storedToken != ""
+
+	// If auth mode is set to none, and insecure allow no auth is set, and it's a
+	// loopback address - allow no authentication regardless of whether a token
+	// exists. This is mostly for all-in-one mode.
+	if cfg.AuthMode == config.AuthModeNone && cfg.InsecureAllowNoAuth && isLoopback {
+		return apiCredentials{disabled: true}, nil
+	}
+
+	// Next, if a token exists, we always use it, regardless of the requested mode.
+	if tokenExists {
+		logger.Info("Found existing API token, enabling authentication", "listen-addr", cfg.ListenAddr)
+		return apiCredentials{storedToken: storedToken}, nil
+	}
+
+	// Next handle auth mode none, which is not allowed for non-loopback
+	// addresses unless explicitly enabled.
 	if cfg.AuthMode == config.AuthModeNone {
 		if !isLoopback && !cfg.InsecureAllowNoAuth {
 			return apiCredentials{}, fmt.Errorf("authentication is disabled but detected non-local listen address, please run the server with --insecure-allow-no-auth to disable authentication")

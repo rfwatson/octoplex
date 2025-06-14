@@ -66,6 +66,7 @@ func (e errInterrupt) ExitCode() int {
 var (
 	serverListenAddr    string
 	serverHostname      string
+	serverAuthMode      string
 	clientHost          string
 	clientTLSSkipVerify bool
 )
@@ -452,6 +453,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Category:    "Server",
 			DefaultText: "auto",
 			Sources:     cli.EnvVars("OCTO_AUTH"),
+			Destination: &serverAuthMode,
 			Hidden:      clientAndServerMode,
 		},
 		&cli.BoolFlag{
@@ -682,8 +684,9 @@ func runClientAndServer(ctx context.Context, c *cli.Command) error {
 	}
 
 	// Override CLI flags:
-	serverListenAddr = fmt.Sprintf(":%d", lis.Addr().(*net.TCPAddr).Port)    // listen on all interfaces
-	serverHostname = "localhost"                                             // DNS name
+	serverListenAddr = fmt.Sprintf("127.0.0.1:%d", lis.Addr().(*net.TCPAddr).Port) // listen on all interfaces
+	serverHostname = "localhost"                                                   // DNS name
+	serverAuthMode = "none"
 	clientHost = fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port) // point client at the correct port
 	clientTLSSkipVerify = true                                               // override default TLS verification
 
@@ -748,7 +751,7 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 	}
 
 	var authMode config.AuthMode
-	switch c.String("auth") {
+	switch serverAuthMode {
 	case "", "auto":
 		authMode = config.AuthModeAuto
 	case "none":

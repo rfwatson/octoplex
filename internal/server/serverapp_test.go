@@ -23,15 +23,33 @@ func TestBuildCredentials(t *testing.T) {
 	}{
 		{
 			name:             "existing token, auth mode token",
+			listenAddr:       ":50051",
 			existingToken:    "s3cr3t",
 			authMode:         config.AuthModeToken,
 			wantAuthRequired: true,
 		},
 		{
 			name:             "existing token, auth mode none",
+			listenAddr:       ":50051",
 			existingToken:    "s3cr3t",
 			authMode:         config.AuthModeNone,
 			wantAuthRequired: true,
+		},
+		{
+			name:                "existing token, auth mode none, localhost, insecure allow no auth",
+			listenAddr:          "127.0.0.1:50051",
+			existingToken:       "s3cr3t",
+			authMode:            config.AuthModeNone,
+			insecureAllowNoAuth: true,
+			wantAuthRequired:    false,
+		},
+		{
+			name:                "existing token, auth mode none, non-localhost, insecure allow no auth",
+			listenAddr:          ":50051",
+			existingToken:       "s3cr3t",
+			authMode:            config.AuthModeNone,
+			insecureAllowNoAuth: true,
+			wantAuthRequired:    true,
 		},
 		{
 			name:             "no existing token, auth mode none, localhost, no insecure allow no auth",
@@ -47,6 +65,7 @@ func TestBuildCredentials(t *testing.T) {
 		},
 		{
 			name:                "no existing token, auth mode none, non-localhost, insecure allow no auth",
+			listenAddr:          ":50051",
 			authMode:            config.AuthModeNone,
 			insecureAllowNoAuth: true,
 			wantAuthRequired:    false,
