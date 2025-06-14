@@ -67,6 +67,7 @@ var (
 	serverListenAddr    string
 	serverHostname      string
 	serverAuthMode      string
+	insecureAllowNoAuth bool
 	clientHost          string
 	clientTLSSkipVerify bool
 )
@@ -462,6 +463,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Category:    "Server",
 			DefaultText: "false",
 			Sources:     cli.EnvVars("OCTO_INSECURE_ALLOW_NO_AUTH"),
+			Destination: &insecureAllowNoAuth,
 			Hidden:      clientAndServerMode,
 		},
 		&cli.StringFlag{
@@ -687,6 +689,7 @@ func runClientAndServer(ctx context.Context, c *cli.Command) error {
 	serverListenAddr = fmt.Sprintf("127.0.0.1:%d", lis.Addr().(*net.TCPAddr).Port) // listen on all interfaces
 	serverHostname = "localhost"                                                   // DNS name
 	serverAuthMode = "none"
+	insecureAllowNoAuth = true
 	clientHost = fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port) // point client at the correct port
 	clientTLSSkipVerify = true                                               // override default TLS verification
 
@@ -775,7 +778,7 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 		ListenAddr:          cmp.Or(serverListenAddr, defaultListenAddr),
 		Host:                cmp.Or(serverHostname, defaultHostname),
 		AuthMode:            authMode,
-		InsecureAllowNoAuth: c.Bool("insecure-allow-no-auth"),
+		InsecureAllowNoAuth: insecureAllowNoAuth,
 		InDocker:            c.Bool("in-docker"),
 		Debug:               c.Bool("debug"),
 		DataDir:             dataDir,
