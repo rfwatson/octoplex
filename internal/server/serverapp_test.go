@@ -61,7 +61,7 @@ func TestBuildCredentials(t *testing.T) {
 			name:       "no existing token, auth mode none, non-localhost, no insecure allow no auth",
 			listenAddr: "0.0.0.0:50051",
 			authMode:   config.AuthModeNone,
-			wantErr:    ErrAuthenticationRequired.Error(),
+			wantErr:    ErrAuthenticationCannotBeDisabled.Error(),
 		},
 		{
 			name:                "no existing token, auth mode none, non-localhost, insecure allow no auth",

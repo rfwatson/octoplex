@@ -73,9 +73,9 @@ var (
 	// detected on startup.
 	ErrOtherInstanceDetected = errors.New("another instance is currently running")
 
-	// ErrAuthenticationRequired is returned when it is not permitted for
+	// ErrAuthenticationCannotBeDisabled is returned when it is not permitted for
 	// authentication mode to be "none".
-	ErrAuthenticationRequired = errors.New("authentication required")
+	ErrAuthenticationCannotBeDisabled = errors.New("authentication cannot be disabled")
 )
 
 // New creates a new application instance.
@@ -631,7 +631,7 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, e
 	// addresses unless explicitly enabled.
 	if cfg.AuthMode == config.AuthModeNone {
 		if !isLoopback && !cfg.InsecureAllowNoAuth {
-			return apiCredentials{}, ErrAuthenticationRequired
+			return apiCredentials{}, ErrAuthenticationCannotBeDisabled
 		}
 
 		logger.Warn("WARNING: API authentication disabled. This is not recommended for production use.", "listen-addr", cfg.ListenAddr)

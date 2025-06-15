@@ -212,7 +212,7 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 				argv: func(t *testing.T, dataDir string) []string {
 					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "none"}
 				},
-				wantErr: "new server: build credentials: authentication required", // handled in main.go
+				wantErr: "new server: build credentials: authentication cannot be disabled", // handled in main.go
 			},
 			authenticate: false,
 		},
@@ -440,7 +440,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 				argv: func(t *testing.T, dataDir string) []string {
 					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "none"}
 				},
-				wantErr: "new server: build credentials: authentication required", // handled in main.go
+				wantErr: "new server: build credentials: authentication cannot be disabled", // handled in main.go
 			},
 			skipClient: true,
 		},

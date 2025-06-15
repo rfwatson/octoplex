@@ -674,7 +674,7 @@ func runServer(ctx context.Context, c *cli.Command, cfg config.Config, serverCfg
 			return cli.Exit(msg, 1)
 		}
 
-		if errors.Is(err, server.ErrAuthenticationRequired) {
+		if errors.Is(err, server.ErrAuthenticationCannotBeDisabled) {
 			msg := "Running with --auth none is not permitted with a non-loopback listen address.\n" +
 				"Either set `--auth token`, or run the server with `--insecure-allow-no-auth` to disable authentication completely."
 			return cli.Exit(msg, 2)
