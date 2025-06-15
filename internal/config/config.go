@@ -59,7 +59,7 @@ type Sources struct {
 type AuthMode string
 
 const (
-	AuthModeAuto  AuthMode = ""
+	AuthModeAuto  AuthMode = "auto"
 	AuthModeNone  AuthMode = "none"
 	AuthModeToken AuthMode = "token"
 )

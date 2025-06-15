@@ -344,11 +344,11 @@ func (s *Server) StopDestination(ctx context.Context, req *pb.StopDestinationReq
 }
 
 func authInterceptorUnary(credentials apiCredentials) grpc.UnaryServerInterceptor {
-	if credentials.storedToken == "" && !credentials.disabled {
+	if credentials.hashedToken == "" && !credentials.disabled {
 		panic("API authentication is enabled but no token is configured")
 	}
 
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if ok, err := authenticate(ctx, credentials); err != nil {
 			return nil, fmt.Errorf("authenticate: %w", err)
 		} else if !ok {
@@ -360,7 +360,7 @@ func authInterceptorUnary(credentials apiCredentials) grpc.UnaryServerIntercepto
 }
 
 func authInterceptorStream(credentials apiCredentials) grpc.StreamServerInterceptor {
-	if credentials.storedToken == "" && !credentials.disabled {
+	if credentials.hashedToken == "" && !credentials.disabled {
 		panic("API authentication is enabled but no token is configured")
 	}
 
@@ -396,7 +396,7 @@ func authenticate(ctx context.Context, credentials apiCredentials) (bool, error)
 	}
 	rawToken := strings.TrimPrefix(authHeaderValue, "Bearer ")
 
-	if isValid, err := token.Compare(token.RawToken(rawToken), credentials.storedToken); err != nil || !isValid {
+	if isValid, err := token.Compare(token.RawToken(rawToken), credentials.hashedToken); err != nil || !isValid {
 		return false, status.Errorf(codes.Unauthenticated, "invalid credentials")
 	}
 

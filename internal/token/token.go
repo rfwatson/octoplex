@@ -47,16 +47,14 @@ func Generate() (RawToken, string, error) {
 
 	saltB64 := base64.StdEncoding.EncodeToString(salt)
 	hashB64 := base64.StdEncoding.EncodeToString(hash)
-	stored := fmt.Sprintf("scrypt$%s$%s", saltB64, hashB64)
+	hashed := fmt.Sprintf("scrypt$%s$%s", saltB64, hashB64)
 
-	tokenHex := hex.EncodeToString(raw)
-
-	return RawToken(tokenHex), stored, nil
+	return RawToken(hex.EncodeToString(raw)), hashed, nil
 }
 
 // Compare checks if the provided raw token matches the stored token.
-func Compare(rawToken RawToken, storedToken string) (bool, error) {
-	parts := strings.Split(storedToken, "$")
+func Compare(rawToken RawToken, hashedToken string) (bool, error) {
+	parts := strings.Split(hashedToken, "$")
 	if len(parts) != 3 || parts[0] != "scrypt" {
 		return false, errors.New("invalid token format")
 	}
@@ -87,30 +85,29 @@ func Compare(rawToken RawToken, storedToken string) (bool, error) {
 // Write generates a new token, writes it to the specified path, and
 // returns the raw and stored representations.
 func Write(dataDir string) (RawToken, string, error) {
-	rawToken, storedToken, err := Generate()
+	rawToken, hashedToken, err := Generate()
 	if err != nil {
 		return "", "", fmt.Errorf("generate token: %w", err)
 	}
 
-	if err := os.WriteFile(tokenPath(dataDir), []byte(storedToken), 0600); err != nil {
+	if err := os.WriteFile(tokenPath(dataDir), []byte(hashedToken), 0600); err != nil {
 		return "", "", fmt.Errorf("write file: %w", err)
 	}
 
-	return rawToken, storedToken, nil
+	return rawToken, hashedToken, nil
 }
 
 // ErrTokenNotFound is returned when the token file does not exist.
 var ErrTokenNotFound = errors.New("token not found")
 
-// Read reads the stored token from the specified path and returns it,
-// along with an empty RawToken.
+// Read reads the stored token from the specified path and returns it.
 func Read(dataDir string) (string, error) {
-	if storedToken, err := os.ReadFile(tokenPath(dataDir)); errors.Is(err, os.ErrNotExist) {
+	if hashedToken, err := os.ReadFile(tokenPath(dataDir)); errors.Is(err, os.ErrNotExist) {
 		return "", ErrTokenNotFound
 	} else if err != nil {
 		return "", fmt.Errorf("read file: %w", err)
 	} else {
-		return string(storedToken), nil
+		return string(hashedToken), nil
 	}
 }
 

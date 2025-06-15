@@ -37,7 +37,7 @@ type command struct {
 
 type apiCredentials struct {
 	disabled    bool // if true, no authentication is required
-	storedToken string
+	hashedToken string
 }
 
 // App is an instance of the app.
@@ -601,11 +601,11 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, e
 	}
 	isLoopback := addr.IP.IsLoopback()
 
-	storedToken, err := token.Read(cfg.DataDir)
+	hashedToken, err := token.Read(cfg.DataDir)
 	if err != nil && !errors.Is(err, token.ErrTokenNotFound) {
 		return apiCredentials{}, fmt.Errorf("load token: %w", err)
 	}
-	tokenExists := storedToken != ""
+	tokenExists := hashedToken != ""
 
 	// If auth mode is set to none, and insecure allow no auth is set, and it's a
 	// loopback address - allow no authentication regardless of whether a token
@@ -617,7 +617,7 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, e
 	// Next, if a token exists, we always use it, regardless of the requested mode.
 	if tokenExists {
 		logger.Info("Found existing API token, enabling authentication", "listen-addr", cfg.ListenAddr)
-		return apiCredentials{storedToken: storedToken}, nil
+		return apiCredentials{hashedToken: hashedToken}, nil
 	}
 
 	// Next handle auth mode none, which is not allowed for non-loopback
@@ -638,10 +638,10 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, e
 	}
 
 	// Otherwise, generate a new token and require it.
-	rawToken, storedToken, err := token.Write(cfg.DataDir)
+	rawToken, hashedToken, err := token.Write(cfg.DataDir)
 	if err != nil {
 		return apiCredentials{}, fmt.Errorf("write token: %w", err)
 	}
 	logger.Info(fmt.Sprintf("New API token generated. Store it now - it will not be shown again. TOKEN: %s", rawToken))
-	return apiCredentials{storedToken: storedToken}, nil
+	return apiCredentials{hashedToken: hashedToken}, nil
 }
