@@ -68,9 +68,15 @@ type Params struct {
 // defaultChanSize is the default size of the dispatch channel.
 const defaultChanSize = 64
 
-// ErrOtherInstanceDetected is returned when another instance of the app is
-// detected on startup.
-var ErrOtherInstanceDetected = errors.New("another instance is currently running")
+var (
+	// ErrOtherInstanceDetected is returned when another instance of the app is
+	// detected on startup.
+	ErrOtherInstanceDetected = errors.New("another instance is currently running")
+
+	// ErrAuthenticationRequired is returned when it is not permitted for
+	// authentication mode to be "none".
+	ErrAuthenticationRequired = errors.New("authentication required")
+)
 
 // New creates a new application instance.
 func New(params Params) (*App, error) {
@@ -127,14 +133,15 @@ func (a *App) Run(ctx context.Context) error {
 		return fmt.Errorf("load TLS cert: %w", err)
 	}
 	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(authInterceptorUnary(a.credentials)),
-		grpc.StreamInterceptor(authInterceptorStream(a.credentials)),
+		grpc.UnaryInterceptor(authInterceptorUnary(a.credentials, a.logger)),
+		grpc.StreamInterceptor(authInterceptorStream(a.credentials, a.logger)),
 		grpc.Creds(credentials.NewTLS(&cryptotls.Config{Certificates: []cryptotls.Certificate{cert}, MinVersion: config.TLSMinVersion})),
 	)
 
 	grpcDone := make(chan error, 1)
 	internalAPI := newServer(a.DispatchSync, a.DispatchAsync, a.eventBus, a.logger)
 	pb.RegisterInternalAPIServer(grpcServer, internalAPI)
+
 	go func() {
 		a.logger.Info("gRPC server started", "listen-addr", lis.Addr().String())
 		grpcDone <- grpcServer.Serve(lis)
@@ -624,7 +631,7 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, e
 	// addresses unless explicitly enabled.
 	if cfg.AuthMode == config.AuthModeNone {
 		if !isLoopback && !cfg.InsecureAllowNoAuth {
-			return apiCredentials{}, fmt.Errorf("authentication is disabled but detected non-local listen address, please run the server with --insecure-allow-no-auth to disable authentication")
+			return apiCredentials{}, ErrAuthenticationRequired
 		}
 
 		logger.Warn("WARNING: API authentication disabled. This is not recommended for production use.", "listen-addr", cfg.ListenAddr)

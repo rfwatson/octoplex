@@ -343,13 +343,13 @@ func (s *Server) StopDestination(ctx context.Context, req *pb.StopDestinationReq
 	}
 }
 
-func authInterceptorUnary(credentials apiCredentials) grpc.UnaryServerInterceptor {
+func authInterceptorUnary(credentials apiCredentials, logger *slog.Logger) grpc.UnaryServerInterceptor {
 	if credentials.hashedToken == "" && !credentials.disabled {
 		panic("API authentication is enabled but no token is configured")
 	}
 
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if ok, err := authenticate(ctx, credentials); err != nil {
+		if ok, err := isAuthenticated(ctx, credentials, logger); err != nil {
 			return nil, fmt.Errorf("authenticate: %w", err)
 		} else if !ok {
 			return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
@@ -359,13 +359,13 @@ func authInterceptorUnary(credentials apiCredentials) grpc.UnaryServerIntercepto
 	}
 }
 
-func authInterceptorStream(credentials apiCredentials) grpc.StreamServerInterceptor {
+func authInterceptorStream(credentials apiCredentials, logger *slog.Logger) grpc.StreamServerInterceptor {
 	if credentials.hashedToken == "" && !credentials.disabled {
 		panic("API authentication is enabled but no token is configured")
 	}
 
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if ok, err := authenticate(ss.Context(), credentials); err != nil {
+		if ok, err := isAuthenticated(ss.Context(), credentials, logger); err != nil {
 			return fmt.Errorf("authenticate: %w", err)
 		} else if !ok {
 			return status.Errorf(codes.Unauthenticated, "invalid credentials")
@@ -375,7 +375,7 @@ func authInterceptorStream(credentials apiCredentials) grpc.StreamServerIntercep
 	}
 }
 
-func authenticate(ctx context.Context, credentials apiCredentials) (bool, error) {
+func isAuthenticated(ctx context.Context, credentials apiCredentials, logger *slog.Logger) (bool, error) {
 	if credentials.disabled {
 		return true, nil
 	}
@@ -397,6 +397,9 @@ func authenticate(ctx context.Context, credentials apiCredentials) (bool, error)
 	rawToken := strings.TrimPrefix(authHeaderValue, "Bearer ")
 
 	if isValid, err := token.Compare(token.RawToken(rawToken), credentials.hashedToken); err != nil || !isValid {
+		if err != nil {
+			logger.Error("Error authenticating", "err", err, "raw_token", rawToken)
+		}
 		return false, status.Errorf(codes.Unauthenticated, "invalid credentials")
 	}
 

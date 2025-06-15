@@ -667,11 +667,19 @@ func runServer(ctx context.Context, c *cli.Command, cfg config.Config, serverCfg
 		if errors.Is(err, context.Canceled) && errors.Is(context.Cause(ctx), errInterrupt{}) {
 			return context.Cause(ctx)
 		}
+
 		if errors.Is(err, server.ErrOtherInstanceDetected) {
 			msg := "Another instance of the server may be running.\n" +
 				"To stop the server, run `octoplex server stop`."
 			return cli.Exit(msg, 1)
 		}
+
+		if errors.Is(err, server.ErrAuthenticationRequired) {
+			msg := "Running with --auth none is not permitted with a non-loopback listen address.\n" +
+				"Either set `--auth token`, or run the server with `--insecure-allow-no-auth` to disable authentication completely."
+			return cli.Exit(msg, 2)
+		}
+
 		return err
 	}
 

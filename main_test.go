@@ -212,7 +212,7 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 				argv: func(t *testing.T, dataDir string) []string {
 					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "none"}
 				},
-				wantErr: "authentication is disabled but detected non-local listen address, please run the server with --insecure-allow-no-auth to disable authentication",
+				wantErr: "new server: build credentials: authentication required", // handled in main.go
 			},
 			authenticate: false,
 		},
@@ -440,7 +440,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 				argv: func(t *testing.T, dataDir string) []string {
 					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "none"}
 				},
-				wantErr: "authentication is disabled but detected non-local listen address, please run the server with --insecure-allow-no-auth to disable authentication",
+				wantErr: "new server: build credentials: authentication required", // handled in main.go
 			},
 			skipClient: true,
 		},

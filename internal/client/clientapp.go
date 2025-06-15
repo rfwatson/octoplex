@@ -403,17 +403,17 @@ func (a *App) doHandshake(stream pb.InternalAPI_CommunicateClient) error {
 
 func authInterceptorUnary(apiKey string) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, next grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		return next(authenticate(ctx, apiKey), method, req, reply, cc, opts...)
+		return next(contextWithAuth(ctx, apiKey), method, req, reply, cc, opts...)
 	}
 }
 
 func authInterceptorStream(apiKey string) grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-		return streamer(authenticate(ctx, apiKey), desc, cc, method, opts...)
+		return streamer(contextWithAuth(ctx, apiKey), desc, cc, method, opts...)
 	}
 }
 
-func authenticate(ctx context.Context, apiKey string) context.Context {
+func contextWithAuth(ctx context.Context, apiKey string) context.Context {
 	if apiKey == "" {
 		return ctx
 	}
