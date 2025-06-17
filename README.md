@@ -3,25 +3,103 @@
 [![build status](https://github.com/rfwatson/octoplex/actions/workflows/build.yml/badge.svg)](https://github.com/rfwatson/octoplex/actions/workflows/build.yml)
 [![scan status](https://github.com/rfwatson/octoplex/actions/workflows/codeql.yml/badge.svg)](https://github.com/rfwatson/octoplex/actions/workflows/codeql.yml)
 ![GitHub Release](https://img.shields.io/github/v/release/rfwatson/octoplex)
+![Go version](https://img.shields.io/github/go-mod/go-version/rfwatson/octoplex)
 [![Go Report Card](https://goreportcard.com/badge/git.netflux.io/rob/octoplex)](https://goreportcard.com/report/git.netflux.io/rob/octoplex)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 Octoplex is a Docker-native live video restreamer.
 
 * Restream RTMP/RTMPS to unlimited destinations
-* Broadcast using OBS or any standard tool
 * Add and remove destinations on-the-fly
+* Broadcast using OBS or any RTMP encoder
 * Automatic reconnections on drop
-* Terminal UI with live metrics and health status
-* Powered by FFmpeg, Docker & other open source tools
+* Terminal UI with live metrics and health
+* Scriptable CLI for automation
 
-:warning: **Warning - alpha software:** Octoplex is still in active
-development. Features and configuration settings may change between releases.
-Double-check your security configuration and exercise extra caution before
-deploying to public-facing networks. See the [Security](#security) section for
-more.
+## Table of Contents
+
+- [Quick start](#quick-start)
+- [How it works](#how-it-works)
+- [Installation](#installation)
+  - [Docker Engine (only if you'll run Octoplex locally)](#docker-engine-only-if-youll-run-octoplex-locally)
+  - [Octoplex](#octoplex)
+    - [Homebrew](#homebrew)
+    - [From GitHub](#from-github)
+    - [With Docker](#with-docker)
+- [Starting Octoplex](#starting-octoplex)
+  - [All-in-one](#all-in-one)
+  - [Client/server](#clientserver)
+- [Interacting with Octoplex](#interacting-with-octoplex)
+  - [Command-line interface (CLI)](#command-line-interface-cli)
+    - [List destinations](#list-destinations)
+    - [Add a destination](#add-a-destination)
+    - [Update a destination](#update-a-destination)
+    - [Start a destination](#start-a-destination)
+    - [Stop a destination](#stop-a-destination)
+    - [Remove a destination](#remove-a-destination)
+  - [Subcommand reference](#subcommand-reference)
+  - [Server flags](#server-flags)
+  - [Client flags](#client-flags)
+  - [All-in-one mode](#all-in-one-mode)
+- [Security](#security)
+  - [API tokens](#api-tokens)
+  - [Incoming streams](#incoming-streams)
+- [Restreaming with Octoplex](#restreaming-with-octoplex)
+  - [Restreaming with OBS](#restreaming-with-obs)
+    - [RTMP](#rtmp)
+    - [RTMPS](#rtmps)
+  - [Restreaming with FFmpeg](#restreaming-with-ffmpeg)
+    - [RTMP](#rtmp-1)
+    - [RTMPS](#rtmps-1)
+- [Advanced](#advanced)
+  - [Running with Docker](#running-with-docker)
+    - [`docker run`](#docker-run)
+    - [`docker-compose`](#docker-compose)
+- [Contributing](#contributing)
+  - [Bug reports](#bug-reports)
+- [Acknowledgements](#acknowledgements)
+- [Licence](#licence)
+
+## Quick start
+
+1. **Install Octoplex**
+
+See the [Installation](#installation) section below.
+
+2. **Launch all-in-one mode**
+
+Starts the server _and_ the terminal UI in a single process &mdash; ideal for local testing.
+
+```shell
+octoplex run
+```
+
+3. **Point your encoder (OBS, FFmpeg, etc) at the RTMP server:**
+
+Full examples are in [Restreaming with Octoplex](#restreaming-with-octoplex).
+
+```shell
+rtmp://localhost:1935/live         # stream key: live
+```
+
+Or, if your encoder supports **RTMPS**:
+
+```shell
+rtmps://localhost:1936/live        # self-signed TLS certificate by default
+```
+
+That's it &mdash; your local restreamer is live.
+Add destinations and start relaying from the TUI or CLI; see [Interacting with Octoplex](#interacting-with-octoplex).
 
 ## How it works
+
+Octoplex server runs on your Docker host (as a container or daemon process) and
+spins up [MediaMTX](https://github.com/bluenviron/mediamtx) and
+[FFmpeg](https://ffmpeg.org/) containers that ingest your feed and rebroadcast
+it anywhere you point them.
+
+It handles reconnection, TLS, and container wiring so you can focus on your
+content.
 
 ```
          +------------------+             +-------------------+
@@ -37,6 +115,11 @@ more.
                                                                        +--------------+
 ```
 
+:warning: **Warning - alpha software:** Octoplex is in active development.
+Features and configuration settings may change between releases. Double-check
+your security configuration and exercise extra caution before deploying to
+public-facing networks. See the [Security](#security) section for more.
+
 ## Installation
 
 ### Docker Engine (only if you'll run Octoplex locally)
@@ -51,7 +134,7 @@ macOS: https://docs.docker.com/desktop/setup/install/mac-install/
 
 Octoplex can be installed using Homebrew on macOS or Linux.
 
-```
+```shell
 brew tap rfwatson/octoplex
 brew install octoplex
 ```
@@ -93,7 +176,7 @@ _Docker must be running on the same machine._
 octoplex server start
 ```
 
-2. **Connect the client** (from your laptop or any host):
+2. **Connect the interactive TUI client** (from your laptop or any host):
 
 ```shell
 octoplex client start # --host my.remotehost.com if on a different host
@@ -111,20 +194,26 @@ octoplex server stop
 
 ### Command-line interface (CLI)
 
-Besides the interactive TUI, you can manage Octoplex with one-off command-line calls.
+Besides the interactive TUI, you can also control Octoplex with one-off command-line calls.
 
 Don't forget to replace `<PLACEHOLDER>` strings with your own values.
+
+> **:information_source: Tip** Octoplex ships with a self-signed TLS certificate by default. When connecting remotely you'll usually need `--tls-skip-verify` (or `-k`).
+> **Warning**: this disables certificate validation, use only on trusted networks.
 
 #### List destinations
 
 ```shell
-octoplex client destination list
+octoplex client destination list --tls-skip-verify
 ```
 
 #### Add a destination
 
 ```shell
-octoplex client destination add --name "<NAME>" --url "<RTMP_URL>"
+octoplex client destination add \
+    --name "<NAME>" \
+    --url "<RTMP_URL>" \
+    --tls-skip-verify
 ```
 
 Make a note of the destination ID that is printed to the terminal, e.g. `036e2a81-dc85-4758-ab04-303849f35cd3`.
@@ -132,25 +221,35 @@ Make a note of the destination ID that is printed to the terminal, e.g. `036e2a8
 #### Update a destination
 
 ```shell
-octoplex client destination update --id "<DESTINATION_ID>" --name "<NAME>" --url "<RTMP_URL>"
+octoplex client destination update \
+    --id "<DESTINATION_ID>"  \
+    --name "<NAME>" \
+    --url "<RTMP_URL>" \
+    --tls-skip-verify
 ```
 
 #### Start a destination
 
 ```shell
-octoplex client destination start --id "<DESTINATION_ID>"
+octoplex client destination start \
+    --id "<DESTINATION_ID>"  \
+    --tls-skip-verify
 ```
 
 #### Stop a destination
 
 ```shell
-octoplex client destination stop --id "<DESTINATION_ID>"
+octoplex client destination stop \
+    --id "<DESTINATION_ID>" \
+    --tls-skip-verify
 ```
 
 #### Remove a destination
 
 ```shell
-octoplex client destination remove --id "<DESTINATION_ID>"
+octoplex client destination remove \
+    --id "<DESTINATION_ID>" \
+    --tls-skip-verify
 ```
 
 > **:information_source: Tip** Pass `--force` (or `-f`) to remove the destination even if it's live.
@@ -195,10 +294,10 @@ Flag|Alias|Modes|Env var|Default|Description
 
 Flag|Alias|Default|Description
 ---|---|---|---
-`--help`|`-h`|All|||Show help
+`--help`|`-h`||||Show help
 `--host`|`-H`|`localhost:50051`|Remote Octoplex server to connect to
-`--tls-skip-verify`||`false`|Skip TLS certificate verification (insecure)
-`--api-token`|||API token. See [Security](#security).
+`--tls-skip-verify`|`-k`|`false`|Skip TLS certificate verification (insecure)
+`--api-token`|`-t`||API token. See [Security](#security).
 `--log-file`|||Path to log file
 
 ### All-in-one mode
@@ -231,7 +330,7 @@ Octoplex also listens for source streams (RTMP/RTMPS on ports 1935/1936 by
 default). These are **not** covered by the API token. To stop anyone from pushing
 an unsolicited feed, start the server with a unique stream key:
 
-```sh
+```shell
 octoplex server start --stream-key "<YOUR_UNIQUE_STREAM_KEY>" ...
 # or, set OCTO_STREAM_KEY=...
 ```
@@ -268,13 +367,13 @@ section above.
 
 #### RTMP
 
-```
+```shell
 ffmpeg -i input.mp4 -c copy -f flv rtmp://localhost:1935/live
 ```
 
 #### RTMPS
 
-```
+```shell
 ffmpeg -i input.mp4 -c copy -f flv rtmps://localhost:1936/live
 ```
 
@@ -311,7 +410,26 @@ docker run \
 
 #### `docker-compose`
 
-See [docker-compose.yaml](/docker-compose.yaml).
+```yaml
+---
+services:
+  octoplex:
+    image: ghcr.io/rfwatson/octoplex:latest
+    container_name: octoplex
+    restart: unless-stopped
+    volumes:
+      - octoplex-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      OCTO_LISTEN_ADDR: "[::]:50051" # bind to all network interfaces
+    ports:
+      - "50051:50051"
+volumes:
+  octoplex-data:
+    driver: local
+```
+
+See also [docker-compose.yaml](/docker-compose.yaml).
 
 ## Contributing
 

@@ -143,12 +143,14 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 					&cli.BoolFlag{
 						Name:        "tls-skip-verify",
 						Usage:       "Skip TLS verification (insecure)",
+						Aliases:     []string{"k"},
 						DefaultText: "false",
 						Destination: &clientTLSSkipVerify,
 					},
 					&cli.StringFlag{
-						Name:  "api-token",
-						Usage: "API token for authentication with the server",
+						Name:    "api-token",
+						Usage:   "API token for authentication with the server",
+						Aliases: []string{"t"},
 					},
 					&cli.StringFlag{
 						Name:      "log-file",
