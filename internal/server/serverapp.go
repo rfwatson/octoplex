@@ -215,6 +215,7 @@ func (a *App) Run(ctx context.Context) error {
 		Host:            a.cfg.Host,
 		KeyPairs:        a.keyPairs,
 		StreamKey:       mediaserver.StreamKey(a.cfg.Sources.MediaServer.StreamKey),
+		ImageName:       a.cfg.Sources.MediaServer.ImageName,
 		ContainerClient: containerClient,
 		InDocker:        a.cfg.InDocker,
 		Logger:          a.logger.With("component", "mediaserver"),
@@ -228,6 +229,7 @@ func (a *App) Run(ctx context.Context) error {
 
 	repl := replicator.StartActor(ctx, replicator.StartActorParams{
 		SourceURL:       srv.RTMPInternalURL(),
+		ImageNameFFMPEG: a.cfg.ImageNameFFMPEG,
 		ContainerClient: containerClient,
 		Logger:          a.logger.With("component", "replicator"),
 	})

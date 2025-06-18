@@ -45,6 +45,7 @@ type TLS struct {
 
 // MediaServerSource holds the configuration for the media server source.
 type MediaServerSource struct {
+	ImageName string // ImageName is the Docker image of the MediaMTX server.
 	StreamKey string
 	RTMP      RTMPSource
 	RTMPS     RTMPSource
@@ -76,4 +77,5 @@ type Config struct {
 	DataDir             string
 	LogFile             LogFile
 	Sources             Sources
+	ImageNameFFMPEG     string
 }

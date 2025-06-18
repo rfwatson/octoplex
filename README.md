@@ -289,6 +289,8 @@ Flag|Alias|Modes|Env var|Default|Description
 `--rtmp-listen-addr`||`server` `all-in-one`||`127.0.0.1:1935`|Listen address for RTMP sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen-addr`.
 `--rtmps-enabled`||`server` `all-in-one`||`false`|Enable RTMPS server
 `--rtmps-listen-addr`||`server` `all-in-one`||`127.0.0.1:1936`|Listen address for RTMPS sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen-addr`.
+`--image-name-mediamtx`||`server` `all-in-one`|`OCTO_IMAGE_NAME_MEDIAMTX`|`ghcr.io/rfwatson/mediamtx-alpine:latest`|OCI-compatible image for launching MediaMTX
+`--image-name-ffmpeg`||`server` `all-in-one`|`OCTO_IMAGE_NAME_FFMPEG`|`ghcr.io/jrottenberg/ffmpeg:7.1-scratch`|OCI-compatible image for launching FFmpeg
 
 ### Client flags
 

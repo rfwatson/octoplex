@@ -21,7 +21,9 @@ import (
 	"git.netflux.io/rob/octoplex/internal/client"
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/mediaserver"
 	"git.netflux.io/rob/octoplex/internal/optional"
+	"git.netflux.io/rob/octoplex/internal/replicator"
 	"git.netflux.io/rob/octoplex/internal/server"
 	"git.netflux.io/rob/octoplex/internal/store"
 	"git.netflux.io/rob/octoplex/internal/xdg"
@@ -548,6 +550,20 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			}(),
 			Sources: cli.EnvVars("OCTO_DATA_DIR"),
 		},
+		&cli.StringFlag{
+			Name:        "image-name-mediamtx",
+			Usage:       "OCI-compatible image name for the MediaMTX server",
+			Category:    "General",
+			DefaultText: mediaserver.DefaultImageNameMediaMTX,
+			Sources:     cli.EnvVars("OCTO_IMAGE_NAME_MEDIAMTX"),
+		},
+		&cli.StringFlag{
+			Name:        "image-name-ffmpeg",
+			Usage:       "OCI-compatible image name for FFmpeg",
+			Category:    "General",
+			DefaultText: replicator.DefaultImageNameFFMPEG,
+			Sources:     cli.EnvVars("OCTO_IMAGE_NAME_FFMPEG"),
+		},
 	}
 }
 
@@ -792,6 +808,7 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 		InDocker:            c.Bool("in-docker"),
 		Debug:               c.Bool("debug"),
 		DataDir:             dataDir,
+		ImageNameFFMPEG:     c.String("image-name-ffmpeg"),
 		LogFile: config.LogFile{
 			Enabled: logToFileEnabled,
 			Path:    logFile,
@@ -811,6 +828,7 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 	}
 
 	cfg.Sources.MediaServer.StreamKey = cmp.Or(c.String("stream-key"), defaultStreamKey)
+	cfg.Sources.MediaServer.ImageName = c.String("image-name-mediamtx")
 
 	rtmpEnabled := true
 	if c.IsSet("rtmp-enabled") {

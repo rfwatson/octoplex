@@ -26,23 +26,26 @@ import (
 type StreamKey string
 
 const (
-	defaultUpdateStateInterval           = 5 * time.Second                           // default interval to update the state of the media server
-	defaultAPIPort                       = 9997                                      // default API host port for the media server
-	defaultRTMPIP                        = "127.0.0.1"                               // default RTMP host IP, bound to localhost for security
-	defaultRTMPPort                      = 1935                                      // default RTMP host port for the media server
-	defaultRTMPSPort                     = 1936                                      // default RTMPS host port for the media server
-	defaultHost                          = "localhost"                               // default mediaserver host name
-	defaultChanSize                      = 64                                        // default channel size for asynchronous non-error channels
-	imageNameMediaMTX                    = "ghcr.io/rfwatson/mediamtx-alpine:latest" // image name for mediamtx
-	defaultStreamKey           StreamKey = "live"                                    // Default stream key. See [StreamKey].
-	componentName                        = "mediaserver"                             // component name, used for Docker hostname and labels
-	httpClientTimeout                    = time.Second                               // timeout for outgoing HTTP client requests
-	configPath                           = "/mediamtx.yml"                           // path to the media server config file
-	tlsInternalCertPath                  = "/etc/tls-internal.crt"                   // path to the internal TLS cert
-	tlsInternalKeyPath                   = "/etc/tls-internal.key"                   // path to the internal TLS key
-	tlsCertPath                          = "/etc/tls.crt"                            // path to the custom TLS cert
-	tlsKeyPath                           = "/etc/tls.key"                            // path to the custom TLS key
+	defaultUpdateStateInterval           = 5 * time.Second         // default interval to update the state of the media server
+	defaultAPIPort                       = 9997                    // default API host port for the media server
+	defaultRTMPIP                        = "127.0.0.1"             // default RTMP host IP, bound to localhost for security
+	defaultRTMPPort                      = 1935                    // default RTMP host port for the media server
+	defaultRTMPSPort                     = 1936                    // default RTMPS host port for the media server
+	defaultHost                          = "localhost"             // default mediaserver host name
+	defaultChanSize                      = 64                      // default channel size for asynchronous non-error channels
+	defaultStreamKey           StreamKey = "live"                  // Default stream key. See [StreamKey].
+	componentName                        = "mediaserver"           // component name, used for Docker hostname and labels
+	httpClientTimeout                    = time.Second             // timeout for outgoing HTTP client requests
+	configPath                           = "/mediamtx.yml"         // path to the media server config file
+	tlsInternalCertPath                  = "/etc/tls-internal.crt" // path to the internal TLS cert
+	tlsInternalKeyPath                   = "/etc/tls-internal.key" // path to the internal TLS key
+	tlsCertPath                          = "/etc/tls.crt"          // path to the custom TLS cert
+	tlsKeyPath                           = "/etc/tls.key"          // path to the custom TLS key
 )
+
+// DefaultImageNameMediaMTX is the default Docker image name for
+// the MediaMTX server.
+const DefaultImageNameMediaMTX = "ghcr.io/rfwatson/mediamtx-alpine:latest"
 
 // action is an action to be performed by the actor.
 type action func()
@@ -58,6 +61,7 @@ type Actor struct {
 	apiPort             int
 	host                string
 	streamKey           StreamKey
+	imageName           string
 	updateStateInterval time.Duration
 	pass                string // password for the media server
 	keyPairs            domain.KeyPairs
@@ -77,6 +81,7 @@ type NewActorParams struct {
 	APIPort             int             // defaults to 9997
 	Host                string          // defaults to "localhost"
 	StreamKey           StreamKey       // defaults to "live"
+	ImageName           string          // defaults to "ghcr.io/rfwatson/mediamtx-alpine:latest"
 	ChanSize            int             // defaults to 64
 	UpdateStateInterval time.Duration   // defaults to 5 seconds
 	KeyPairs            domain.KeyPairs
@@ -110,6 +115,7 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 		apiPort:             cmp.Or(params.APIPort, defaultAPIPort),
 		host:                cmp.Or(params.Host, defaultHost),
 		streamKey:           cmp.Or(params.StreamKey, defaultStreamKey),
+		imageName:           cmp.Or(params.ImageName, DefaultImageNameMediaMTX),
 		updateStateInterval: cmp.Or(params.UpdateStateInterval, defaultUpdateStateInterval),
 		keyPairs:            params.KeyPairs,
 		pass:                generatePassword(),
@@ -207,7 +213,7 @@ func (a *Actor) Start(ctx context.Context) error {
 			Name:     componentName,
 			ChanSize: a.chanSize,
 			ContainerConfig: &typescontainer.Config{
-				Image:    imageNameMediaMTX,
+				Image:    a.imageName,
 				Hostname: componentName,
 				Labels:   map[string]string{container.LabelComponent: componentName},
 				Healthcheck: &typescontainer.HealthConfig{

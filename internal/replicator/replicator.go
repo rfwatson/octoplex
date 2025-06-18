@@ -20,10 +20,12 @@ import (
 type action func()
 
 const (
-	defaultChanSize = 64                                       // default channel size for asynchronous non-error channels
-	componentName   = "replicator"                             // component name, mostly used for Docker labels
-	imageNameFFMPEG = "ghcr.io/jrottenberg/ffmpeg:7.1-scratch" // image name for ffmpeg
+	defaultChanSize = 64           // default channel size for asynchronous non-error channels
+	componentName   = "replicator" // component name, mostly used for Docker labels
 )
+
+// DefaultImageNameFFMPEG is the default Docker image name for FFmpeg.
+const DefaultImageNameFFMPEG = "ghcr.io/jrottenberg/ffmpeg:7.1-scratch"
 
 // State is the state of a single destination from the point of view of the
 // replicator.
@@ -39,6 +41,7 @@ type Actor struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	sourceURL       string
+	imageName       string
 	containerClient *container.Client
 	logger          *slog.Logger
 	actorC          chan action
@@ -55,6 +58,7 @@ type StartActorParams struct {
 	SourceURL       string
 	ChanSize        int
 	ContainerClient *container.Client
+	ImageNameFFMPEG string
 	Logger          *slog.Logger
 }
 
@@ -68,6 +72,7 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 		ctx:             ctx,
 		cancel:          cancel,
 		sourceURL:       params.SourceURL,
+		imageName:       cmp.Or(params.ImageNameFFMPEG, DefaultImageNameFFMPEG),
 		containerClient: params.ContainerClient,
 		logger:          params.Logger,
 		actorC:          make(chan action, cmp.Or(params.ChanSize, defaultChanSize)),
@@ -97,7 +102,7 @@ func (a *Actor) StartDestination(url string) <-chan State {
 		containerStateC, errC := a.containerClient.RunContainer(a.ctx, container.RunContainerParams{
 			Name: componentName + "-" + strconv.Itoa(a.nextIndex),
 			ContainerConfig: &typescontainer.Config{
-				Image: imageNameFFMPEG,
+				Image: a.imageName,
 				Cmd: []string{
 					"-loglevel", "level+error",
 					"-i", a.sourceURL,
