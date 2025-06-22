@@ -344,6 +344,7 @@ func (a *App) buildClientConn(ctx context.Context) (*grpc.ClientConn, error) {
 	tlsConfig := &tls.Config{
 		MinVersion:         config.TLSMinVersion,
 		InsecureSkipVerify: a.insecureSkipVerify,
+		NextProtos: []string{"h2"},
 	}
 
 	var err error

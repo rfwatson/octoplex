@@ -341,7 +341,7 @@ func TestIntegrationCustomHost(t *testing.T) {
 	require.EventuallyWithT(
 		t,
 		func(c *assert.CollectT) {
-			conn, err := tls.Dial("tcp", "localhost:9997", &tls.Config{InsecureSkipVerify: true})
+			conn, err := tls.Dial("tcp", "localhost:9997", &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h2"}})
 			require.NoError(c, err)
 
 			require.Nil(
@@ -408,7 +408,7 @@ func TestIntegrationTLSCerts(t *testing.T) {
 			rtmpPort := "localhost:1936"
 			grpcPort := fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port)
 			for _, addr := range []string{rtmpPort, grpcPort} {
-				conn, dialErr := tls.Dial("tcp", addr, &tls.Config{ServerName: "localhost", InsecureSkipVerify: true})
+				conn, dialErr := tls.Dial("tcp", addr, &tls.Config{ServerName: "localhost", InsecureSkipVerify: true, NextProtos: []string{"h2"}})
 				require.NoErrorf(c, dialErr, "failed to connect to %s: %v", addr, dialErr)
 				defer conn.Close()
 
@@ -457,7 +457,7 @@ func TestIntegrationTLSCerts(t *testing.T) {
 			rtmpPort := "localhost:1936"
 			grpcPort := fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port)
 			for i, addr := range []string{rtmpPort, grpcPort} {
-				conn, dialErr := tls.Dial("tcp", addr, &tls.Config{ServerName: "localhost", InsecureSkipVerify: true})
+				conn, dialErr := tls.Dial("tcp", addr, &tls.Config{ServerName: "localhost", InsecureSkipVerify: true, NextProtos: []string{"h2"}})
 				require.NoErrorf(c, dialErr, "failed to connect to %s: %v", addr, dialErr)
 				defer conn.Close()
 
@@ -533,6 +533,7 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 					RootCAs:            rootCAs,
 					ServerName:         "localhost",
 					InsecureSkipVerify: false,
+					NextProtos: 				[]string{"h2"},
 				})
 				require.NoErrorf(c, err, "failed to connect to %s: %v", addr, err)
 				defer conn.Close()

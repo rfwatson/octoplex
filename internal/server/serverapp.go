@@ -135,7 +135,7 @@ func (a *App) Run(ctx context.Context) error {
 	grpcServer := grpc.NewServer(
 		grpc.UnaryInterceptor(authInterceptorUnary(a.credentials, a.logger)),
 		grpc.StreamInterceptor(authInterceptorStream(a.credentials, a.logger)),
-		grpc.Creds(credentials.NewTLS(&cryptotls.Config{Certificates: []cryptotls.Certificate{cert}, MinVersion: config.TLSMinVersion})),
+		grpc.Creds(credentials.NewTLS(&cryptotls.Config{Certificates: []cryptotls.Certificate{cert}, MinVersion: config.TLSMinVersion, NextProtos: []string{"h2"}})),
 	)
 
 	grpcDone := make(chan error, 1)
