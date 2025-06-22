@@ -26,7 +26,7 @@ func NewTestStore(t *testing.T, state ...store.State) *store.FileStore {
 	store, err := store.New(path)
 	require.NoError(t, err)
 
-	t.Cleanup(func() { os.RemoveAll(path) })
+	t.Cleanup(func() { os.RemoveAll(path) }) //nolint:errcheck
 
 	return store
 }

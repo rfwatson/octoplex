@@ -29,7 +29,7 @@ func getLogs(
 		logger.Error("Error getting container logs", "err", err, "id", shortID(containerID))
 		return
 	}
-	defer logsC.Close()
+	defer logsC.Close() //nolint:errcheck
 
 	scanner := bufio.NewScanner(logsC)
 	for scanner.Scan() {

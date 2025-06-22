@@ -126,7 +126,7 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
-	defer lis.Close()
+	defer lis.Close() //nolint:errcheck
 
 	cert, err := cryptotls.X509KeyPair(a.keyPairs.External().Cert, a.keyPairs.External().Key)
 	if err != nil {
@@ -200,7 +200,7 @@ func (a *App) Run(ctx context.Context) error {
 		doFatalError(msg)
 		return err
 	}
-	defer containerClient.Close()
+	defer containerClient.Close() //nolint:errcheck
 
 	sendAppStateChanged := func() {
 		// The state is mutable so can't be passed into another goroutine
@@ -225,7 +225,7 @@ func (a *App) Run(ctx context.Context) error {
 		doFatalError(err.Error())
 		return err
 	}
-	defer srv.Close()
+	defer srv.Close() //nolint:errcheck
 
 	repl := replicator.StartActor(ctx, replicator.StartActorParams{
 		SourceURL:       srv.RTMPInternalURL(),
@@ -233,7 +233,7 @@ func (a *App) Run(ctx context.Context) error {
 		ContainerClient: containerClient,
 		Logger:          a.logger.With("component", "replicator"),
 	})
-	defer repl.Close()
+	defer repl.Close() //nolint:errcheck
 
 	const uiUpdateInterval = time.Second
 	uiUpdateT := time.NewTicker(uiUpdateInterval)
@@ -456,7 +456,7 @@ func (a *App) handleCommand(
 			}
 		}()
 
-		return event.DestinationStartedEvent{ID: c.ID}, nil, nil //nolint:gosimple
+		return event.DestinationStartedEvent{ID: c.ID}, nil, nil //nolint:staticcheck
 	case event.CommandStopDestination:
 		destIndex := slices.IndexFunc(state.Destinations, func(d domain.Destination) bool {
 			return d.ID == c.ID
@@ -467,7 +467,7 @@ func (a *App) handleCommand(
 		}
 
 		repl.StopDestination(state.Destinations[destIndex].URL)
-		return event.DestinationStoppedEvent{ID: c.ID}, nil, nil //nolint:gosimple
+		return event.DestinationStoppedEvent{ID: c.ID}, nil, nil //nolint:staticcheck
 	case event.CommandCloseOtherInstance:
 		if err := closeOtherInstances(ctx, containerClient); err != nil {
 			return nil, nil, fmt.Errorf("close other instances: %w", err) // TODO: improve error handling
@@ -589,7 +589,7 @@ func (a *App) Stop(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create container client: %w", err)
 	}
-	defer containerClient.Close()
+	defer containerClient.Close() //nolint:errcheck
 
 	return closeOtherInstances(ctx, containerClient)
 }

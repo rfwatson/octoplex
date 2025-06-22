@@ -29,7 +29,7 @@ func handleStats(
 		logger.Error("Error getting container stats", "err", err, "id", shortID(containerID))
 		return
 	}
-	defer statsReader.Body.Close()
+	defer statsReader.Body.Close() //nolint:errcheck
 
 	var (
 		lastRxBytes  uint64

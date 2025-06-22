@@ -18,7 +18,7 @@ func TestFilestore(t *testing.T) {
 	st, err := store.New(path)
 	require.NoError(t, err)
 	assert.FileExists(t, path)
-	t.Cleanup(func() { os.RemoveAll(path) })
+	t.Cleanup(func() { os.RemoveAll(path) }) //nolint:errcheck
 
 	state := st.Get()
 	assert.Zero(t, state)
@@ -84,7 +84,7 @@ func TestFilestoreValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fptr, err := os.CreateTemp("", "octoplex-"+shortid.New().String())
 			require.NoError(t, err)
-			t.Cleanup(func() { os.RemoveAll(fptr.Name()) })
+			t.Cleanup(func() { os.RemoveAll(fptr.Name()) }) //nolint:errcheck
 
 			require.NoError(t, os.WriteFile(fptr.Name(), []byte(tc.in), 0644))
 

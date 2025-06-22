@@ -43,7 +43,7 @@ func TestHandleStats(t *testing.T) {
 	}()
 
 	go func() {
-		defer pw.Close()
+		defer pw.Close() //nolint:errcheck
 
 		scanner := bufio.NewScanner(bytes.NewReader(statsJSON))
 		for scanner.Scan() {
@@ -89,7 +89,7 @@ func TestHandleStatsWithContainerRestart(t *testing.T) {
 	}()
 
 	go func() {
-		defer pw.Close()
+		defer pw.Close() //nolint:errcheck
 
 		scanner := bufio.NewScanner(bytes.NewReader(statsWithRestartJSON))
 		for scanner.Scan() {

@@ -69,7 +69,7 @@ func (a *App) ListDestinations(ctx context.Context) (_ []domain.Destination, err
 	if err != nil {
 		return nil, fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	apiClient := pb.NewInternalAPIClient(conn)
 
@@ -96,7 +96,7 @@ func (a *App) AddDestination(ctx context.Context, name, url string) (id string, 
 	if err != nil {
 		return "", fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	apiClient := pb.NewInternalAPIClient(conn)
 
@@ -135,7 +135,7 @@ func (a *App) UpdateDestination(ctx context.Context, destinationID string, name,
 	if err != nil {
 		return fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	apiClient := pb.NewInternalAPIClient(conn)
 
@@ -170,7 +170,7 @@ func (a *App) RemoveDestination(ctx context.Context, destinationID string, force
 	if err != nil {
 		return fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	apiClient := pb.NewInternalAPIClient(conn)
 
@@ -201,7 +201,7 @@ func (a *App) StartDestination(ctx context.Context, destinationID string) error 
 	if err != nil {
 		return fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	apiClient := pb.NewInternalAPIClient(conn)
 
@@ -232,7 +232,7 @@ func (a *App) StopDestination(ctx context.Context, destinationID string) error {
 	if err != nil {
 		return fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	apiClient := pb.NewInternalAPIClient(conn)
 
@@ -264,7 +264,7 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	apiClient := pb.NewInternalAPIClient(conn)
 	stream, err := apiClient.Communicate(ctx)
@@ -357,7 +357,7 @@ func (a *App) buildClientConn(ctx context.Context) (*grpc.ClientConn, error) {
 		var tlsConn *tls.Conn
 		tlsConn, err = tls.Dial("tcp", a.serverAddr, tlsConfig)
 		if err == nil {
-			tlsConn.Close()
+			tlsConn.Close() //nolint:errcheck
 		}
 	}()
 

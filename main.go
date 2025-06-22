@@ -193,18 +193,24 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 										return fmt.Errorf("list destinations: %w", err)
 									} else {
 										w := tabwriter.NewWriter(stdout, 0, 8, 2, ' ', 0)
-										fmt.Fprintf(w, "ID\tName\tURL\tStatus\n")
+										if _, err := fmt.Fprintf(w, "ID\tName\tURL\tStatus\n"); err != nil {
+											return handleStdoutError(err)
+										}
 										for _, dest := range destinations {
-											fmt.Fprintf(
+											if _, err := fmt.Fprintf(
 												w,
 												"%s\t%s\t%s\t%s\n",
 												dest.ID,
 												dest.Name,
 												dest.URL,
 												dest.Status.String(),
-											)
+											); err != nil {
+												return handleStdoutError(err)
+											}
 										}
-										w.Flush()
+										if err := w.Flush(); err != nil {
+											return handleStdoutError(err)
+										}
 
 										return nil
 									}
@@ -234,12 +240,16 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 										return fmt.Errorf("build client: %w", err)
 									}
 
-									if id, err := client.AddDestination(ctx, c.String("name"), c.String("url")); err != nil {
+									id, err := client.AddDestination(ctx, c.String("name"), c.String("url"))
+									if err != nil {
 										return fmt.Errorf("add destination: %w", err)
-									} else {
-										stdout.Write([]byte(id + "\n"))
-										return nil
 									}
+
+									if _, err := stdout.Write([]byte(id + "\n")); err != nil {
+										return handleStdoutError(err)
+									}
+
+									return nil
 								},
 							},
 							{
@@ -283,10 +293,13 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 
 									if err := client.UpdateDestination(ctx, destID, name, url); err != nil {
 										return fmt.Errorf("update destination: %w", err)
-									} else {
-										stdout.Write([]byte("OK\n"))
-										return nil
 									}
+
+										if _, err := stdout.Write([]byte("OK\n")); err != nil {
+											return handleStdoutError(err)
+										}
+
+										return nil
 								},
 							},
 							{
@@ -317,10 +330,13 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 
 									if err := client.RemoveDestination(ctx, destID, c.Bool("force")); err != nil {
 										return fmt.Errorf("remove destination: %w", err)
-									} else {
-										stdout.Write([]byte("OK\n"))
-										return nil
 									}
+
+									if _, err := stdout.Write([]byte("OK\n")); err != nil {
+										return handleStdoutError(err)
+									}
+
+									return nil
 								},
 							},
 							{
@@ -346,10 +362,13 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 
 									if err := client.StartDestination(ctx, destID); err != nil {
 										return fmt.Errorf("start destination: %w", err)
-									} else {
-										stdout.Write([]byte("OK\n"))
-										return nil
 									}
+
+									if _, err := stdout.Write([]byte("OK\n")); err != nil {
+										return handleStdoutError(err)
+									}
+
+									return nil
 								},
 							},
 							{
@@ -375,10 +394,13 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 
 									if err := client.StopDestination(ctx, destID); err != nil {
 										return fmt.Errorf("stop destination: %w", err)
-									} else {
-										stdout.Write([]byte("OK\n"))
-										return nil
 									}
+
+									if _, err := stdout.Write([]byte("OK\n")); err != nil {
+										return handleStdoutError(err)
+									}
+
+									return nil
 								},
 							},
 						},
@@ -397,18 +419,22 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 				Name:  "version",
 				Usage: "Display the currrent version",
 				Action: func(context.Context, *cli.Command) error {
-					return printVersion()
+					if err := printVersion(); err != nil {
+						return fmt.Errorf("print version: %s", err)
+					}
+
+					return nil
 				},
 			},
 		},
 	}
 
 	if err := app.Run(ctx, args); err != nil {
-		fmt.Fprintf(stderr, "Error: %v\n", err)
+		fmt.Fprintf(stderr, "Error: %v\n", err) //nolint:errcheck
 
 		var authErr x509.UnknownAuthorityError
 		if errors.As(err, &authErr) {
-			stderr.Write([]byte("Hint: Run with --tls-skip-verify to ignore.\n"))
+			stderr.Write([]byte("Hint: Run with --tls-skip-verify to ignore.\n")) //nolint:errcheck
 		}
 
 		return err
@@ -908,4 +934,9 @@ func buildClientLogger(c *cli.Command) (*slog.Logger, error) {
 	}
 
 	return logger, nil
+}
+
+func handleStdoutError(err error) error {
+	_, _ = fmt.Fprintf(os.Stderr, "failed to write to stdout: %s", err)
+	return fmt.Errorf("fprintf: %w", err)
 }
