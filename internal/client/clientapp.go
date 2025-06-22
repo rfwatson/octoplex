@@ -272,6 +272,12 @@ func (a *App) Run(ctx context.Context) error {
 		return fmt.Errorf("create gRPC stream: %w", err)
 	}
 
+	// Perform a handshake with the server, which has the function of flushing
+	// any authentication issues before the UI is initialised.
+	if err := a.doHandshake(stream); err != nil {
+		return fmt.Errorf("do handshake: %w", err)
+	}
+
 	ui, err := terminal.NewUI(ctx, terminal.Params{
 		EventBus: a.bus,
 		Dispatcher: func(cmd event.Command) {
@@ -291,14 +297,6 @@ func (a *App) Run(ctx context.Context) error {
 	defer ui.Close()
 
 	g.Go(func() error { return ui.Run(ctx) })
-
-	// After the UI is available, perform a handshake with the server.
-	// Ordering is important here. We want to ensure that the UI is ready to
-	// react to events received from the server. Performing the handshake ensures
-	// the client has received at least one event.
-	if err := a.doHandshake(stream); err != nil {
-		return fmt.Errorf("do handshake: %w", err)
-	}
 
 	g.Go(func() error {
 		for {

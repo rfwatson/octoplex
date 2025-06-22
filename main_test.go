@@ -172,7 +172,7 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 				argv: func(t *testing.T, _ string) []string {
 					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
 				},
-				wantErr: "rpc error: code = Unauthenticated desc = authorization token not supplied",
+				wantErr: "rpc error: code = Unauthenticated desc = invalid credentials",
 			},
 			authenticate: false,
 		},
@@ -258,7 +258,7 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 				argv: func(t *testing.T, _ string) []string {
 					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
 				},
-				wantErr: "rpc error: code = Unauthenticated desc = authorization token not supplied",
+				wantErr: "rpc error: code = Unauthenticated desc = invalid credentials",
 			},
 			authenticate: false,
 		},
@@ -289,7 +289,7 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 				argv: func(t *testing.T, _ string) []string {
 					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
 				},
-				wantErr: "rpc error: code = Unauthenticated desc = authorization token not supplied",
+				wantErr: "rpc error: code = Unauthenticated desc = invalid credentials",
 			},
 			authenticate: false,
 		},
@@ -411,7 +411,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 				},
 				wantErr: "context canceled",
 			},
-			wantClientErr: "rpc error: code = Unauthenticated desc = authorization token not supplied",
+			wantClientErr: "rpc error: code = Unauthenticated desc = invalid credentials",
 			authenticate:  false,
 		},
 		{
@@ -472,7 +472,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 				},
 				wantErr: "context canceled",
 			},
-			wantClientErr: "rpc error: code = Unauthenticated desc = authorization token not supplied",
+			wantClientErr: "rpc error: code = Unauthenticated desc = invalid credentials",
 			authenticate:  false,
 		},
 		{
@@ -493,7 +493,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 				},
 				wantErr: "context canceled",
 			},
-			wantClientErr: "rpc error: code = Unauthenticated desc = authorization token not supplied",
+			wantClientErr: "rpc error: code = Unauthenticated desc = invalid credentials",
 			authenticate:  false,
 		},
 		{

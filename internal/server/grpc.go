@@ -349,9 +349,7 @@ func authInterceptorUnary(credentials apiCredentials, logger *slog.Logger) grpc.
 	}
 
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if ok, err := isAuthenticated(ctx, credentials, logger); err != nil {
-			return nil, fmt.Errorf("authenticate: %w", err)
-		} else if !ok {
+		if ok, err := isAuthenticated(ctx, credentials, logger); err != nil || !ok {
 			return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
 		}
 
@@ -365,9 +363,18 @@ func authInterceptorStream(credentials apiCredentials, logger *slog.Logger) grpc
 	}
 
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if ok, err := isAuthenticated(ss.Context(), credentials, logger); err != nil {
-			return fmt.Errorf("authenticate: %w", err)
-		} else if !ok {
+		if ok, err := isAuthenticated(ss.Context(), credentials, logger); err != nil || !ok {
+			// Force the server to flush the response, and give the client enough
+			// time to receive it.
+			// This is needed to avoid a race condition between the server and
+			// clients both closing their connection simultaneously during an
+			// authentication failure. It seems that if the client closes its
+			// connection before the server has chance to respond then the client
+			// receives an io.EOF instead of an unauthenticated response. This does
+			// seem pretty hacky, there's probably a better way to do it.
+			ss.SendHeader(metadata.MD{}) //nolint:errcheck
+			time.Sleep(time.Millisecond * 100)
+
 			return status.Errorf(codes.Unauthenticated, "invalid credentials")
 		}
 
@@ -375,6 +382,11 @@ func authInterceptorStream(credentials apiCredentials, logger *slog.Logger) grpc
 	}
 }
 
+// isAuthenticated checks if the request is authenticated using the provided
+// credentials. It returns true, nil if the request is authenticated. If the
+// request is not authenticated it should return a gRPC status with an
+// appropriate message. It is responsible for logging any significant errors
+// that occur.
 func isAuthenticated(ctx context.Context, credentials apiCredentials, logger *slog.Logger) (bool, error) {
 	if credentials.disabled {
 		return true, nil
