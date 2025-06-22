@@ -287,7 +287,6 @@ func TestClientRunContainerErrorStartingContainer(t *testing.T) {
 
 	assert.Equal(t, "pulling", (<-containerStateC).Status)
 	assert.Equal(t, "created", (<-containerStateC).Status)
-	assert.Equal(t, "exited", (<-containerStateC).Status)
 
 	err = <-errC
 	require.EqualError(t, err, "container start: error starting container")

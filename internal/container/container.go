@@ -236,10 +236,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 	now := time.Now()
 	containerStateC := make(chan domain.Container, cmp.Or(params.ChanSize, defaultChanSize))
 	errC := make(chan error, 1)
-	sendError := func(err error, containerID string) {
-		containerStateC <- domain.Container{ID: containerID, Status: domain.ContainerStatusExited}
-		errC <- err
-	}
+	sendError := func(err error) { errC <- err }
 
 	a.wg.Add(1)
 	go func() {
@@ -270,23 +267,23 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 			name,
 		)
 		if err != nil {
-			sendError(fmt.Errorf("container create: %w", err), createResp.ID)
+			sendError(fmt.Errorf("container create: %w", err))
 			return
 		}
 		containerStateC <- domain.Container{ID: createResp.ID, Status: domain.ContainerStatusCreated}
 
 		if err = a.apiClient.NetworkConnect(ctx, a.networkID, createResp.ID, nil); err != nil {
-			sendError(fmt.Errorf("network connect: %w", err), createResp.ID)
+			sendError(fmt.Errorf("network connect: %w", err))
 			return
 		}
 
 		if err = a.copyFilesToContainer(ctx, createResp.ID, params.CopyFiles); err != nil {
-			sendError(fmt.Errorf("copy files to container: %w", err), createResp.ID)
+			sendError(fmt.Errorf("copy files to container: %w", err))
 			return
 		}
 
 		if err = a.apiClient.ContainerStart(ctx, createResp.ID, container.StartOptions{}); err != nil {
-			sendError(fmt.Errorf("container start: %w", err), createResp.ID)
+			sendError(fmt.Errorf("container start: %w", err))
 			return
 		}
 		a.logger.Info("Started container", "id", shortID(createResp.ID), "duration", time.Since(now))

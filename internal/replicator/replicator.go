@@ -230,6 +230,10 @@ func (a *Actor) destLoop(
 			if err != nil {
 				a.logger.Error("Error from container client", "err", err)
 				state.Container.Err = err
+				// If the error channel fires, the container state channel will not be
+				// updated. We have to clean up here, at least by setting the status to
+				// Exited.
+				state.Container.Status = domain.ContainerStatusExited
 			}
 			sendState()
 			return
