@@ -199,6 +199,7 @@ func UpdateDestinationFailedEventToProto(evt event.UpdateDestinationFailedEvent)
 // DestinationStreamExitedEventToProto converts a DestinationStreamExitedEvent to a protobuf message.
 func DestinationStreamExitedEventToProto(evt event.DestinationStreamExitedEvent) *pb.DestinationStreamExitedEvent {
 	return &pb.DestinationStreamExitedEvent{
+		Id: evt.ID[:],
 		Name:  evt.Name,
 		Error: evt.Err.Error(),
 	}
@@ -432,7 +433,12 @@ func EventFromDestinationStreamExitedProto(evt *pb.DestinationStreamExitedEvent)
 		return nil, errors.New("nil DestinationStreamExitedEvent")
 	}
 
-	return event.DestinationStreamExitedEvent{Name: evt.Name, Err: errors.New(evt.Error)}, nil
+	id, err := uuid.FromBytes(evt.Id)
+	if err != nil {
+		return nil, fmt.Errorf("parse ID: %w", err)
+	}
+
+	return event.DestinationStreamExitedEvent{ID: id, Name: evt.Name, Err: errors.New(evt.Error)}, nil
 }
 
 // EventFromDestinationStartedProto converts a protobuf DestinationStartedEvent to a domain event.

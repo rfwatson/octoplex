@@ -101,6 +101,7 @@ func (e UpdateDestinationFailedEvent) EventName() Name {
 
 // DestinationStreamExitedEvent is emitted when a destination goes off-air unexpectedly.
 type DestinationStreamExitedEvent struct {
+	ID uuid.UUID
 	Name string
 	Err  error
 }

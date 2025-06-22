@@ -404,6 +404,12 @@ func (ui *UI) handleOtherInstanceDetected(event.OtherInstanceDetectedEvent) {
 }
 
 func (ui *UI) handleDestinationStreamExited(evt event.DestinationStreamExitedEvent) {
+	ui.mu.Lock()
+	if _, ok := ui.destinationIDsToStartState[evt.ID]; ok {
+		ui.destinationIDsToStartState[evt.ID] = startStateNotStarted
+	}
+	ui.mu.Unlock()
+
 	ui.showModal(
 		pageNameModalDestinationError,
 		fmt.Sprintf(

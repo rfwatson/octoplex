@@ -442,13 +442,12 @@ func (a *App) handleCommand(
 
 		dest := state.Destinations[destIndex]
 		doneC := repl.StartDestination(dest.URL)
-		// Destination starts asynchronously, we can't handle the result
 		// immediately.
 		go func() {
 			select {
 			case state := <-doneC:
 				if cmd.clientID != "" && state.Container.Err != nil {
-					a.eventBus.SendTo(cmd.clientID, event.DestinationStreamExitedEvent{Name: dest.Name, Err: state.Container.Err})
+					a.eventBus.SendTo(cmd.clientID, event.DestinationStreamExitedEvent{ID: dest.ID, Name: dest.Name, Err: state.Container.Err})
 				}
 
 				repl.StopDestination(dest.URL)

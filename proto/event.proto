@@ -31,8 +31,9 @@ message Event {
 message AppStateChangedEvent { AppState app_state = 1; }
 
 message DestinationStreamExitedEvent {
-  string name = 1;
-  string error = 2;
+  bytes id = 1;
+  string name = 2;
+  string error = 3;
 }
 
 message DestinationsListedEvent { repeated Destination destinations = 1; }
