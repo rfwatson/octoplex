@@ -1,22 +1,19 @@
 syntax = "proto3";
 
-option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc";
-package api;
+package internalapi.v1;
 
-import "command.proto";
-import "event.proto";
+import "internalapi/v1/command.proto";
+import "internalapi/v1/event.proto";
 
-service InternalAPI {
+option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1";
+
+service APIService {
   rpc Communicate(stream Envelope) returns (stream Envelope);
-  rpc ListDestinations(ListDestinationsRequest)
-      returns (ListDestinationsResponse);
+  rpc ListDestinations(ListDestinationsRequest) returns (ListDestinationsResponse);
   rpc AddDestination(AddDestinationRequest) returns (AddDestinationResponse);
-  rpc UpdateDestination(UpdateDestinationRequest)
-      returns (UpdateDestinationResponse);
-  rpc RemoveDestination(RemoveDestinationRequest)
-      returns (RemoveDestinationResponse);
-  rpc StartDestination(StartDestinationRequest)
-      returns (StartDestinationResponse);
+  rpc UpdateDestination(UpdateDestinationRequest) returns (UpdateDestinationResponse);
+  rpc RemoveDestination(RemoveDestinationRequest) returns (RemoveDestinationResponse);
+  rpc StartDestination(StartDestinationRequest) returns (StartDestinationResponse);
   rpc StopDestination(StopDestinationRequest) returns (StopDestinationResponse);
 }
 
@@ -27,7 +24,9 @@ message Envelope {
   }
 }
 
-message ListDestinationsRequest { ListDestinationsCommand command = 1; }
+message ListDestinationsRequest {
+  ListDestinationsCommand command = 1;
+}
 
 message ListDestinationsResponse {
   oneof result {
@@ -36,7 +35,9 @@ message ListDestinationsResponse {
   }
 }
 
-message AddDestinationRequest { AddDestinationCommand command = 1; }
+message AddDestinationRequest {
+  AddDestinationCommand command = 1;
+}
 
 message AddDestinationResponse {
   oneof result {
@@ -45,7 +46,9 @@ message AddDestinationResponse {
   }
 }
 
-message UpdateDestinationRequest { UpdateDestinationCommand command = 1; }
+message UpdateDestinationRequest {
+  UpdateDestinationCommand command = 1;
+}
 
 message UpdateDestinationResponse {
   oneof result {
@@ -54,7 +57,9 @@ message UpdateDestinationResponse {
   }
 }
 
-message RemoveDestinationRequest { RemoveDestinationCommand command = 1; }
+message RemoveDestinationRequest {
+  RemoveDestinationCommand command = 1;
+}
 
 message RemoveDestinationResponse {
   oneof result {
@@ -63,7 +68,9 @@ message RemoveDestinationResponse {
   }
 }
 
-message StartDestinationRequest { StartDestinationCommand command = 1; }
+message StartDestinationRequest {
+  StartDestinationCommand command = 1;
+}
 
 message StartDestinationResponse {
   oneof result {
@@ -72,7 +79,9 @@ message StartDestinationResponse {
   }
 }
 
-message StopDestinationRequest { StopDestinationCommand command = 1; }
+message StopDestinationRequest {
+  StopDestinationCommand command = 1;
+}
 
 message StopDestinationResponse {
   oneof result {

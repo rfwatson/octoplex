@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"git.netflux.io/rob/octoplex/internal/event"
-	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	pb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1"
 	"git.netflux.io/rob/octoplex/internal/optional"
 	"git.netflux.io/rob/octoplex/internal/protocol"
 	"git.netflux.io/rob/octoplex/internal/ptr"

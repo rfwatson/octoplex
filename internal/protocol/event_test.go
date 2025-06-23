@@ -6,7 +6,7 @@ import (
 
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/event"
-	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	pb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1"
 	"git.netflux.io/rob/octoplex/internal/protocol"
 	gocmp "github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"

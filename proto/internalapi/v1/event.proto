@@ -1,9 +1,10 @@
 syntax = "proto3";
 
-package api;
-option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc";
+package internalapi.v1;
 
-import "domain.proto";
+import "internalapi/v1/domain.proto";
+
+option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1";
 
 message Event {
   oneof event_type {
@@ -28,7 +29,9 @@ message Event {
   }
 }
 
-message AppStateChangedEvent { AppState app_state = 1; }
+message AppStateChangedEvent {
+  AppState app_state = 1;
+}
 
 message DestinationStreamExitedEvent {
   bytes id = 1;
@@ -36,39 +39,53 @@ message DestinationStreamExitedEvent {
   string error = 3;
 }
 
-message DestinationsListedEvent { repeated Destination destinations = 1; }
+message DestinationsListedEvent {
+  repeated Destination destinations = 1;
+}
 
-message ListDestinationsFailedEvent { string error = 1; }
+message ListDestinationsFailedEvent {
+  string error = 1;
+}
 
-message DestinationAddedEvent { bytes id = 1; }
+message DestinationAddedEvent {
+  bytes id = 1;
+}
 
 message AddDestinationFailedEvent {
   string url = 1;
   string error = 2;
 }
 
-message DestinationUpdatedEvent { bytes id = 1; }
+message DestinationUpdatedEvent {
+  bytes id = 1;
+}
 
 message UpdateDestinationFailedEvent {
   bytes id = 1;
   string error = 2;
 }
 
-message DestinationRemovedEvent { bytes id = 1; }
+message DestinationRemovedEvent {
+  bytes id = 1;
+}
 
 message RemoveDestinationFailedEvent {
   bytes id = 1;
   string error = 2;
 }
 
-message DestinationStartedEvent { bytes id = 1; }
+message DestinationStartedEvent {
+  bytes id = 1;
+}
 
 message StartDestinationFailedEvent {
   bytes id = 1;
   string error = 2;
 }
 
-message DestinationStoppedEvent { bytes id = 1; }
+message DestinationStoppedEvent {
+  bytes id = 1;
+}
 
 message StopDestinationFailedEvent {
   bytes id = 1;
@@ -79,6 +96,8 @@ message MediaServerStartedEvent {}
 
 message OtherInstanceDetectedEvent {}
 
-message FatalErrorEvent { string message = 1; }
+message FatalErrorEvent {
+  string message = 1;
+}
 
 message HandshakeCompletedEvent {}

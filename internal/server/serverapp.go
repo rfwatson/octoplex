@@ -3,27 +3,28 @@ package server
 import (
 	"cmp"
 	"context"
-	cryptotls "crypto/tls"
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"net"
+	"net/http"
 	"slices"
 	"time"
 
+	"connectrpc.com/connect"
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/event"
-	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	connectpb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1/internalapiv1connect"
 	"git.netflux.io/rob/octoplex/internal/mediaserver"
 	"git.netflux.io/rob/octoplex/internal/replicator"
 	"git.netflux.io/rob/octoplex/internal/store"
 	"git.netflux.io/rob/octoplex/internal/token"
 	"github.com/docker/docker/client"
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 // command is a wrapper around an event.Command that includes
@@ -128,23 +129,31 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	defer lis.Close() //nolint:errcheck
 
-	cert, err := cryptotls.X509KeyPair(a.keyPairs.External().Cert, a.keyPairs.External().Key)
+	cert, err := tls.X509KeyPair(a.keyPairs.External().Cert, a.keyPairs.External().Key)
 	if err != nil {
 		return fmt.Errorf("load TLS cert: %w", err)
 	}
-	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(authInterceptorUnary(a.credentials, a.logger)),
-		grpc.StreamInterceptor(authInterceptorStream(a.credentials, a.logger)),
-		grpc.Creds(credentials.NewTLS(&cryptotls.Config{Certificates: []cryptotls.Certificate{cert}, MinVersion: config.TLSMinVersion, NextProtos: []string{"h2"}})),
-	)
 
-	grpcDone := make(chan error, 1)
 	internalAPI := newServer(a.DispatchSync, a.DispatchAsync, a.eventBus, a.logger)
-	pb.RegisterInternalAPIServer(grpcServer, internalAPI)
 
+	path, handler := connectpb.NewAPIServiceHandler(internalAPI, connect.WithInterceptors(newAuthInterceptor(a.credentials, a.logger)))
+	mux := http.NewServeMux()
+	mux.Handle(path, handler)
+
+	httpServer := &http.Server{
+		Handler: mux,
+		TLSConfig: &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   config.TLSMinVersion,
+			NextProtos:   []string{"h2"},
+		},
+		ErrorLog: log.New(&logWriter{a.logger}, "", 0),
+	}
+
+	srvDone := make(chan error, 1)
 	go func() {
 		a.logger.Info("gRPC server started", "listen-addr", lis.Addr().String())
-		grpcDone <- grpcServer.Serve(lis)
+		srvDone <- httpServer.Serve(tls.NewListener(lis, httpServer.TLSConfig))
 	}()
 
 	if a.waitForClient {
@@ -254,10 +263,18 @@ func (a *App) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if shutdownErr := httpServer.Shutdown(shutdownCtx); shutdownErr != nil {
+				a.logger.Error("gRPC server shutdown failed", "err", shutdownErr)
+			}
+			cancel()
+
 			return ctx.Err()
-		case grpcErr := <-grpcDone:
-			a.logger.Error("gRPC server exited", "err", grpcErr)
-			return grpcErr
+		case srvErr := <-srvDone:
+			if srvErr != nil && !errors.Is(srvErr, http.ErrServerClosed) {
+				a.logger.Error("gRPC server exited with error", "err", srvErr)
+			}
+			return srvErr
 		case <-startMediaServerC:
 			if err = srv.Start(ctx); err != nil {
 				return fmt.Errorf("start mediaserver: %w", err)
@@ -652,4 +669,13 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, e
 	}
 	logger.Info(fmt.Sprintf("New API token generated. Store it now - it will not be shown again. TOKEN: %s", rawToken))
 	return apiCredentials{hashedToken: hashedToken}, nil
+}
+
+type logWriter struct {
+	logger *slog.Logger
+}
+
+func (w *logWriter) Write(p []byte) (n int, err error) {
+	w.logger.Info("H2 error log", "msg", string(p))
+	return len(p), nil
 }

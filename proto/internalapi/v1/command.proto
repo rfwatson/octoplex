@@ -1,7 +1,8 @@
 syntax = "proto3";
-package api;
 
-option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc";
+package internalapi.v1;
+
+option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1";
 
 message Command {
   oneof command_type {
@@ -35,12 +36,16 @@ message RemoveDestinationCommand {
   bool force = 2;
 }
 
-message StartDestinationCommand { bytes id = 1; }
+message StartDestinationCommand {
+  bytes id = 1;
+}
 
-message StopDestinationCommand { bytes id = 1; }
+message StopDestinationCommand {
+  bytes id = 1;
+}
 
 message CloseOtherInstancesCommand {}
 
 message KillServerCommand {}
 
-message StartHandshakeCommand {};
+message StartHandshakeCommand {}

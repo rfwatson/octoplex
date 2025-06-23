@@ -15,6 +15,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: ludeeus/action-shellcheck@2.0.0
+    - uses: actions/checkout@v4
+    - uses: bufbuild/buf-action@v1
+      with:
+        push: false
+        pr_comment: false
+        format: true
+        lint: true
+        breaking: false
   build:
     runs-on: ubuntu-24.04
     permissions:

@@ -5,7 +5,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net"
 	"regexp"
@@ -13,13 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"git.netflux.io/rob/octoplex/internal/config"
-	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	pb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1"
+	connectpb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1/internalapiv1connect"
+	"git.netflux.io/rob/octoplex/internal/httphelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 )
 
 // TODO: test all-in-one mode
@@ -172,7 +169,7 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 				argv: func(t *testing.T, _ string) []string {
 					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
 				},
-				wantErr: "rpc error: code = Unauthenticated desc = invalid credentials",
+				wantErr: "unauthenticated: invalid credentials",
 			},
 			authenticate: false,
 		},
@@ -258,7 +255,7 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 				argv: func(t *testing.T, _ string) []string {
 					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
 				},
-				wantErr: "rpc error: code = Unauthenticated desc = invalid credentials",
+				wantErr: "unauthenticated: invalid credentials",
 			},
 			authenticate: false,
 		},
@@ -289,7 +286,7 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 				argv: func(t *testing.T, _ string) []string {
 					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
 				},
-				wantErr: "rpc error: code = Unauthenticated desc = invalid credentials",
+				wantErr: "unauthenticated: invalid credentials",
 			},
 			authenticate: false,
 		},
@@ -411,7 +408,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 				},
 				wantErr: "context canceled",
 			},
-			wantClientErr: "rpc error: code = Unauthenticated desc = invalid credentials",
+			wantClientErr: "unauthenticated: invalid credentials",
 			authenticate:  false,
 		},
 		{
@@ -472,7 +469,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 				},
 				wantErr: "context canceled",
 			},
-			wantClientErr: "rpc error: code = Unauthenticated desc = invalid credentials",
+			wantClientErr: "unauthenticated: invalid credentials",
 			authenticate:  false,
 		},
 		{
@@ -493,7 +490,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 				},
 				wantErr: "context canceled",
 			},
-			wantClientErr: "rpc error: code = Unauthenticated desc = invalid credentials",
+			wantClientErr: "unauthenticated: invalid credentials",
 			authenticate:  false,
 		},
 		{
@@ -546,32 +543,21 @@ func TestIntegrationClientServerStream(t *testing.T) {
 					t.Log("Detected API token:", apiToken, "will send:", tc.authenticate)
 				}
 
-				var apiTokenToSend string
-				if tc.authenticate {
-					apiTokenToSend = apiToken
-				}
-
-				tlsConfig := &tls.Config{
-					MinVersion:         config.TLSMinVersion,
-					InsecureSkipVerify: true,
-					NextProtos:         []string{"h2"},
-				}
-
-				conn, err := grpc.NewClient(
-					"localhost:50051",
-					grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
-					grpc.WithStreamInterceptor(authInterceptorStream(apiTokenToSend)),
-				)
+				httpClient, err := httphelpers.NewH2Client(ctx, "localhost:50051", true)
 				require.NoError(t, err)
-				defer conn.Close()
 
-				apiClient := pb.NewInternalAPIClient(conn)
-				stream, err := apiClient.Communicate(ctx)
-				require.NoError(t, err, "failed to create stream")
+				apiClient := connectpb.NewAPIServiceClient(
+					httpClient,
+					"https://localhost:50051",
+				)
+				stream := apiClient.Communicate(ctx)
+				if tc.authenticate {
+					stream.RequestHeader().Set("authorization", "Bearer "+apiToken)
+				}
 
 				require.NoError(t, stream.Send(&pb.Envelope{Payload: &pb.Envelope_Command{Command: &pb.Command{CommandType: &pb.Command_StartHandshake{}}}}))
 
-				_, err = stream.Recv()
+				_, err = stream.Receive()
 				if tc.wantClientErr == "" {
 					require.NoError(t, err)
 				} else {
@@ -583,18 +569,6 @@ func TestIntegrationClientServerStream(t *testing.T) {
 
 			<-done
 		})
-	}
-}
-
-func authInterceptorStream(apiToken string) grpc.StreamClientInterceptor {
-	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-		if apiToken == "" {
-			return streamer(ctx, desc, cc, method, opts...)
-		}
-
-		md := metadata.New(nil)
-		md.Set("authorization", "Bearer "+apiToken)
-		return streamer(metadata.NewOutgoingContext(ctx, md), desc, cc, method, opts...)
 	}
 }
 

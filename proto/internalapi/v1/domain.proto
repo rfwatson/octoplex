@@ -1,9 +1,10 @@
 syntax = "proto3";
 
-package api;
-option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc";
+package internalapi.v1;
 
 import "google/protobuf/timestamp.proto";
+
+option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1";
 
 message Container {
   string id = 1;

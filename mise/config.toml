@@ -47,5 +47,5 @@ alias = "m"
 [tasks.generate_proto]
 description = "Generate gRPC files from proto"
 dir = "{{cwd}}"
-run = "protoc -I proto --go_out=paths=source_relative:internal/generated/grpc --go-grpc_out=paths=source_relative:internal/generated/grpc proto/api.proto proto/domain.proto proto/event.proto proto/command.proto"
+run = "buf generate"
 alias = "p"

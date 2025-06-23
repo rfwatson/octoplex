@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/domain"
-	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	pb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

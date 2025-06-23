@@ -3,24 +3,21 @@ package client
 import (
 	"cmp"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 
-	"git.netflux.io/rob/octoplex/internal/config"
+	"connectrpc.com/connect"
 	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/event"
-	pb "git.netflux.io/rob/octoplex/internal/generated/grpc"
+	pb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1"
+	connectpb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1/internalapiv1connect"
+	"git.netflux.io/rob/octoplex/internal/httphelpers"
 	"git.netflux.io/rob/octoplex/internal/optional"
 	"git.netflux.io/rob/octoplex/internal/protocol"
 	"git.netflux.io/rob/octoplex/internal/terminal"
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 )
 
 // DefaultServerAddr is the default address for the client to connect to.
@@ -65,22 +62,21 @@ func New(params NewParams) *App {
 
 // ListDestinations retrieves the list of destinations from the server.
 func (a *App) ListDestinations(ctx context.Context) (_ []domain.Destination, err error) {
-	conn, err := a.buildClientConn(ctx)
+	apiClient, err := a.buildAPIClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close() //nolint:errcheck
 
-	apiClient := pb.NewInternalAPIClient(conn)
-
-	resp, err := apiClient.ListDestinations(ctx, &pb.ListDestinationsRequest{
-		Command: &pb.ListDestinationsCommand{},
+	resp, err := apiClient.ListDestinations(ctx, &connect.Request[pb.ListDestinationsRequest]{
+		Msg: &pb.ListDestinationsRequest{
+			Command: &pb.ListDestinationsCommand{},
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("call API: %w", err)
 	}
 
-	switch evt := resp.Result.(type) {
+	switch evt := resp.Msg.Result.(type) {
 	case *pb.ListDestinationsResponse_Ok:
 		return protocol.ProtoToDestinations(evt.Ok.Destinations)
 	case *pb.ListDestinationsResponse_Error:
@@ -92,25 +88,24 @@ func (a *App) ListDestinations(ctx context.Context) (_ []domain.Destination, err
 
 // AddDestination adds a new destination to the server.
 func (a *App) AddDestination(ctx context.Context, name, url string) (id string, err error) {
-	conn, err := a.buildClientConn(ctx)
+	apiClient, err := a.buildAPIClient(ctx)
 	if err != nil {
 		return "", fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close() //nolint:errcheck
 
-	apiClient := pb.NewInternalAPIClient(conn)
-
-	resp, err := apiClient.AddDestination(ctx, &pb.AddDestinationRequest{
-		Command: &pb.AddDestinationCommand{
-			Name: name,
-			Url:  url,
+	resp, err := apiClient.AddDestination(ctx, &connect.Request[pb.AddDestinationRequest]{
+		Msg: &pb.AddDestinationRequest{
+			Command: &pb.AddDestinationCommand{
+				Name: name,
+				Url:  url,
+			},
 		},
 	})
 	if err != nil {
 		return "", fmt.Errorf("call API: %w", err)
 	}
 
-	switch evt := resp.Result.(type) {
+	switch evt := resp.Msg.Result.(type) {
 	case *pb.AddDestinationResponse_Ok:
 		destID, err := uuid.FromBytes(evt.Ok.Id)
 		if err != nil {
@@ -131,26 +126,25 @@ func (a *App) UpdateDestination(ctx context.Context, destinationID string, name,
 		return fmt.Errorf("parse ID: %w", err)
 	}
 
-	conn, err := a.buildClientConn(ctx)
+	apiClient, err := a.buildAPIClient(ctx)
 	if err != nil {
 		return fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close() //nolint:errcheck
 
-	apiClient := pb.NewInternalAPIClient(conn)
-
-	resp, err := apiClient.UpdateDestination(ctx, &pb.UpdateDestinationRequest{
-		Command: &pb.UpdateDestinationCommand{
-			Id:   id[:],
-			Name: name.Ref(),
-			Url:  url.Ref(),
+	resp, err := apiClient.UpdateDestination(ctx, &connect.Request[pb.UpdateDestinationRequest]{
+		Msg: &pb.UpdateDestinationRequest{
+			Command: &pb.UpdateDestinationCommand{
+				Id:   id[:],
+				Name: name.Ref(),
+				Url:  url.Ref(),
+			},
 		},
 	})
 	if err != nil {
 		return fmt.Errorf("call API: %w", err)
 	}
 
-	switch evt := resp.Result.(type) {
+	switch evt := resp.Msg.Result.(type) {
 	case *pb.UpdateDestinationResponse_Ok:
 		return nil
 	case *pb.UpdateDestinationResponse_Error:
@@ -166,22 +160,21 @@ func (a *App) RemoveDestination(ctx context.Context, destinationID string, force
 		return fmt.Errorf("parse ID: %w", err)
 	}
 
-	conn, err := a.buildClientConn(ctx)
+	apiClient, err := a.buildAPIClient(ctx)
 	if err != nil {
 		return fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close() //nolint:errcheck
 
-	apiClient := pb.NewInternalAPIClient(conn)
-
-	resp, err := apiClient.RemoveDestination(ctx, &pb.RemoveDestinationRequest{
-		Command: &pb.RemoveDestinationCommand{Id: id[:], Force: force},
+	resp, err := apiClient.RemoveDestination(ctx, &connect.Request[pb.RemoveDestinationRequest]{
+		Msg: &pb.RemoveDestinationRequest{
+			Command: &pb.RemoveDestinationCommand{Id: id[:], Force: force},
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("call API: %w", err)
 	}
 
-	switch evt := resp.Result.(type) {
+	switch evt := resp.Msg.Result.(type) {
 	case *pb.RemoveDestinationResponse_Ok:
 		return nil
 	case *pb.RemoveDestinationResponse_Error:
@@ -197,22 +190,21 @@ func (a *App) StartDestination(ctx context.Context, destinationID string) error 
 		return fmt.Errorf("parse ID: %w", err)
 	}
 
-	conn, err := a.buildClientConn(ctx)
+	apiClient, err := a.buildAPIClient(ctx)
 	if err != nil {
 		return fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close() //nolint:errcheck
 
-	apiClient := pb.NewInternalAPIClient(conn)
-
-	resp, err := apiClient.StartDestination(ctx, &pb.StartDestinationRequest{
-		Command: &pb.StartDestinationCommand{Id: id[:]},
+	resp, err := apiClient.StartDestination(ctx, &connect.Request[pb.StartDestinationRequest]{
+		Msg: &pb.StartDestinationRequest{
+			Command: &pb.StartDestinationCommand{Id: id[:]},
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("call API: %w", err)
 	}
 
-	switch evt := resp.Result.(type) {
+	switch evt := resp.Msg.Result.(type) {
 	case *pb.StartDestinationResponse_Ok:
 		return nil
 	case *pb.StartDestinationResponse_Error:
@@ -228,22 +220,21 @@ func (a *App) StopDestination(ctx context.Context, destinationID string) error {
 		return fmt.Errorf("parse ID: %w", err)
 	}
 
-	conn, err := a.buildClientConn(ctx)
+	apiClient, err := a.buildAPIClient(ctx)
 	if err != nil {
 		return fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close() //nolint:errcheck
 
-	apiClient := pb.NewInternalAPIClient(conn)
-
-	resp, err := apiClient.StopDestination(ctx, &pb.StopDestinationRequest{
-		Command: &pb.StopDestinationCommand{Id: id[:]},
+	resp, err := apiClient.StopDestination(ctx, &connect.Request[pb.StopDestinationRequest]{
+		Msg: &pb.StopDestinationRequest{
+			Command: &pb.StopDestinationCommand{Id: id[:]},
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("call API: %w", err)
 	}
 
-	switch evt := resp.Result.(type) {
+	switch evt := resp.Msg.Result.(type) {
 	case *pb.StopDestinationResponse_Ok:
 		return nil
 	case *pb.StopDestinationResponse_Error:
@@ -258,19 +249,12 @@ func (a *App) StopDestination(ctx context.Context, destinationID string) error {
 // It returns nil if the application was closed by the user, or an error if it
 // closed for any other reason.
 func (a *App) Run(ctx context.Context) error {
-	g, ctx := errgroup.WithContext(ctx)
-
-	conn, err := a.buildClientConn(ctx)
+	apiClient, err := a.buildAPIClient(ctx)
 	if err != nil {
 		return fmt.Errorf("build client conn: %w", err)
 	}
-	defer conn.Close() //nolint:errcheck
 
-	apiClient := pb.NewInternalAPIClient(conn)
-	stream, err := apiClient.Communicate(ctx)
-	if err != nil {
-		return fmt.Errorf("create gRPC stream: %w", err)
-	}
+	stream := apiClient.Communicate(ctx)
 
 	// Perform a handshake with the server, which has the function of flushing
 	// any authentication issues before the UI is initialised.
@@ -296,11 +280,26 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	defer ui.Close()
 
+	g, ctx := errgroup.WithContext(ctx)
+
+	// If the context is cancelled, we must close the gRPC stream.
+	// It seems that passing the context to apiClient.Communicate() is not
+	// enough.
+	g.Go(func() error {
+		<-ctx.Done()
+
+		if err := stream.CloseRequest(); err != nil {
+			a.logger.Error("Error closing gRPC stream after context cancelled", "err", err)
+		}
+
+		return ctx.Err()
+	})
+
 	g.Go(func() error { return ui.Run(ctx) })
 
 	g.Go(func() error {
 		for {
-			envelope, recErr := stream.Recv()
+			envelope, recErr := stream.Receive()
 			if recErr != nil {
 				return fmt.Errorf("recv: %w", recErr)
 			}
@@ -329,7 +328,7 @@ func (a *App) Run(ctx context.Context) error {
 	}
 }
 
-func (a *App) buildClientConn(ctx context.Context) (*grpc.ClientConn, error) {
+func (a *App) buildAPIClient(ctx context.Context) (connectpb.APIServiceClient, error) {
 	if a.insecureSkipVerify {
 		a.logger.Warn(
 			"TLS certificate verification is DISABLED — traffic is encrypted but unauthenticated",
@@ -339,57 +338,29 @@ func (a *App) buildClientConn(ctx context.Context) (*grpc.ClientConn, error) {
 		)
 	}
 
-	tlsConfig := &tls.Config{
-		MinVersion:         config.TLSMinVersion,
-		InsecureSkipVerify: a.insecureSkipVerify,
-		NextProtos:         []string{"h2"},
+	httpClient, err := httphelpers.NewH2Client(ctx, a.serverAddr, a.insecureSkipVerify)
+	if err != nil {
+		return nil, fmt.Errorf("new H2 client: %w", err)
 	}
 
-	var err error
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-
-		// Test the TLS config.
-		// This returns a more meaningful error than if we wait for gRPC layer to
-		// fail.
-		var tlsConn *tls.Conn
-		tlsConn, err = tls.Dial("tcp", a.serverAddr, tlsConfig)
-		if err == nil {
-			tlsConn.Close() //nolint:errcheck
-		}
-	}()
-
-	select {
-	case <-done:
-		if err != nil {
-			return nil, fmt.Errorf("test TLS connection: %w", err)
-		}
-	case <-ctx.Done(): // Important: avoid blocking forever if the context is cancelled during startup.
-		return nil, ctx.Err()
-	case <-time.After(5 * time.Second):
-		return nil, errors.New("timed out waiting for TLS connection to be established")
-	}
-
-	conn, err := grpc.NewClient(
-		a.serverAddr,
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
-		grpc.WithUnaryInterceptor(authInterceptorUnary(a.apiToken)),
-		grpc.WithStreamInterceptor(authInterceptorStream(a.apiToken)),
+	client := connectpb.NewAPIServiceClient(
+		httpClient,
+		"https://"+a.serverAddr,
+		connect.WithInterceptors(authInterceptor{apiToken: a.apiToken}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("new gRPC client: %w", err)
+		return nil, fmt.Errorf("new API client: %w", err)
 	}
 
-	return conn, nil
+	return client, nil
 }
 
-func (a *App) doHandshake(stream pb.InternalAPI_CommunicateClient) error {
+func (a *App) doHandshake(stream *connect.BidiStreamForClient[pb.Envelope, pb.Envelope]) error {
 	if err := stream.Send(&pb.Envelope{Payload: &pb.Envelope_Command{Command: &pb.Command{CommandType: &pb.Command_StartHandshake{}}}}); err != nil {
 		return fmt.Errorf("send start handshake command: %w", err)
 	}
 
-	env, err := stream.Recv()
+	env, err := stream.Receive()
 	if err != nil {
 		return fmt.Errorf("receive handshake completed event: %w", err)
 	}
@@ -400,32 +371,38 @@ func (a *App) doHandshake(stream pb.InternalAPI_CommunicateClient) error {
 	return nil
 }
 
-func authInterceptorUnary(apiToken string) grpc.UnaryClientInterceptor {
-	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, next grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		return next(contextWithAuth(ctx, apiToken), method, req, reply, cc, opts...)
+type authInterceptor struct {
+	apiToken string
+}
+
+func NewAuthInterceptor(apiToken string) *authInterceptor {
+	return &authInterceptor{apiToken: apiToken}
+}
+
+func (a authInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
+	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		if a.apiToken != "" {
+			req.Header().Set("authorization", "Bearer "+a.apiToken)
+		}
+
+		return next(ctx, req)
 	}
 }
 
-func authInterceptorStream(apiToken string) grpc.StreamClientInterceptor {
-	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-		return streamer(contextWithAuth(ctx, apiToken), desc, cc, method, opts...)
-	}
+func (a authInterceptor) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
+	return connect.StreamingClientFunc(func(ctx context.Context, spec connect.Spec) connect.StreamingClientConn {
+		conn := next(ctx, spec)
+		conn.RequestHeader().Set("authorization", "Bearer "+a.apiToken)
+
+		return conn
+	})
 }
 
-func contextWithAuth(ctx context.Context, apiToken string) context.Context {
-	if apiToken == "" {
-		return ctx
-	}
-
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		md = metadata.New(nil)
-	} else {
-		md = md.Copy()
-	}
-
-	md.Set("authorization", "Bearer "+apiToken)
-	return metadata.NewOutgoingContext(ctx, md)
+func (a authInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return connect.StreamingHandlerFunc(func(ctx context.Context, conn connect.StreamingHandlerConn) error {
+		// no-op
+		return next(ctx, conn)
+	})
 }
 
 func parseID(id string) (uuid.UUID, error) {

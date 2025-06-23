@@ -1,0 +1,19 @@
+# For details on buf.yaml configuration, visit https://buf.build/docs/configuration/v2/buf-yaml
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+  ignore_only:
+    ENUM_ZERO_VALUE_SUFFIX:
+      - proto/internalapi/v1/domain.proto
+    RPC_REQUEST_STANDARD_NAME:
+      - proto/internalapi/v1/api.proto
+    RPC_RESPONSE_STANDARD_NAME:
+      - proto/internalapi/v1/api.proto
+    RPC_REQUEST_RESPONSE_UNIQUE:
+      - proto/internalapi/v1/api.proto
+breaking:
+  use:
+    - FILE
