@@ -533,7 +533,7 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 					RootCAs:            rootCAs,
 					ServerName:         "localhost",
 					InsecureSkipVerify: false,
-					NextProtos: 				[]string{"h2"},
+					NextProtos:         []string{"h2"},
 				})
 				require.NoErrorf(c, err, "failed to connect to %s: %v", addr, err)
 				defer conn.Close()

@@ -295,11 +295,11 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 										return fmt.Errorf("update destination: %w", err)
 									}
 
-										if _, err := stdout.Write([]byte("OK\n")); err != nil {
-											return handleStdoutError(err)
-										}
+									if _, err := stdout.Write([]byte("OK\n")); err != nil {
+										return handleStdoutError(err)
+									}
 
-										return nil
+									return nil
 								},
 							},
 							{

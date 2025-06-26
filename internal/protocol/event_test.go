@@ -187,7 +187,7 @@ func TestEventToProto(t *testing.T) {
 			want: &pb.Event{
 				EventType: &pb.Event_DestinationStreamExited{
 					DestinationStreamExited: &pb.DestinationStreamExitedEvent{
-						Id: destinationID[:],
+						Id:    destinationID[:],
 						Name:  "stream1",
 						Error: "exit reason",
 					},
@@ -394,7 +394,7 @@ func TestUnwrappedEventConversion(t *testing.T) {
 
 	t.Run("DestinationStreamExitedEvent", func(t *testing.T) {
 		domainEvent := event.DestinationStreamExitedEvent{
-			ID: destinationID,
+			ID:   destinationID,
 			Name: "stream1",
 			Err:  errors.New("exit reason"),
 		}
@@ -786,7 +786,7 @@ func TestEventFromProto(t *testing.T) {
 			in: &pb.Event{
 				EventType: &pb.Event_DestinationStreamExited{
 					DestinationStreamExited: &pb.DestinationStreamExitedEvent{
-						Id: destinationID[:],
+						Id:    destinationID[:],
 						Name:  "stream1",
 						Error: "exit reason",
 					},

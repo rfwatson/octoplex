@@ -554,7 +554,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 				tlsConfig := &tls.Config{
 					MinVersion:         config.TLSMinVersion,
 					InsecureSkipVerify: true,
-					NextProtos: []string{"h2"},
+					NextProtos:         []string{"h2"},
 				}
 
 				conn, err := grpc.NewClient(

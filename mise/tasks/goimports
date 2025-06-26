@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Run goimports, but only if there are no uncommitted changes to .go files"
+
+set -euo pipefail
+
+STATUS=$(git status --porcelain --untracked=no "*.go")
+if [ -n "$STATUS" ]; then
+  echo "There are uncommitted changes in the repository. Please commit or stash them before running goimports."
+  exit 1
+fi
+
+go tool goimports -w .
+git checkout -q -- ./internal/generated

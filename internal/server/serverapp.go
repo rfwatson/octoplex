@@ -341,10 +341,10 @@ var errExit = errors.New("exit")
 //
 // It returns one of:
 //
-// - a successful event, which should be sent to all clients
-// - an error event, which should be sent to the client that sent the command
-// - an error, which is currently only ever [errExit] to indicate that the
-//   server should exit cleanly.
+//   - a successful event, which should be sent to all clients
+//   - an error event, which should be sent to the client that sent the command
+//   - an error, which is currently only ever [errExit] to indicate that the
+//     server should exit cleanly.
 func (a *App) handleCommand(
 	ctx context.Context,
 	cmd command,

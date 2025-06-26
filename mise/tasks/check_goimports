@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Check if goimports should be run"
+
+# set -euo pipefail
+
+output=$(go tool goimports -l . | grep -v '^internal/generated' || true)
+
+if [[ $output ]]; then
+  echo "The following files need to be formatted with goimports:"
+  echo
+  echo "$output"
+  echo
+  echo "Run \`mise run goimports\` to format the code."
+  exit 1
+fi
+
+exit 0

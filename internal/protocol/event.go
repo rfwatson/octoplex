@@ -199,7 +199,7 @@ func UpdateDestinationFailedEventToProto(evt event.UpdateDestinationFailedEvent)
 // DestinationStreamExitedEventToProto converts a DestinationStreamExitedEvent to a protobuf message.
 func DestinationStreamExitedEventToProto(evt event.DestinationStreamExitedEvent) *pb.DestinationStreamExitedEvent {
 	return &pb.DestinationStreamExitedEvent{
-		Id: evt.ID[:],
+		Id:    evt.ID[:],
 		Name:  evt.Name,
 		Error: evt.Err.Error(),
 	}
