@@ -277,7 +277,7 @@ Flag|Alias|Modes|Env var|Default|Description
 ---|---|---|---|---|---
 `--help`|`-h`|All|||Show help
 `--data-dir`||`server` `all-in-one`|`OCTO_DATA_DIR`|`$HOME/.local/state/octoplex` (Linux) or`$HOME/Library/Caches/octoplex` (macOS)|Directory for storing persistent state and logs
-`--listen-addr`|`-a`|`server`|`OCTO_LISTEN_ADDR`|`127.0.0.1:50051`|Listen address for gRPC API.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. Use `0:0.0.0:50051` to bind to all network interfaces.
+`--listen-addr`|`-a`|`server`|`OCTO_LISTEN_ADDR`|`127.0.0.1:8443`|Listen address for gRPC API.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. Use `0:0.0.0:8443` to bind to all network interfaces.
 `--hostname`|`-H`|`server`|`OCTO_HOSTNAME`|`localhost`|DNS name of server
 `--auth`||`server`|`OCTO_AUTH`|`auto`|Authentication mode for clients, one of `none`, `auto` and `token`. See [Security](#security).
 `--insecure-allow-no-auth`||`server`|`OCTO_INSECURE_ALLOW_NO_AUTH`|`false`|Allow `--auth=none` when bound to non-local addresses. See [Security](#security).
@@ -297,7 +297,7 @@ Flag|Alias|Modes|Env var|Default|Description
 Flag|Alias|Default|Description
 ---|---|---|---
 `--help`|`-h`||||Show help
-`--host`|`-H`|`localhost:50051`|Remote Octoplex server to connect to
+`--host`|`-H`|`localhost:8443`|Remote Octoplex server to connect to
 `--tls-skip-verify`|`-k`|`false`|Skip TLS certificate verification (insecure)
 `--api-token`|`-t`||API token. See [Security](#security).
 `--log-file`|||Path to log file
@@ -319,7 +319,7 @@ When you run `octoplex server start`:
 
 * `--auth=auto` (the default): if the API listen address is bound only to **localhost/loopback**, Octoplex requires no authentication; if it's bound to **any other network interface** the server generates a long random API token, logs it once on startup, hashes it to disk, and requires every client call to include `--api-token "<API_TOKEN>"`.
 * `--auth=token`: always require an API token, even on loopback.
-* `--auth=none`: disable authentication completely, **but only for localhost binds**. If you set `--auth=none` with `--listen-addr:0.0.0.0:50051` or any other non-localhost address you must also pass `--insecure-allow-no-auth` to acknowledge the risk; otherwise the server refuses to start.
+* `--auth=none`: disable authentication completely, **but only for localhost binds**. If you set `--auth=none` with `--listen-addr:0.0.0.0:8443` or any other non-localhost address you must also pass `--insecure-allow-no-auth` to acknowledge the risk; otherwise the server refuses to start.
 
 The API is **always** served over TLS; if you don't supply a certificate
 Octoplex generates a self-signed one, so the token is never sent in clear-text.
@@ -397,15 +397,15 @@ GitHub instead. See [Installation](#Installation) for details.
 
 #### `docker run`
 
-Run the Octoplex gRPC server on all interfaces (port 50051):
+Run the Octoplex gRPC server on all interfaces (port 8443):
 
 ```shell
 docker run \
   --name octoplex                              \
   -v octoplex-data:/data                       \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -e OCTO_LISTEN_ADDR=":50051"                 \
-  -p 50051:50051                               \
+  -e OCTO_LISTEN_ADDR=":8443"                  \
+  -p 8443:8443                                 \
   --restart unless-stopped                     \
   ghcr.io/rfwatson/octoplex:latest
 ```
@@ -423,9 +423,9 @@ services:
       - octoplex-data:/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      OCTO_LISTEN_ADDR: "[::]:50051" # bind to all network interfaces
+      OCTO_LISTEN_ADDR: "[::]:8443" # bind to all network interfaces
     ports:
-      - "50051:50051"
+      - "8443:8443"
 volumes:
   octoplex-data:
     driver: local

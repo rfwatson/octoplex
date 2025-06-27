@@ -21,7 +21,7 @@ import (
 )
 
 // DefaultServerAddr is the default address for the client to connect to.
-const DefaultServerAddr = "localhost:50051"
+const DefaultServerAddr = "localhost:8443"
 
 // App is the client application.
 type App struct {

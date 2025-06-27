@@ -125,7 +125,7 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			Sources:             config.Sources{MediaServer: mediaServerConfig},
@@ -307,7 +307,7 @@ func TestIntegrationCustomHost(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			Host:                "rtmp.example.com",
@@ -386,7 +386,7 @@ func TestIntegrationTLSCerts(t *testing.T) {
 	client, srv := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			DataDir:             dataDir,
@@ -437,7 +437,7 @@ func TestIntegrationTLSCerts(t *testing.T) {
 	client, srv = buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			DataDir:             dataDir,
@@ -492,7 +492,7 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			TLS: &config.TLS{
@@ -571,7 +571,7 @@ func TestIntegrationCustomTLSNoInsecureSkipVerify(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			TLS: &config.TLS{
@@ -623,7 +623,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
@@ -772,7 +772,7 @@ func TestIntegrationUpdateDestination(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
@@ -875,7 +875,7 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
@@ -960,7 +960,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			Sources:             config.Sources{MediaServer: config.MediaServerSource{StreamKey: "live", RTMP: config.RTMPSource{Enabled: true}}},
@@ -1109,7 +1109,7 @@ func TestIntegrationStartupCheck(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
@@ -1185,7 +1185,7 @@ func TestIntegrationMediaServerError(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
@@ -1231,7 +1231,7 @@ func TestIntegrationDockerClientError(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
@@ -1276,7 +1276,7 @@ func TestIntegrationDockerConnectionError(t *testing.T) {
 	client, server := buildClientServer(
 		t,
 		config.Config{
-			ListenAddr:          "localhost:50051",
+			ListenAddr:          "localhost:8443",
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
@@ -1378,7 +1378,7 @@ func TestIntegrationCopyURLs(t *testing.T) {
 			client, server := buildClientServer(
 				t,
 				config.Config{
-					ListenAddr:          "localhost:50051",
+					ListenAddr:          "localhost:8443",
 					AuthMode:            config.AuthModeNone,
 					InsecureAllowNoAuth: true,
 					Sources:             config.Sources{MediaServer: tc.mediaServerConfig},

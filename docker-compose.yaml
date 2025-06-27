@@ -8,9 +8,9 @@ services:
       - octoplex-data:/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      OCTO_LISTEN_ADDR: "[::]:50051" # bind to all network interfaces
+      OCTO_LISTEN_ADDR: "[::]:8443" # bind to all network interfaces
     ports:
-      - "50051:50051"
+      - "8443:8443"
 volumes:
   octoplex-data:
     driver: local

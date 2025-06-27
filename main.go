@@ -43,7 +43,7 @@ var (
 )
 
 const (
-	defaultListenAddr = "127.0.0.1:50051"
+	defaultListenAddr = "127.0.0.1:8443"
 	defaultHostname   = "localhost"
 	defaultStreamKey  = "live"
 )

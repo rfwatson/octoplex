@@ -31,10 +31,10 @@ func TestIntegrationRunServer(t *testing.T) {
 		{
 			name:      "launch server",
 			args:      []string{"octoplex", "server", "start"},
-			wantPorts: []int{50051, 1935},
+			wantPorts: []int{8443, 1935},
 			wantStderr: []string{
 				`level=INFO msg="Starting server"`,
-				`level=INFO msg="gRPC server started" component=server listen-addr=127.0.0.1:50051`,
+				`level=INFO msg="gRPC server started" component=server listen-addr=127.0.0.1:8443`,
 				`level=INFO msg="Starting media server" component=server component=mediaserver host=localhost rtmp.enabled=true rtmp.bind_addr=127.0.0.1 rtmp.bind_port=1935 rtmps.enabled=true rtmps.bind_addr=127.0.0.1`,
 				`level=INFO msg="Started container"`,
 			},
@@ -61,10 +61,10 @@ func TestIntegrationRunServer(t *testing.T) {
 		{
 			name:      "launch server with custom RTMP listen addresses",
 			args:      []string{"octoplex", "server", "start", "--rtmp-listen-addr", "127.0.0.1:31935", "--rtmps-listen-addr", "0.0.0.0:31936"},
-			wantPorts: []int{50051, 31935, 31936},
+			wantPorts: []int{8443, 31935, 31936},
 			wantStderr: []string{
 				`level=INFO msg="Starting server"`,
-				`level=INFO msg="gRPC server started" component=server listen-addr=127.0.0.1:50051`,
+				`level=INFO msg="gRPC server started" component=server listen-addr=127.0.0.1:8443`,
 				`level=INFO msg="Starting media server" component=server component=mediaserver host=localhost rtmp.enabled=true rtmp.bind_addr=127.0.0.1 rtmp.bind_port=31935 rtmps.enabled=true rtmps.bind_addr=0.0.0.0 rtmps.bind_port=31936`,
 				`level=INFO msg="Started container"`,
 			},
@@ -146,13 +146,13 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 			name: "auth mode unspecified, localhost, no authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:50051", "--data-dir", dataDir}
+					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:8443", "--data-dir", dataDir}
 				},
 				wantErr: "context canceled",
 			},
 			clientArgs: clientArgs{
 				argv: func(t *testing.T, _ string) []string {
-					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
+					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:8443", "--tls-skip-verify"}
 				},
 			},
 			authenticate: false,
@@ -161,13 +161,13 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 			name: "auth mode unspecified, non-localhost, no authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir}
 				},
 				wantErr: "context canceled",
 			},
 			clientArgs: clientArgs{
 				argv: func(t *testing.T, _ string) []string {
-					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
+					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:8443", "--tls-skip-verify"}
 				},
 				wantErr: "unauthenticated: invalid credentials",
 			},
@@ -177,13 +177,13 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 			name: "auth mode unspecified, non-localhost, authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir}
 				},
 				wantErr: "context canceled",
 			},
 			clientArgs: clientArgs{
 				argv: func(t *testing.T, apiToken string) []string {
-					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify", "--api-token", apiToken}
+					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:8443", "--tls-skip-verify", "--api-token", apiToken}
 				},
 			},
 			authenticate: true,
@@ -192,13 +192,13 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 			name: "auth mode none, localhost, no authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:50051", "--data-dir", dataDir, "--auth", "none"}
+					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:8443", "--data-dir", dataDir, "--auth", "none"}
 				},
 				wantErr: "context canceled",
 			},
 			clientArgs: clientArgs{
 				argv: func(t *testing.T, _ string) []string {
-					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
+					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:8443", "--tls-skip-verify"}
 				},
 			},
 			authenticate: false,
@@ -207,7 +207,7 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 			name: "auth mode none, non-localhost, no insecure-allow-no-auth passed to server",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "none"}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir, "--auth", "none"}
 				},
 				wantErr: "new server: build credentials: authentication cannot be disabled", // handled in main.go
 			},
@@ -217,13 +217,13 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 			name: "auth mode none, non-localhost, insecure-allow-no-auth passed to server",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "none", "--insecure-allow-no-auth"}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir, "--auth", "none", "--insecure-allow-no-auth"}
 				},
 				wantErr: "context canceled",
 			},
 			clientArgs: clientArgs{
 				argv: func(t *testing.T, _ string) []string {
-					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
+					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:8443", "--tls-skip-verify"}
 				},
 			},
 			authenticate: false,
@@ -232,13 +232,13 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 			name: "auth mode auto, localhost, no authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:50051", "--data-dir", dataDir, "--auth", "auto"}
+					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:8443", "--data-dir", dataDir, "--auth", "auto"}
 				},
 				wantErr: "context canceled",
 			},
 			clientArgs: clientArgs{
 				argv: func(t *testing.T, _ string) []string {
-					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
+					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:8443", "--tls-skip-verify"}
 				},
 			},
 			authenticate: false,
@@ -247,13 +247,13 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 			name: "auth mode auto, non-localhost, no authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "auto"}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir, "--auth", "auto"}
 				},
 				wantErr: "context canceled",
 			},
 			clientArgs: clientArgs{
 				argv: func(t *testing.T, _ string) []string {
-					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
+					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:8443", "--tls-skip-verify"}
 				},
 				wantErr: "unauthenticated: invalid credentials",
 			},
@@ -263,13 +263,13 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 			name: "auth mode auto, non-localhost, authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "auto"}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir, "--auth", "auto"}
 				},
 				wantErr: "context canceled",
 			},
 			clientArgs: clientArgs{
 				argv: func(t *testing.T, apiToken string) []string {
-					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify", "--api-token", apiToken}
+					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:8443", "--tls-skip-verify", "--api-token", apiToken}
 				},
 			},
 			authenticate: true,
@@ -278,13 +278,13 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 			name: "auth mode token, no authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:50051", "--data-dir", dataDir, "--auth", "token"}
+					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:8443", "--data-dir", dataDir, "--auth", "token"}
 				},
 				wantErr: "context canceled",
 			},
 			clientArgs: clientArgs{
 				argv: func(t *testing.T, _ string) []string {
-					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify"}
+					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:8443", "--tls-skip-verify"}
 				},
 				wantErr: "unauthenticated: invalid credentials",
 			},
@@ -294,13 +294,13 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 			name: "auth mode token, authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:50051", "--data-dir", dataDir, "--auth", "token"}
+					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:8443", "--data-dir", dataDir, "--auth", "token"}
 				},
 				wantErr: "context canceled",
 			},
 			clientArgs: clientArgs{
 				argv: func(t *testing.T, apiToken string) []string {
-					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:50051", "--tls-skip-verify", "--api-token", apiToken}
+					return []string{"octoplex", "client", "destination", "list", "--host", "localhost:8443", "--tls-skip-verify", "--api-token", apiToken}
 				},
 			},
 			authenticate: true,
@@ -404,7 +404,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 			name: "auth mode unspecified, non-localhost, no authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir}
 				},
 				wantErr: "context canceled",
 			},
@@ -415,7 +415,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 			name: "auth mode unspecified, non-localhost, authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir}
 				},
 				wantErr: "context canceled",
 			},
@@ -425,7 +425,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 			name: "auth mode none, localhost, no authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:50051", "--data-dir", dataDir, "--auth", "none"}
+					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:8443", "--data-dir", dataDir, "--auth", "none"}
 				},
 				wantErr: "context canceled",
 			},
@@ -435,7 +435,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 			name: "auth mode none, non-localhost, no insecure-allow-no-auth passed to server",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "none"}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir, "--auth", "none"}
 				},
 				wantErr: "new server: build credentials: authentication cannot be disabled", // handled in main.go
 			},
@@ -445,7 +445,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 			name: "auth mode none, non-localhost, insecure-allow-no-auth passed to server",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "none", "--insecure-allow-no-auth"}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir, "--auth", "none", "--insecure-allow-no-auth"}
 				},
 				wantErr: "context canceled",
 			},
@@ -455,7 +455,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 			name: "auth mode auto, localhost, no authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:50051", "--data-dir", dataDir, "--auth", "auto"}
+					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:8443", "--data-dir", dataDir, "--auth", "auto"}
 				},
 				wantErr: "context canceled",
 			},
@@ -465,7 +465,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 			name: "auth mode auto, non-localhost, no authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "auto"}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir, "--auth", "auto"}
 				},
 				wantErr: "context canceled",
 			},
@@ -476,7 +476,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 			name: "auth mode auto, non-localhost, authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", ":50051", "--data-dir", dataDir, "--auth", "auto"}
+					return []string{"octoplex", "server", "start", "--listen-addr", ":8443", "--data-dir", dataDir, "--auth", "auto"}
 				},
 				wantErr: "context canceled",
 			},
@@ -486,7 +486,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 			name: "auth mode token, no authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:50051", "--data-dir", dataDir, "--auth", "token"}
+					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:8443", "--data-dir", dataDir, "--auth", "token"}
 				},
 				wantErr: "context canceled",
 			},
@@ -497,7 +497,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 			name: "auth mode token, authentication provided",
 			serverArgs: serverArgs{
 				argv: func(t *testing.T, dataDir string) []string {
-					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:50051", "--data-dir", dataDir, "--auth", "token"}
+					return []string{"octoplex", "server", "start", "--listen-addr", "127.0.0.1:8443", "--data-dir", dataDir, "--auth", "token"}
 				},
 				wantErr: "context canceled",
 			},
@@ -543,12 +543,12 @@ func TestIntegrationClientServerStream(t *testing.T) {
 					t.Log("Detected API token:", apiToken, "will send:", tc.authenticate)
 				}
 
-				httpClient, err := httphelpers.NewH2Client(ctx, "localhost:50051", true)
+				httpClient, err := httphelpers.NewH2Client(ctx, "localhost:8443", true)
 				require.NoError(t, err)
 
 				apiClient := connectpb.NewAPIServiceClient(
 					httpClient,
-					"https://localhost:50051",
+					"https://localhost:8443",
 				)
 				stream := apiClient.Communicate(ctx)
 				if tc.authenticate {
