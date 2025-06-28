@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path/filepath"
 	"slices"
 
 	"time"
@@ -84,7 +85,7 @@ var (
 func New(params Params) (*App, error) {
 	cfg := params.Config
 
-	credentials, err := buildCredentials(cfg, params.Logger)
+	credentials, err := buildAPICredentials(cfg, params.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("build credentials: %w", err)
 	}
@@ -641,11 +642,14 @@ func (a *App) Stop(ctx context.Context) error {
 	return closeOtherInstances(ctx, containerClient)
 }
 
-// buildCredentials builds the API credentials based on the configuration.
+// buildAPICredentials builds the API credentials based on the configuration.
 //
 // It either returns a valid set of active credentials, a set of disabled
 // credentials, or an error.
-func buildCredentials(cfg config.Config, logger *slog.Logger) (_ apiCredentials, err error) {
+func buildAPICredentials(cfg config.Config, logger *slog.Logger) (_ apiCredentials, err error) {
+	const tokenLenBytes = 32 // length of raw token in bytes
+	tokenPath := filepath.Join(cfg.DataDir, "token.txt")
+
 	if cfg.ListenAddrs.Plain == "" && cfg.ListenAddrs.TLS == "" {
 		return apiCredentials{}, fmt.Errorf("listen addresses cannot all be empty")
 	}
@@ -655,7 +659,7 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (_ apiCredentials,
 		return apiCredentials{}, fmt.Errorf("check loopback: %w", err)
 	}
 
-	hashedToken, err := token.Read(cfg.DataDir)
+	hashedToken, err := token.Read(tokenPath)
 	if err != nil && !errors.Is(err, token.ErrTokenNotFound) {
 		return apiCredentials{}, fmt.Errorf("load token: %w", err)
 	}
@@ -692,7 +696,7 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (_ apiCredentials,
 	}
 
 	// Otherwise, generate a new token and require it.
-	rawToken, hashedToken, err := token.Write(cfg.DataDir)
+	rawToken, hashedToken, err := token.Write(tokenPath, tokenLenBytes)
 	if err != nil {
 		return apiCredentials{}, fmt.Errorf("write token: %w", err)
 	}

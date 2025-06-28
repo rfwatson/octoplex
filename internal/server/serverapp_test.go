@@ -129,7 +129,7 @@ func TestBuildCredentials(t *testing.T) {
 				require.NoError(t, os.WriteFile(filepath.Join(tempDir, "token.txt"), []byte(tc.existingToken), 0600))
 			}
 
-			got, err := buildCredentials(cfg, logger)
+			got, err := buildAPICredentials(cfg, logger)
 			if tc.wantErr != "" {
 				require.Error(t, err)
 				assert.EqualError(t, err, tc.wantErr)
