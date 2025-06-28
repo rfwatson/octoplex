@@ -43,9 +43,10 @@ var (
 )
 
 const (
-	defaultListenAddr = "127.0.0.1:8443"
-	defaultHostname   = "localhost"
-	defaultStreamKey  = "live"
+	defaultListenAddr    = "127.0.0.1:8080"
+	defaultListenAddrTLS = "127.0.0.1:8443"
+	defaultHostname      = "localhost"
+	defaultStreamKey     = "live"
 )
 
 // errInterrupt is an error type that indicates an interrupt signal was
@@ -452,12 +453,21 @@ func idFromArgOrFlag(c *cli.Command) string {
 func serverFlags(clientAndServerMode bool) []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{
-			Name:        "listen-addr",
-			Usage:       "The address to listen on",
+			Name:        "listen",
+			Usage:       "The address to listen on (plain-text HTTP/gRPC, insecure)",
 			DefaultText: defaultListenAddr,
 			Category:    "Server",
+			Aliases:     []string{"l"},
+			Sources:     cli.EnvVars("OCTO_LISTEN"),
+			Hidden:      clientAndServerMode,
+		},
+		&cli.StringFlag{
+			Name:        "listen-tls",
+			Usage:       "The address to listen on (TLS, self-signed certificate by default)",
+			DefaultText: defaultListenAddrTLS,
+			Category:    "Server",
 			Aliases:     []string{"a"},
-			Sources:     cli.EnvVars("OCTO_LISTEN_ADDR"),
+			Sources:     cli.EnvVars("OCTO_LISTEN_TLS"),
 			Destination: &serverListenAddr,
 			Hidden:      clientAndServerMode,
 		},
@@ -543,7 +553,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			DefaultText: "true",
 		},
 		&cli.StringFlag{
-			Name:        "rtmp-listen-addr",
+			Name:        "rtmp-listen",
 			Usage:       "The address to listen on for RTMP",
 			Category:    "Sources",
 			DefaultText: "127.0.0.1:1935",
@@ -555,7 +565,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			DefaultText: "true",
 		},
 		&cli.StringFlag{
-			Name:        "rtmps-listen-addr",
+			Name:        "rtmps-listen",
 			Usage:       "The address to listen on for RTMPS",
 			Category:    "Sources",
 			DefaultText: "127.0.0.1:1936",
@@ -690,12 +700,12 @@ func runServer(ctx context.Context, c *cli.Command, cfg config.Config, serverCfg
 	}
 
 	app, err := server.New(server.Params{
-		Config:        cfg,
-		Store:         store,
-		DockerClient:  dockerClient,
-		ListenerFunc:  serverCfg.listenerFunc,
-		WaitForClient: serverCfg.waitForClient,
-		Logger:        logger,
+		Config:          cfg,
+		Store:           store,
+		DockerClient:    dockerClient,
+		ListenerTLSFunc: serverCfg.listenerFunc,
+		WaitForClient:   serverCfg.waitForClient,
+		Logger:          logger,
 	})
 	if err != nil {
 		return fmt.Errorf("new server: %w", err)
@@ -826,8 +836,17 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 		logFile = filepath.Join(dataDir, "octoplex.log")
 	}
 
+	const argNone = "none"
+	var listenAddrPlain, listenAddrTLS string
+	if addr := c.String("listen"); addr != argNone {
+		listenAddrPlain = cmp.Or(addr, defaultListenAddr)
+	}
+	if addr := c.String("listen-tls"); addr != argNone {
+		listenAddrTLS = cmp.Or(addr, defaultListenAddrTLS)
+	}
+
 	cfg := config.Config{
-		ListenAddr:          cmp.Or(serverListenAddr, defaultListenAddr),
+		ListenAddrs:         config.ListenAddrs{Plain: listenAddrPlain, TLS: listenAddrTLS},
 		Host:                cmp.Or(serverHostname, defaultHostname),
 		AuthMode:            authMode,
 		InsecureAllowNoAuth: insecureAllowNoAuth,
@@ -862,7 +881,7 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 	}
 	cfg.Sources.MediaServer.RTMP.Enabled = rtmpEnabled
 	if rtmpEnabled {
-		if err := parseRTMPConfig(&cfg.Sources.MediaServer.RTMP, c, "rtmp-listen-addr"); err != nil {
+		if err := parseRTMPConfig(&cfg.Sources.MediaServer.RTMP, c, "rtmp-listen"); err != nil {
 			return config.Config{}, fmt.Errorf("parse RTMP: %w", err)
 		}
 	}
@@ -873,7 +892,7 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 	}
 	cfg.Sources.MediaServer.RTMPS.Enabled = rtmpsEnabled
 	if rtmpsEnabled {
-		if err := parseRTMPConfig(&cfg.Sources.MediaServer.RTMPS, c, "rtmps-listen-addr"); err != nil {
+		if err := parseRTMPConfig(&cfg.Sources.MediaServer.RTMPS, c, "rtmps-listen"); err != nil {
 			return config.Config{}, fmt.Errorf("parse RTMP: %w", err)
 		}
 	}

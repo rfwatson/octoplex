@@ -42,6 +42,7 @@ Octoplex is a Docker-native live video restreamer.
   - [Client flags](#client-flags)
   - [All-in-one mode](#all-in-one-mode)
 - [Security](#security)
+  - [TLS](#tls)
   - [API tokens](#api-tokens)
   - [Incoming streams](#incoming-streams)
 - [Restreaming with Octoplex](#restreaming-with-octoplex)
@@ -103,8 +104,8 @@ content.
 
 ```
          +------------------+             +-------------------+
-         |      OBS          |  ---->     |     Octoplex      |
-         | (Video Capture)   |   RTMP     |                   |
+         |      OBS          |   ----->   |     Octoplex      |
+         |   (Encoder)       |   RTMP/S   |                   |
          +------------------+             +-------------------+
                                                  |
                                                  | Restream to multiple destinations
@@ -277,7 +278,8 @@ Flag|Alias|Modes|Env var|Default|Description
 ---|---|---|---|---|---
 `--help`|`-h`|All|||Show help
 `--data-dir`||`server` `all-in-one`|`OCTO_DATA_DIR`|`$HOME/.local/state/octoplex` (Linux) or`$HOME/Library/Caches/octoplex` (macOS)|Directory for storing persistent state and logs
-`--listen-addr`|`-a`|`server`|`OCTO_LISTEN_ADDR`|`127.0.0.1:8443`|Listen address for gRPC API.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. Use `0:0.0.0:8443` to bind to all network interfaces.
+`--listen`|`-l`|`server`|`OCTO_LISTEN`|`127.0.0.1:8080`|Listen address for non-TLS API and web traffic.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. Use `0:0.0.0:8080` to bind to all network interfaces. Pass `none` to disable entirely.
+`--listen-tls`|`-a`|`server`|`OCTO_LISTEN_TLS`|`127.0.0.1:8443`|Listen address for TLS API and web traffic.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. Use `0:0.0.0:8443` to bind to all network interfaces. Pass `none` to disable entirely.
 `--hostname`|`-H`|`server`|`OCTO_HOSTNAME`|`localhost`|DNS name of server
 `--auth`||`server`|`OCTO_AUTH`|`auto`|Authentication mode for clients, one of `none`, `auto` and `token`. See [Security](#security).
 `--insecure-allow-no-auth`||`server`|`OCTO_INSECURE_ALLOW_NO_AUTH`|`false`|Allow `--auth=none` when bound to non-local addresses. See [Security](#security).
@@ -286,9 +288,9 @@ Flag|Alias|Modes|Env var|Default|Description
 `--in-docker`||`server`|`OCTO_DOCKER`|`false`|Configure Octoplex to run inside Docker
 `--stream-key`||`server` `all-in-one`|`OCTO_STREAM_KEY`|`live`|Stream key, e.g. `rtmp://rtmp.example.com/live`
 `--rtmp-enabled`||`server` `all-in-one`||`true`|Enable RTMP server
-`--rtmp-listen-addr`||`server` `all-in-one`||`127.0.0.1:1935`|Listen address for RTMP sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen-addr`.
+`--rtmp-listen`||`server` `all-in-one`||`127.0.0.1:1935`|Listen address for RTMP sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen`.
 `--rtmps-enabled`||`server` `all-in-one`||`false`|Enable RTMPS server
-`--rtmps-listen-addr`||`server` `all-in-one`||`127.0.0.1:1936`|Listen address for RTMPS sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen-addr`.
+`--rtmps-listen`||`server` `all-in-one`||`127.0.0.1:1936`|Listen address for RTMPS sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen`.
 `--image-name-mediamtx`||`server` `all-in-one`|`OCTO_IMAGE_NAME_MEDIAMTX`|`ghcr.io/rfwatson/mediamtx-alpine:latest`|OCI-compatible image for launching MediaMTX
 `--image-name-ffmpeg`||`server` `all-in-one`|`OCTO_IMAGE_NAME_FFMPEG`|`ghcr.io/jrottenberg/ffmpeg:7.1-scratch`|OCI-compatible image for launching FFmpeg
 
@@ -310,6 +312,18 @@ Flag|Alias|Default|Description
 
 Read this section before putting Octoplex on any network you don't fully control.
 
+### TLS
+
+By default, the Octoplex server listens for HTTP and API traffic on ports 8080
+(plain text) and 8443 (TLS with a self-signed certificate). Both listeners are
+bound to 127.0.0.1 unless explicitly configured otherwise. See [Server
+flags](#server-flags) for full configuration options.
+
+When deploying on untrusted networks, ensure that plain-text ports are only
+accessible behind a TLS-enabled reverse proxy. To disable non-TLS listeners
+entirely, use `--listen=none` with `octoplex server start`, or set the
+`OCTO_LISTEN=none` environment variable.
+
 ### API tokens
 
 Octoplex automatically protects its internal API whenever it binds to anything other
@@ -317,12 +331,9 @@ than localhost.
 
 When you run `octoplex server start`:
 
-* `--auth=auto` (the default): if the API listen address is bound only to **localhost/loopback**, Octoplex requires no authentication; if it's bound to **any other network interface** the server generates a long random API token, logs it once on startup, hashes it to disk, and requires every client call to include `--api-token "<API_TOKEN>"`.
+* `--auth=auto` (the default): if the API is bound only to **localhost/loopback addresses**, Octoplex requires no authentication; if it's bound to **any other network interface** the server securely generates a random API token, logs it once on startup, hashes it to disk, and requires every client call to include `--api-token "<API_TOKEN>"`.
 * `--auth=token`: always require an API token, even on loopback.
-* `--auth=none`: disable authentication completely, **but only for localhost binds**. If you set `--auth=none` with `--listen-addr:0.0.0.0:8443` or any other non-localhost address you must also pass `--insecure-allow-no-auth` to acknowledge the risk; otherwise the server refuses to start.
-
-The API is **always** served over TLS; if you don't supply a certificate
-Octoplex generates a self-signed one, so the token is never sent in clear-text.
+* `--auth=none`: disable authentication completely, **but only for localhost binds**. If you set `--auth=none` with any non-loopback API listen addresses you must also pass `--insecure-allow-no-auth` to acknowledge the risk; otherwise the server refuses to start.
 
 > **:information_source: Tip** To regenerate a new API token, delete `token.txt` from the Octoplex data directory, and restart the server. See the `--data-dir` option in [server flags](#server-flags).
 
@@ -397,20 +408,24 @@ GitHub instead. See [Installation](#Installation) for details.
 
 #### `docker run`
 
-Run the Octoplex gRPC server on all interfaces (port 8443):
+Run the Octoplex server on all interfaces (ports 8080 and 8443/TLS):
 
 ```shell
 docker run \
   --name octoplex                              \
   -v octoplex-data:/data                       \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -e OCTO_LISTEN_ADDR=":8443"                  \
+  -e OCTO_LISTEN=":8080"                       \
+  -e OCTO_LISTEN_TLS=":8443"                   \
+  -p 8080:8080                                 \
   -p 8443:8443                                 \
   --restart unless-stopped                     \
   ghcr.io/rfwatson/octoplex:latest
 ```
 
 #### `docker-compose`
+
+Run the Octoplex server on all interfaces (ports 8080 and 8443/TLS):
 
 ```yaml
 ---
@@ -423,8 +438,10 @@ services:
       - octoplex-data:/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      OCTO_LISTEN_ADDR: "[::]:8443" # bind to all network interfaces
+      OCTO_LISTEN: "[::]:8080"     # bind to all network interfaces
+      OCTO_LISTEN_TLS: "[::]:8443" # bind to all network interfaces
     ports:
+      - "8080:8080"
       - "8443:8443"
 volumes:
   octoplex-data:

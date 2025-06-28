@@ -27,7 +27,7 @@ func TestIntegrationCLI(t *testing.T) {
 	host := "localhost:3001"
 
 	go func() {
-		_, _, err := runCommand(ctx, t, "octoplex", "server", "start", "--data-dir", dataDir, "--listen-addr", host)
+		_, _, err := runCommand(ctx, t, "octoplex", "server", "start", "--data-dir", dataDir, "--listen-tls", host)
 		assert.ErrorIs(t, err, context.Canceled)
 		done <- struct{}{}
 	}()

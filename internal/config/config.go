@@ -65,9 +65,15 @@ const (
 	AuthModeToken AuthMode = "token"
 )
 
+// ListenAddrs holds the listen addresses for the application.
+type ListenAddrs struct {
+	TLS   string // may be empty
+	Plain string // may be empty
+}
+
 // Config holds the configuration for the application.
 type Config struct {
-	ListenAddr          string
+	ListenAddrs         ListenAddrs
 	Host                string
 	TLS                 *TLS
 	AuthMode            AuthMode

@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"slices"
+
 	"time"
 
 	"connectrpc.com/connect"
@@ -43,27 +44,27 @@ type apiCredentials struct {
 
 // App is an instance of the app.
 type App struct {
-	cfg           config.Config
-	store         *store.FileStore
-	credentials   apiCredentials
-	eventBus      *event.Bus
-	dispatchC     chan command
-	dockerClient  container.DockerClient
-	listenerFunc  func() (net.Listener, error)
-	keyPairs      domain.KeyPairs
-	waitForClient bool
-	logger        *slog.Logger
+	cfg             config.Config
+	store           *store.FileStore
+	credentials     apiCredentials
+	eventBus        *event.Bus
+	dispatchC       chan command
+	dockerClient    container.DockerClient
+	listenerTLSFunc func() (net.Listener, error)
+	keyPairs        domain.KeyPairs
+	waitForClient   bool
+	logger          *slog.Logger
 }
 
 // Params holds the parameters for running the application.
 type Params struct {
-	Config        config.Config
-	Store         *store.FileStore
-	DockerClient  container.DockerClient
-	ListenerFunc  func() (net.Listener, error) // ListenerFunc overrides the configured listen address. May be nil.
-	ChanSize      int
-	WaitForClient bool
-	Logger        *slog.Logger
+	Config          config.Config
+	Store           *store.FileStore
+	DockerClient    container.DockerClient
+	ListenerTLSFunc func() (net.Listener, error) // ListenerTLSFunc overrides the configured TLS listen address. May be nil.
+	ChanSize        int
+	WaitForClient   bool
+	Logger          *slog.Logger
 }
 
 // defaultChanSize is the default size of the dispatch channel.
@@ -93,22 +94,22 @@ func New(params Params) (*App, error) {
 		return nil, fmt.Errorf("build key pairs: %w", err)
 	}
 
-	listenerFunc := params.ListenerFunc
-	if listenerFunc == nil {
-		listenerFunc = Listener(cfg.ListenAddr)
+	listenerTLSFunc := params.ListenerTLSFunc
+	if listenerTLSFunc == nil && cfg.ListenAddrs.TLS != "" {
+		listenerTLSFunc = Listener(cfg.ListenAddrs.TLS)
 	}
 
 	return &App{
-		cfg:           cfg,
-		store:         params.Store,
-		credentials:   credentials,
-		eventBus:      event.NewBus(params.Logger.With("component", "event_bus")),
-		dispatchC:     make(chan command, cmp.Or(params.ChanSize, defaultChanSize)),
-		dockerClient:  params.DockerClient,
-		listenerFunc:  listenerFunc,
-		keyPairs:      keyPairs,
-		waitForClient: params.WaitForClient,
-		logger:        params.Logger,
+		cfg:             cfg,
+		store:           params.Store,
+		credentials:     credentials,
+		eventBus:        event.NewBus(params.Logger.With("component", "event_bus")),
+		dispatchC:       make(chan command, cmp.Or(params.ChanSize, defaultChanSize)),
+		dockerClient:    params.DockerClient,
+		listenerTLSFunc: listenerTLSFunc,
+		keyPairs:        keyPairs,
+		waitForClient:   params.WaitForClient,
+		logger:          params.Logger,
 	}, nil
 }
 
@@ -123,38 +124,56 @@ func (a *App) Run(ctx context.Context) error {
 		return errors.New("config: either sources.mediaServer.rtmp.enabled or sources.mediaServer.rtmps.enabled must be set")
 	}
 
-	lis, err := a.listenerFunc()
-	if err != nil {
-		return fmt.Errorf("listen: %w", err)
-	}
-	defer lis.Close() //nolint:errcheck
-
-	cert, err := tls.X509KeyPair(a.keyPairs.External().Cert, a.keyPairs.External().Key)
-	if err != nil {
-		return fmt.Errorf("load TLS cert: %w", err)
-	}
-
 	internalAPI := newServer(a.DispatchSync, a.DispatchAsync, a.eventBus, a.logger)
 
 	path, handler := connectpb.NewAPIServiceHandler(internalAPI, connect.WithInterceptors(newAuthInterceptor(a.credentials, a.logger)))
 	mux := http.NewServeMux()
 	mux.Handle(path, handler)
 
-	httpServer := &http.Server{
-		Handler: mux,
-		TLSConfig: &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			MinVersion:   config.TLSMinVersion,
-			NextProtos:   []string{"h2"},
-		},
-		ErrorLog: log.New(&logWriter{a.logger}, "", 0),
+	var tlsServer, plainServer *http.Server
+	tlsSrvC := make(chan error, 1)
+	plainSrvC := make(chan error, 1)
+
+	cert, err := tls.X509KeyPair(a.keyPairs.External().Cert, a.keyPairs.External().Key)
+	if err != nil {
+		return fmt.Errorf("load TLS cert: %w", err)
 	}
 
-	srvDone := make(chan error, 1)
-	go func() {
-		a.logger.Info("gRPC server started", "listen-addr", lis.Addr().String())
-		srvDone <- httpServer.Serve(tls.NewListener(lis, httpServer.TLSConfig))
-	}()
+	if a.listenerTLSFunc != nil {
+		lisTLS, err := a.listenerTLSFunc()
+		if err != nil {
+			return fmt.Errorf("listen: %w", err)
+		}
+		defer lisTLS.Close() //nolint:errcheck
+
+		tlsServer = &http.Server{
+			Handler: mux,
+			TLSConfig: &tls.Config{
+				Certificates: []tls.Certificate{cert},
+				MinVersion:   config.TLSMinVersion,
+				NextProtos:   []string{"h2"},
+			},
+			ErrorLog: log.New(&logWriter{a.logger}, "", 0),
+		}
+
+		go func() {
+			a.logger.Info("Server started", "tls", "true", "listen-addr", lisTLS.Addr().String())
+			tlsSrvC <- tlsServer.Serve(tls.NewListener(lisTLS, tlsServer.TLSConfig))
+		}()
+	}
+
+	if a.cfg.ListenAddrs.Plain != "" {
+		plainServer = &http.Server{
+			Addr:     a.cfg.ListenAddrs.Plain,
+			Handler:  mux,
+			ErrorLog: log.New(&logWriter{a.logger}, "", 0),
+		}
+
+		go func() {
+			a.logger.Info("Server started", "tls", "false", "listen-addr", a.cfg.ListenAddrs.Plain)
+			plainSrvC <- plainServer.ListenAndServe()
+		}()
+	}
 
 	if a.waitForClient {
 		if err = internalAPI.WaitForClient(ctx); err != nil {
@@ -264,15 +283,27 @@ func (a *App) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			if shutdownErr := httpServer.Shutdown(shutdownCtx); shutdownErr != nil {
-				a.logger.Error("gRPC server shutdown failed", "err", shutdownErr)
+			if tlsServer != nil {
+				if shutdownErr := tlsServer.Shutdown(shutdownCtx); shutdownErr != nil {
+					a.logger.Error("gRPC server shutdown failed", "err", shutdownErr, "tls", "true")
+				}
+			}
+			if plainServer != nil {
+				if shutdownErr := plainServer.Shutdown(shutdownCtx); shutdownErr != nil {
+					a.logger.Error("gRPC server shutdown failed", "err", shutdownErr, "tls", "false")
+				}
 			}
 			cancel()
 
 			return ctx.Err()
-		case srvErr := <-srvDone:
+		case srvErr := <-tlsSrvC:
 			if srvErr != nil && !errors.Is(srvErr, http.ErrServerClosed) {
-				a.logger.Error("gRPC server exited with error", "err", srvErr)
+				a.logger.Error("gRPC server exited with error", "err", srvErr, "tls", "true")
+			}
+			return srvErr
+		case srvErr := <-plainSrvC:
+			if srvErr != nil && !errors.Is(srvErr, http.ErrServerClosed) {
+				a.logger.Error("gRPC server exited with error", "err", srvErr, "tls", "false")
 			}
 			return srvErr
 		case <-startMediaServerC:
@@ -614,17 +645,15 @@ func (a *App) Stop(ctx context.Context) error {
 //
 // It either returns a valid set of active credentials, a set of disabled
 // credentials, or an error.
-func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, error) {
-	if cfg.ListenAddr == "" {
-		return apiCredentials{}, fmt.Errorf("listen address cannot be empty")
+func buildCredentials(cfg config.Config, logger *slog.Logger) (_ apiCredentials, err error) {
+	if cfg.ListenAddrs.Plain == "" && cfg.ListenAddrs.TLS == "" {
+		return apiCredentials{}, fmt.Errorf("listen addresses cannot all be empty")
 	}
 
-	var addr *net.TCPAddr
-	addr, err := net.ResolveTCPAddr("tcp", cfg.ListenAddr)
+	isLoopback, err := isLoopback(cfg)
 	if err != nil {
-		return apiCredentials{}, fmt.Errorf("resolve listen address: %w", err)
+		return apiCredentials{}, fmt.Errorf("check loopback: %w", err)
 	}
-	isLoopback := addr.IP.IsLoopback()
 
 	hashedToken, err := token.Read(cfg.DataDir)
 	if err != nil && !errors.Is(err, token.ErrTokenNotFound) {
@@ -641,7 +670,7 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, e
 
 	// Next, if a token exists, we always use it, regardless of the requested mode.
 	if tokenExists {
-		logger.Info("Found existing API token, enabling authentication", "listen-addr", cfg.ListenAddr)
+		logger.Info("Enabling API authentication due to existing token")
 		return apiCredentials{hashedToken: hashedToken}, nil
 	}
 
@@ -652,13 +681,13 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, e
 			return apiCredentials{}, ErrAuthenticationCannotBeDisabled
 		}
 
-		logger.Warn("WARNING: API authentication disabled. This is not recommended for production use.", "listen-addr", cfg.ListenAddr)
+		logger.Warn("WARNING: API authentication disabled. This is not recommended for production use.")
 		return apiCredentials{disabled: true}, nil
 	}
 
 	// If the listen address is a loopback address, and auth mode is set to auto, we disable authentication
 	if cfg.AuthMode == config.AuthModeAuto && isLoopback {
-		logger.Info("No authentication required for loopback address", "listen-addr", cfg.ListenAddr)
+		logger.Info("No authentication required when only listening on loopback addresses")
 		return apiCredentials{disabled: true}, nil
 	}
 
@@ -669,6 +698,35 @@ func buildCredentials(cfg config.Config, logger *slog.Logger) (apiCredentials, e
 	}
 	logger.Info(fmt.Sprintf("New API token generated. Store it now - it will not be shown again. TOKEN: %s", rawToken))
 	return apiCredentials{hashedToken: hashedToken}, nil
+}
+
+func isLoopback(cfg config.Config) (bool, error) {
+	var isLoopbacks []bool
+
+	if cfg.ListenAddrs.Plain != "" {
+		addr, err := net.ResolveTCPAddr("tcp", cfg.ListenAddrs.Plain)
+		if err != nil {
+			return false, fmt.Errorf("resolve TLS: %w", err)
+		}
+
+		isLoopbacks = append(isLoopbacks, addr.IP.IsLoopback())
+	}
+
+	if cfg.ListenAddrs.TLS != "" {
+		addr, err := net.ResolveTCPAddr("tcp", cfg.ListenAddrs.TLS)
+		if err != nil {
+			return false, fmt.Errorf("resolve plain: %w", err)
+		}
+
+		isLoopbacks = append(isLoopbacks, addr.IP.IsLoopback())
+	}
+
+	for _, isLoopback := range isLoopbacks {
+		if !isLoopback {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 type logWriter struct {

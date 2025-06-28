@@ -99,12 +99,12 @@ func buildClientServer(
 	})
 
 	server, err := server.New(server.Params{
-		Config:        cfg,
-		Store:         testhelpers.NewTestStore(t, options.state),
-		ListenerFunc:  server.WithListener(lis),
-		DockerClient:  dockerClient,
-		WaitForClient: true,
-		Logger:        logger,
+		Config:          cfg,
+		Store:           testhelpers.NewTestStore(t, options.state),
+		ListenerTLSFunc: server.WithListener(lis),
+		DockerClient:    dockerClient,
+		WaitForClient:   true,
+		Logger:          logger,
 	})
 	require.NoError(t, err)
 
