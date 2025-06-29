@@ -348,9 +348,6 @@ func (a *App) buildAPIClient(ctx context.Context) (connectpb.APIServiceClient, e
 		"https://"+a.serverAddr,
 		connect.WithInterceptors(authInterceptor{apiToken: a.apiToken}),
 	)
-	if err != nil {
-		return nil, fmt.Errorf("new API client: %w", err)
-	}
 
 	return client, nil
 }

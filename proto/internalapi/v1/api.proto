@@ -8,6 +8,7 @@ import "internalapi/v1/event.proto";
 option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1";
 
 service APIService {
+  rpc Authenticate(AuthenticateRequest) returns (AuthenticateResponse);
   rpc Communicate(stream Envelope) returns (stream Envelope);
   rpc ListDestinations(ListDestinationsRequest) returns (ListDestinationsResponse);
   rpc AddDestination(AddDestinationRequest) returns (AddDestinationResponse);
@@ -16,6 +17,10 @@ service APIService {
   rpc StartDestination(StartDestinationRequest) returns (StartDestinationResponse);
   rpc StopDestination(StopDestinationRequest) returns (StopDestinationResponse);
 }
+
+message AuthenticateRequest {}
+
+message AuthenticateResponse {}
 
 message Envelope {
   oneof payload {

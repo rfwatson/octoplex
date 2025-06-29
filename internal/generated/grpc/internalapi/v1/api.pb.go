@@ -21,6 +21,78 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type AuthenticateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthenticateRequest) Reset() {
+	*x = AuthenticateRequest{}
+	mi := &file_internalapi_v1_api_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthenticateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthenticateRequest) ProtoMessage() {}
+
+func (x *AuthenticateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internalapi_v1_api_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthenticateRequest.ProtoReflect.Descriptor instead.
+func (*AuthenticateRequest) Descriptor() ([]byte, []int) {
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{0}
+}
+
+type AuthenticateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthenticateResponse) Reset() {
+	*x = AuthenticateResponse{}
+	mi := &file_internalapi_v1_api_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthenticateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthenticateResponse) ProtoMessage() {}
+
+func (x *AuthenticateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internalapi_v1_api_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthenticateResponse.ProtoReflect.Descriptor instead.
+func (*AuthenticateResponse) Descriptor() ([]byte, []int) {
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{1}
+}
+
 type Envelope struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Payload:
@@ -34,7 +106,7 @@ type Envelope struct {
 
 func (x *Envelope) Reset() {
 	*x = Envelope{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[0]
+	mi := &file_internalapi_v1_api_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -46,7 +118,7 @@ func (x *Envelope) String() string {
 func (*Envelope) ProtoMessage() {}
 
 func (x *Envelope) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[0]
+	mi := &file_internalapi_v1_api_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59,7 +131,7 @@ func (x *Envelope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Envelope.ProtoReflect.Descriptor instead.
 func (*Envelope) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{0}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Envelope) GetPayload() isEnvelope_Payload {
@@ -112,7 +184,7 @@ type ListDestinationsRequest struct {
 
 func (x *ListDestinationsRequest) Reset() {
 	*x = ListDestinationsRequest{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[1]
+	mi := &file_internalapi_v1_api_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -124,7 +196,7 @@ func (x *ListDestinationsRequest) String() string {
 func (*ListDestinationsRequest) ProtoMessage() {}
 
 func (x *ListDestinationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[1]
+	mi := &file_internalapi_v1_api_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -137,7 +209,7 @@ func (x *ListDestinationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDestinationsRequest.ProtoReflect.Descriptor instead.
 func (*ListDestinationsRequest) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{1}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ListDestinationsRequest) GetCommand() *ListDestinationsCommand {
@@ -160,7 +232,7 @@ type ListDestinationsResponse struct {
 
 func (x *ListDestinationsResponse) Reset() {
 	*x = ListDestinationsResponse{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[2]
+	mi := &file_internalapi_v1_api_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -172,7 +244,7 @@ func (x *ListDestinationsResponse) String() string {
 func (*ListDestinationsResponse) ProtoMessage() {}
 
 func (x *ListDestinationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[2]
+	mi := &file_internalapi_v1_api_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -185,7 +257,7 @@ func (x *ListDestinationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDestinationsResponse.ProtoReflect.Descriptor instead.
 func (*ListDestinationsResponse) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{2}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ListDestinationsResponse) GetResult() isListDestinationsResponse_Result {
@@ -238,7 +310,7 @@ type AddDestinationRequest struct {
 
 func (x *AddDestinationRequest) Reset() {
 	*x = AddDestinationRequest{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[3]
+	mi := &file_internalapi_v1_api_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -250,7 +322,7 @@ func (x *AddDestinationRequest) String() string {
 func (*AddDestinationRequest) ProtoMessage() {}
 
 func (x *AddDestinationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[3]
+	mi := &file_internalapi_v1_api_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -263,7 +335,7 @@ func (x *AddDestinationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddDestinationRequest.ProtoReflect.Descriptor instead.
 func (*AddDestinationRequest) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{3}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *AddDestinationRequest) GetCommand() *AddDestinationCommand {
@@ -286,7 +358,7 @@ type AddDestinationResponse struct {
 
 func (x *AddDestinationResponse) Reset() {
 	*x = AddDestinationResponse{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[4]
+	mi := &file_internalapi_v1_api_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -298,7 +370,7 @@ func (x *AddDestinationResponse) String() string {
 func (*AddDestinationResponse) ProtoMessage() {}
 
 func (x *AddDestinationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[4]
+	mi := &file_internalapi_v1_api_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -311,7 +383,7 @@ func (x *AddDestinationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddDestinationResponse.ProtoReflect.Descriptor instead.
 func (*AddDestinationResponse) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{4}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *AddDestinationResponse) GetResult() isAddDestinationResponse_Result {
@@ -364,7 +436,7 @@ type UpdateDestinationRequest struct {
 
 func (x *UpdateDestinationRequest) Reset() {
 	*x = UpdateDestinationRequest{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[5]
+	mi := &file_internalapi_v1_api_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -376,7 +448,7 @@ func (x *UpdateDestinationRequest) String() string {
 func (*UpdateDestinationRequest) ProtoMessage() {}
 
 func (x *UpdateDestinationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[5]
+	mi := &file_internalapi_v1_api_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -389,7 +461,7 @@ func (x *UpdateDestinationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateDestinationRequest.ProtoReflect.Descriptor instead.
 func (*UpdateDestinationRequest) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{5}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *UpdateDestinationRequest) GetCommand() *UpdateDestinationCommand {
@@ -412,7 +484,7 @@ type UpdateDestinationResponse struct {
 
 func (x *UpdateDestinationResponse) Reset() {
 	*x = UpdateDestinationResponse{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[6]
+	mi := &file_internalapi_v1_api_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -424,7 +496,7 @@ func (x *UpdateDestinationResponse) String() string {
 func (*UpdateDestinationResponse) ProtoMessage() {}
 
 func (x *UpdateDestinationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[6]
+	mi := &file_internalapi_v1_api_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -437,7 +509,7 @@ func (x *UpdateDestinationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateDestinationResponse.ProtoReflect.Descriptor instead.
 func (*UpdateDestinationResponse) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{6}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *UpdateDestinationResponse) GetResult() isUpdateDestinationResponse_Result {
@@ -490,7 +562,7 @@ type RemoveDestinationRequest struct {
 
 func (x *RemoveDestinationRequest) Reset() {
 	*x = RemoveDestinationRequest{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[7]
+	mi := &file_internalapi_v1_api_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -502,7 +574,7 @@ func (x *RemoveDestinationRequest) String() string {
 func (*RemoveDestinationRequest) ProtoMessage() {}
 
 func (x *RemoveDestinationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[7]
+	mi := &file_internalapi_v1_api_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -515,7 +587,7 @@ func (x *RemoveDestinationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveDestinationRequest.ProtoReflect.Descriptor instead.
 func (*RemoveDestinationRequest) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{7}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RemoveDestinationRequest) GetCommand() *RemoveDestinationCommand {
@@ -538,7 +610,7 @@ type RemoveDestinationResponse struct {
 
 func (x *RemoveDestinationResponse) Reset() {
 	*x = RemoveDestinationResponse{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[8]
+	mi := &file_internalapi_v1_api_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -550,7 +622,7 @@ func (x *RemoveDestinationResponse) String() string {
 func (*RemoveDestinationResponse) ProtoMessage() {}
 
 func (x *RemoveDestinationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[8]
+	mi := &file_internalapi_v1_api_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -563,7 +635,7 @@ func (x *RemoveDestinationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveDestinationResponse.ProtoReflect.Descriptor instead.
 func (*RemoveDestinationResponse) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{8}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RemoveDestinationResponse) GetResult() isRemoveDestinationResponse_Result {
@@ -616,7 +688,7 @@ type StartDestinationRequest struct {
 
 func (x *StartDestinationRequest) Reset() {
 	*x = StartDestinationRequest{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[9]
+	mi := &file_internalapi_v1_api_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -628,7 +700,7 @@ func (x *StartDestinationRequest) String() string {
 func (*StartDestinationRequest) ProtoMessage() {}
 
 func (x *StartDestinationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[9]
+	mi := &file_internalapi_v1_api_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -641,7 +713,7 @@ func (x *StartDestinationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartDestinationRequest.ProtoReflect.Descriptor instead.
 func (*StartDestinationRequest) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{9}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *StartDestinationRequest) GetCommand() *StartDestinationCommand {
@@ -664,7 +736,7 @@ type StartDestinationResponse struct {
 
 func (x *StartDestinationResponse) Reset() {
 	*x = StartDestinationResponse{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[10]
+	mi := &file_internalapi_v1_api_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -676,7 +748,7 @@ func (x *StartDestinationResponse) String() string {
 func (*StartDestinationResponse) ProtoMessage() {}
 
 func (x *StartDestinationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[10]
+	mi := &file_internalapi_v1_api_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -689,7 +761,7 @@ func (x *StartDestinationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartDestinationResponse.ProtoReflect.Descriptor instead.
 func (*StartDestinationResponse) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{10}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *StartDestinationResponse) GetResult() isStartDestinationResponse_Result {
@@ -742,7 +814,7 @@ type StopDestinationRequest struct {
 
 func (x *StopDestinationRequest) Reset() {
 	*x = StopDestinationRequest{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[11]
+	mi := &file_internalapi_v1_api_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -754,7 +826,7 @@ func (x *StopDestinationRequest) String() string {
 func (*StopDestinationRequest) ProtoMessage() {}
 
 func (x *StopDestinationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[11]
+	mi := &file_internalapi_v1_api_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -767,7 +839,7 @@ func (x *StopDestinationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopDestinationRequest.ProtoReflect.Descriptor instead.
 func (*StopDestinationRequest) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{11}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *StopDestinationRequest) GetCommand() *StopDestinationCommand {
@@ -790,7 +862,7 @@ type StopDestinationResponse struct {
 
 func (x *StopDestinationResponse) Reset() {
 	*x = StopDestinationResponse{}
-	mi := &file_internalapi_v1_api_proto_msgTypes[12]
+	mi := &file_internalapi_v1_api_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -802,7 +874,7 @@ func (x *StopDestinationResponse) String() string {
 func (*StopDestinationResponse) ProtoMessage() {}
 
 func (x *StopDestinationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalapi_v1_api_proto_msgTypes[12]
+	mi := &file_internalapi_v1_api_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -815,7 +887,7 @@ func (x *StopDestinationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopDestinationResponse.ProtoReflect.Descriptor instead.
 func (*StopDestinationResponse) Descriptor() ([]byte, []int) {
-	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{12}
+	return file_internalapi_v1_api_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *StopDestinationResponse) GetResult() isStopDestinationResponse_Result {
@@ -863,7 +935,9 @@ var File_internalapi_v1_api_proto protoreflect.FileDescriptor
 
 const file_internalapi_v1_api_proto_rawDesc = "" +
 	"\n" +
-	"\x18internalapi/v1/api.proto\x12\x0einternalapi.v1\x1a\x1cinternalapi/v1/command.proto\x1a\x1ainternalapi/v1/event.proto\"y\n" +
+	"\x18internalapi/v1/api.proto\x12\x0einternalapi.v1\x1a\x1cinternalapi/v1/command.proto\x1a\x1ainternalapi/v1/event.proto\"\x15\n" +
+	"\x13AuthenticateRequest\"\x16\n" +
+	"\x14AuthenticateResponse\"y\n" +
 	"\bEnvelope\x123\n" +
 	"\acommand\x18\x01 \x01(\v2\x17.internalapi.v1.CommandH\x00R\acommand\x12-\n" +
 	"\x05event\x18\x02 \x01(\v2\x15.internalapi.v1.EventH\x00R\x05eventB\t\n" +
@@ -903,9 +977,10 @@ const file_internalapi_v1_api_proto_rawDesc = "" +
 	"\x17StopDestinationResponse\x129\n" +
 	"\x02ok\x18\x01 \x01(\v2'.internalapi.v1.DestinationStoppedEventH\x00R\x02ok\x12B\n" +
 	"\x05error\x18\x02 \x01(\v2*.internalapi.v1.StopDestinationFailedEventH\x00R\x05errorB\b\n" +
-	"\x06result2\xba\x05\n" +
+	"\x06result2\x95\x06\n" +
 	"\n" +
-	"APIService\x12E\n" +
+	"APIService\x12Y\n" +
+	"\fAuthenticate\x12#.internalapi.v1.AuthenticateRequest\x1a$.internalapi.v1.AuthenticateResponse\x12E\n" +
 	"\vCommunicate\x12\x18.internalapi.v1.Envelope\x1a\x18.internalapi.v1.Envelope(\x010\x01\x12e\n" +
 	"\x10ListDestinations\x12'.internalapi.v1.ListDestinationsRequest\x1a(.internalapi.v1.ListDestinationsResponse\x12_\n" +
 	"\x0eAddDestination\x12%.internalapi.v1.AddDestinationRequest\x1a&.internalapi.v1.AddDestinationResponse\x12h\n" +
@@ -927,79 +1002,83 @@ func file_internalapi_v1_api_proto_rawDescGZIP() []byte {
 	return file_internalapi_v1_api_proto_rawDescData
 }
 
-var file_internalapi_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_internalapi_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_internalapi_v1_api_proto_goTypes = []any{
-	(*Envelope)(nil),                     // 0: internalapi.v1.Envelope
-	(*ListDestinationsRequest)(nil),      // 1: internalapi.v1.ListDestinationsRequest
-	(*ListDestinationsResponse)(nil),     // 2: internalapi.v1.ListDestinationsResponse
-	(*AddDestinationRequest)(nil),        // 3: internalapi.v1.AddDestinationRequest
-	(*AddDestinationResponse)(nil),       // 4: internalapi.v1.AddDestinationResponse
-	(*UpdateDestinationRequest)(nil),     // 5: internalapi.v1.UpdateDestinationRequest
-	(*UpdateDestinationResponse)(nil),    // 6: internalapi.v1.UpdateDestinationResponse
-	(*RemoveDestinationRequest)(nil),     // 7: internalapi.v1.RemoveDestinationRequest
-	(*RemoveDestinationResponse)(nil),    // 8: internalapi.v1.RemoveDestinationResponse
-	(*StartDestinationRequest)(nil),      // 9: internalapi.v1.StartDestinationRequest
-	(*StartDestinationResponse)(nil),     // 10: internalapi.v1.StartDestinationResponse
-	(*StopDestinationRequest)(nil),       // 11: internalapi.v1.StopDestinationRequest
-	(*StopDestinationResponse)(nil),      // 12: internalapi.v1.StopDestinationResponse
-	(*Command)(nil),                      // 13: internalapi.v1.Command
-	(*Event)(nil),                        // 14: internalapi.v1.Event
-	(*ListDestinationsCommand)(nil),      // 15: internalapi.v1.ListDestinationsCommand
-	(*DestinationsListedEvent)(nil),      // 16: internalapi.v1.DestinationsListedEvent
-	(*ListDestinationsFailedEvent)(nil),  // 17: internalapi.v1.ListDestinationsFailedEvent
-	(*AddDestinationCommand)(nil),        // 18: internalapi.v1.AddDestinationCommand
-	(*DestinationAddedEvent)(nil),        // 19: internalapi.v1.DestinationAddedEvent
-	(*AddDestinationFailedEvent)(nil),    // 20: internalapi.v1.AddDestinationFailedEvent
-	(*UpdateDestinationCommand)(nil),     // 21: internalapi.v1.UpdateDestinationCommand
-	(*DestinationUpdatedEvent)(nil),      // 22: internalapi.v1.DestinationUpdatedEvent
-	(*UpdateDestinationFailedEvent)(nil), // 23: internalapi.v1.UpdateDestinationFailedEvent
-	(*RemoveDestinationCommand)(nil),     // 24: internalapi.v1.RemoveDestinationCommand
-	(*DestinationRemovedEvent)(nil),      // 25: internalapi.v1.DestinationRemovedEvent
-	(*RemoveDestinationFailedEvent)(nil), // 26: internalapi.v1.RemoveDestinationFailedEvent
-	(*StartDestinationCommand)(nil),      // 27: internalapi.v1.StartDestinationCommand
-	(*DestinationStartedEvent)(nil),      // 28: internalapi.v1.DestinationStartedEvent
-	(*StartDestinationFailedEvent)(nil),  // 29: internalapi.v1.StartDestinationFailedEvent
-	(*StopDestinationCommand)(nil),       // 30: internalapi.v1.StopDestinationCommand
-	(*DestinationStoppedEvent)(nil),      // 31: internalapi.v1.DestinationStoppedEvent
-	(*StopDestinationFailedEvent)(nil),   // 32: internalapi.v1.StopDestinationFailedEvent
+	(*AuthenticateRequest)(nil),          // 0: internalapi.v1.AuthenticateRequest
+	(*AuthenticateResponse)(nil),         // 1: internalapi.v1.AuthenticateResponse
+	(*Envelope)(nil),                     // 2: internalapi.v1.Envelope
+	(*ListDestinationsRequest)(nil),      // 3: internalapi.v1.ListDestinationsRequest
+	(*ListDestinationsResponse)(nil),     // 4: internalapi.v1.ListDestinationsResponse
+	(*AddDestinationRequest)(nil),        // 5: internalapi.v1.AddDestinationRequest
+	(*AddDestinationResponse)(nil),       // 6: internalapi.v1.AddDestinationResponse
+	(*UpdateDestinationRequest)(nil),     // 7: internalapi.v1.UpdateDestinationRequest
+	(*UpdateDestinationResponse)(nil),    // 8: internalapi.v1.UpdateDestinationResponse
+	(*RemoveDestinationRequest)(nil),     // 9: internalapi.v1.RemoveDestinationRequest
+	(*RemoveDestinationResponse)(nil),    // 10: internalapi.v1.RemoveDestinationResponse
+	(*StartDestinationRequest)(nil),      // 11: internalapi.v1.StartDestinationRequest
+	(*StartDestinationResponse)(nil),     // 12: internalapi.v1.StartDestinationResponse
+	(*StopDestinationRequest)(nil),       // 13: internalapi.v1.StopDestinationRequest
+	(*StopDestinationResponse)(nil),      // 14: internalapi.v1.StopDestinationResponse
+	(*Command)(nil),                      // 15: internalapi.v1.Command
+	(*Event)(nil),                        // 16: internalapi.v1.Event
+	(*ListDestinationsCommand)(nil),      // 17: internalapi.v1.ListDestinationsCommand
+	(*DestinationsListedEvent)(nil),      // 18: internalapi.v1.DestinationsListedEvent
+	(*ListDestinationsFailedEvent)(nil),  // 19: internalapi.v1.ListDestinationsFailedEvent
+	(*AddDestinationCommand)(nil),        // 20: internalapi.v1.AddDestinationCommand
+	(*DestinationAddedEvent)(nil),        // 21: internalapi.v1.DestinationAddedEvent
+	(*AddDestinationFailedEvent)(nil),    // 22: internalapi.v1.AddDestinationFailedEvent
+	(*UpdateDestinationCommand)(nil),     // 23: internalapi.v1.UpdateDestinationCommand
+	(*DestinationUpdatedEvent)(nil),      // 24: internalapi.v1.DestinationUpdatedEvent
+	(*UpdateDestinationFailedEvent)(nil), // 25: internalapi.v1.UpdateDestinationFailedEvent
+	(*RemoveDestinationCommand)(nil),     // 26: internalapi.v1.RemoveDestinationCommand
+	(*DestinationRemovedEvent)(nil),      // 27: internalapi.v1.DestinationRemovedEvent
+	(*RemoveDestinationFailedEvent)(nil), // 28: internalapi.v1.RemoveDestinationFailedEvent
+	(*StartDestinationCommand)(nil),      // 29: internalapi.v1.StartDestinationCommand
+	(*DestinationStartedEvent)(nil),      // 30: internalapi.v1.DestinationStartedEvent
+	(*StartDestinationFailedEvent)(nil),  // 31: internalapi.v1.StartDestinationFailedEvent
+	(*StopDestinationCommand)(nil),       // 32: internalapi.v1.StopDestinationCommand
+	(*DestinationStoppedEvent)(nil),      // 33: internalapi.v1.DestinationStoppedEvent
+	(*StopDestinationFailedEvent)(nil),   // 34: internalapi.v1.StopDestinationFailedEvent
 }
 var file_internalapi_v1_api_proto_depIdxs = []int32{
-	13, // 0: internalapi.v1.Envelope.command:type_name -> internalapi.v1.Command
-	14, // 1: internalapi.v1.Envelope.event:type_name -> internalapi.v1.Event
-	15, // 2: internalapi.v1.ListDestinationsRequest.command:type_name -> internalapi.v1.ListDestinationsCommand
-	16, // 3: internalapi.v1.ListDestinationsResponse.ok:type_name -> internalapi.v1.DestinationsListedEvent
-	17, // 4: internalapi.v1.ListDestinationsResponse.error:type_name -> internalapi.v1.ListDestinationsFailedEvent
-	18, // 5: internalapi.v1.AddDestinationRequest.command:type_name -> internalapi.v1.AddDestinationCommand
-	19, // 6: internalapi.v1.AddDestinationResponse.ok:type_name -> internalapi.v1.DestinationAddedEvent
-	20, // 7: internalapi.v1.AddDestinationResponse.error:type_name -> internalapi.v1.AddDestinationFailedEvent
-	21, // 8: internalapi.v1.UpdateDestinationRequest.command:type_name -> internalapi.v1.UpdateDestinationCommand
-	22, // 9: internalapi.v1.UpdateDestinationResponse.ok:type_name -> internalapi.v1.DestinationUpdatedEvent
-	23, // 10: internalapi.v1.UpdateDestinationResponse.error:type_name -> internalapi.v1.UpdateDestinationFailedEvent
-	24, // 11: internalapi.v1.RemoveDestinationRequest.command:type_name -> internalapi.v1.RemoveDestinationCommand
-	25, // 12: internalapi.v1.RemoveDestinationResponse.ok:type_name -> internalapi.v1.DestinationRemovedEvent
-	26, // 13: internalapi.v1.RemoveDestinationResponse.error:type_name -> internalapi.v1.RemoveDestinationFailedEvent
-	27, // 14: internalapi.v1.StartDestinationRequest.command:type_name -> internalapi.v1.StartDestinationCommand
-	28, // 15: internalapi.v1.StartDestinationResponse.ok:type_name -> internalapi.v1.DestinationStartedEvent
-	29, // 16: internalapi.v1.StartDestinationResponse.error:type_name -> internalapi.v1.StartDestinationFailedEvent
-	30, // 17: internalapi.v1.StopDestinationRequest.command:type_name -> internalapi.v1.StopDestinationCommand
-	31, // 18: internalapi.v1.StopDestinationResponse.ok:type_name -> internalapi.v1.DestinationStoppedEvent
-	32, // 19: internalapi.v1.StopDestinationResponse.error:type_name -> internalapi.v1.StopDestinationFailedEvent
-	0,  // 20: internalapi.v1.APIService.Communicate:input_type -> internalapi.v1.Envelope
-	1,  // 21: internalapi.v1.APIService.ListDestinations:input_type -> internalapi.v1.ListDestinationsRequest
-	3,  // 22: internalapi.v1.APIService.AddDestination:input_type -> internalapi.v1.AddDestinationRequest
-	5,  // 23: internalapi.v1.APIService.UpdateDestination:input_type -> internalapi.v1.UpdateDestinationRequest
-	7,  // 24: internalapi.v1.APIService.RemoveDestination:input_type -> internalapi.v1.RemoveDestinationRequest
-	9,  // 25: internalapi.v1.APIService.StartDestination:input_type -> internalapi.v1.StartDestinationRequest
-	11, // 26: internalapi.v1.APIService.StopDestination:input_type -> internalapi.v1.StopDestinationRequest
-	0,  // 27: internalapi.v1.APIService.Communicate:output_type -> internalapi.v1.Envelope
-	2,  // 28: internalapi.v1.APIService.ListDestinations:output_type -> internalapi.v1.ListDestinationsResponse
-	4,  // 29: internalapi.v1.APIService.AddDestination:output_type -> internalapi.v1.AddDestinationResponse
-	6,  // 30: internalapi.v1.APIService.UpdateDestination:output_type -> internalapi.v1.UpdateDestinationResponse
-	8,  // 31: internalapi.v1.APIService.RemoveDestination:output_type -> internalapi.v1.RemoveDestinationResponse
-	10, // 32: internalapi.v1.APIService.StartDestination:output_type -> internalapi.v1.StartDestinationResponse
-	12, // 33: internalapi.v1.APIService.StopDestination:output_type -> internalapi.v1.StopDestinationResponse
-	27, // [27:34] is the sub-list for method output_type
-	20, // [20:27] is the sub-list for method input_type
+	15, // 0: internalapi.v1.Envelope.command:type_name -> internalapi.v1.Command
+	16, // 1: internalapi.v1.Envelope.event:type_name -> internalapi.v1.Event
+	17, // 2: internalapi.v1.ListDestinationsRequest.command:type_name -> internalapi.v1.ListDestinationsCommand
+	18, // 3: internalapi.v1.ListDestinationsResponse.ok:type_name -> internalapi.v1.DestinationsListedEvent
+	19, // 4: internalapi.v1.ListDestinationsResponse.error:type_name -> internalapi.v1.ListDestinationsFailedEvent
+	20, // 5: internalapi.v1.AddDestinationRequest.command:type_name -> internalapi.v1.AddDestinationCommand
+	21, // 6: internalapi.v1.AddDestinationResponse.ok:type_name -> internalapi.v1.DestinationAddedEvent
+	22, // 7: internalapi.v1.AddDestinationResponse.error:type_name -> internalapi.v1.AddDestinationFailedEvent
+	23, // 8: internalapi.v1.UpdateDestinationRequest.command:type_name -> internalapi.v1.UpdateDestinationCommand
+	24, // 9: internalapi.v1.UpdateDestinationResponse.ok:type_name -> internalapi.v1.DestinationUpdatedEvent
+	25, // 10: internalapi.v1.UpdateDestinationResponse.error:type_name -> internalapi.v1.UpdateDestinationFailedEvent
+	26, // 11: internalapi.v1.RemoveDestinationRequest.command:type_name -> internalapi.v1.RemoveDestinationCommand
+	27, // 12: internalapi.v1.RemoveDestinationResponse.ok:type_name -> internalapi.v1.DestinationRemovedEvent
+	28, // 13: internalapi.v1.RemoveDestinationResponse.error:type_name -> internalapi.v1.RemoveDestinationFailedEvent
+	29, // 14: internalapi.v1.StartDestinationRequest.command:type_name -> internalapi.v1.StartDestinationCommand
+	30, // 15: internalapi.v1.StartDestinationResponse.ok:type_name -> internalapi.v1.DestinationStartedEvent
+	31, // 16: internalapi.v1.StartDestinationResponse.error:type_name -> internalapi.v1.StartDestinationFailedEvent
+	32, // 17: internalapi.v1.StopDestinationRequest.command:type_name -> internalapi.v1.StopDestinationCommand
+	33, // 18: internalapi.v1.StopDestinationResponse.ok:type_name -> internalapi.v1.DestinationStoppedEvent
+	34, // 19: internalapi.v1.StopDestinationResponse.error:type_name -> internalapi.v1.StopDestinationFailedEvent
+	0,  // 20: internalapi.v1.APIService.Authenticate:input_type -> internalapi.v1.AuthenticateRequest
+	2,  // 21: internalapi.v1.APIService.Communicate:input_type -> internalapi.v1.Envelope
+	3,  // 22: internalapi.v1.APIService.ListDestinations:input_type -> internalapi.v1.ListDestinationsRequest
+	5,  // 23: internalapi.v1.APIService.AddDestination:input_type -> internalapi.v1.AddDestinationRequest
+	7,  // 24: internalapi.v1.APIService.UpdateDestination:input_type -> internalapi.v1.UpdateDestinationRequest
+	9,  // 25: internalapi.v1.APIService.RemoveDestination:input_type -> internalapi.v1.RemoveDestinationRequest
+	11, // 26: internalapi.v1.APIService.StartDestination:input_type -> internalapi.v1.StartDestinationRequest
+	13, // 27: internalapi.v1.APIService.StopDestination:input_type -> internalapi.v1.StopDestinationRequest
+	1,  // 28: internalapi.v1.APIService.Authenticate:output_type -> internalapi.v1.AuthenticateResponse
+	2,  // 29: internalapi.v1.APIService.Communicate:output_type -> internalapi.v1.Envelope
+	4,  // 30: internalapi.v1.APIService.ListDestinations:output_type -> internalapi.v1.ListDestinationsResponse
+	6,  // 31: internalapi.v1.APIService.AddDestination:output_type -> internalapi.v1.AddDestinationResponse
+	8,  // 32: internalapi.v1.APIService.UpdateDestination:output_type -> internalapi.v1.UpdateDestinationResponse
+	10, // 33: internalapi.v1.APIService.RemoveDestination:output_type -> internalapi.v1.RemoveDestinationResponse
+	12, // 34: internalapi.v1.APIService.StartDestination:output_type -> internalapi.v1.StartDestinationResponse
+	14, // 35: internalapi.v1.APIService.StopDestination:output_type -> internalapi.v1.StopDestinationResponse
+	28, // [28:36] is the sub-list for method output_type
+	20, // [20:28] is the sub-list for method input_type
 	20, // [20:20] is the sub-list for extension type_name
 	20, // [20:20] is the sub-list for extension extendee
 	0,  // [0:20] is the sub-list for field type_name
@@ -1012,31 +1091,31 @@ func file_internalapi_v1_api_proto_init() {
 	}
 	file_internalapi_v1_command_proto_init()
 	file_internalapi_v1_event_proto_init()
-	file_internalapi_v1_api_proto_msgTypes[0].OneofWrappers = []any{
+	file_internalapi_v1_api_proto_msgTypes[2].OneofWrappers = []any{
 		(*Envelope_Command)(nil),
 		(*Envelope_Event)(nil),
 	}
-	file_internalapi_v1_api_proto_msgTypes[2].OneofWrappers = []any{
+	file_internalapi_v1_api_proto_msgTypes[4].OneofWrappers = []any{
 		(*ListDestinationsResponse_Ok)(nil),
 		(*ListDestinationsResponse_Error)(nil),
 	}
-	file_internalapi_v1_api_proto_msgTypes[4].OneofWrappers = []any{
+	file_internalapi_v1_api_proto_msgTypes[6].OneofWrappers = []any{
 		(*AddDestinationResponse_Ok)(nil),
 		(*AddDestinationResponse_Error)(nil),
 	}
-	file_internalapi_v1_api_proto_msgTypes[6].OneofWrappers = []any{
+	file_internalapi_v1_api_proto_msgTypes[8].OneofWrappers = []any{
 		(*UpdateDestinationResponse_Ok)(nil),
 		(*UpdateDestinationResponse_Error)(nil),
 	}
-	file_internalapi_v1_api_proto_msgTypes[8].OneofWrappers = []any{
+	file_internalapi_v1_api_proto_msgTypes[10].OneofWrappers = []any{
 		(*RemoveDestinationResponse_Ok)(nil),
 		(*RemoveDestinationResponse_Error)(nil),
 	}
-	file_internalapi_v1_api_proto_msgTypes[10].OneofWrappers = []any{
+	file_internalapi_v1_api_proto_msgTypes[12].OneofWrappers = []any{
 		(*StartDestinationResponse_Ok)(nil),
 		(*StartDestinationResponse_Error)(nil),
 	}
-	file_internalapi_v1_api_proto_msgTypes[12].OneofWrappers = []any{
+	file_internalapi_v1_api_proto_msgTypes[14].OneofWrappers = []any{
 		(*StopDestinationResponse_Ok)(nil),
 		(*StopDestinationResponse_Error)(nil),
 	}
@@ -1046,7 +1125,7 @@ func file_internalapi_v1_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internalapi_v1_api_proto_rawDesc), len(file_internalapi_v1_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

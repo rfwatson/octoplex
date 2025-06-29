@@ -143,3 +143,9 @@ type Container struct {
 	ExitCode         *int
 	Err              error // Err is set if any error was received from the container client.
 }
+
+// Token represents a token used for API authentication or session management.
+type Token struct {
+	Hashed    string
+	ExpiresAt time.Time // may be zero value, meaning no expiration
+}

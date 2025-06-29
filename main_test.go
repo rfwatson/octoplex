@@ -248,7 +248,7 @@ func TestIntegrationClientServerUnary(t *testing.T) {
 				argv: func(t *testing.T, dataDir string) []string {
 					return []string{"octoplex", "server", "start", "--listen-tls", ":8443", "--data-dir", dataDir, "--auth", "none"}
 				},
-				wantErr: "new server: build credentials: authentication cannot be disabled", // handled in main.go
+				wantErr: "new server: build credentials: build API credentials: authentication cannot be disabled", // handled in main.go
 			},
 			authenticate: false,
 		},
@@ -476,7 +476,7 @@ func TestIntegrationClientServerStream(t *testing.T) {
 				argv: func(t *testing.T, dataDir string) []string {
 					return []string{"octoplex", "server", "start", "--listen-tls", ":8443", "--data-dir", dataDir, "--auth", "none"}
 				},
-				wantErr: "new server: build credentials: authentication cannot be disabled", // handled in main.go
+				wantErr: "new server: build credentials: build API credentials: authentication cannot be disabled", // handled in main.go
 			},
 			skipClient: true,
 		},
@@ -596,12 +596,16 @@ func TestIntegrationClientServerStream(t *testing.T) {
 
 				require.NoError(t, stream.Send(&pb.Envelope{Payload: &pb.Envelope_Command{Command: &pb.Command{CommandType: &pb.Command_StartHandshake{}}}}))
 
-				_, err = stream.Receive()
+				resp, err := stream.Receive()
 				if tc.wantClientErr == "" {
 					require.NoError(t, err)
+					assert.IsType(t, &pb.Event_HandshakeCompleted{}, resp.GetEvent().GetEventType())
 				} else {
 					assert.ErrorContains(t, err, tc.wantClientErr)
 				}
+
+				require.NoError(t, stream.CloseRequest())
+				require.NoError(t, stream.CloseResponse())
 			}
 
 			cancel()

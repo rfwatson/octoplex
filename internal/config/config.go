@@ -3,6 +3,9 @@ package config
 import (
 	"cmp"
 	"crypto/tls"
+	"fmt"
+	"net/url"
+	"strings"
 )
 
 const (
@@ -71,14 +74,62 @@ type ListenAddrs struct {
 	Plain string // may be empty
 }
 
+// ServerURL holds the parsed components of a server URL.
+type ServerURL struct {
+	Raw      string
+	Scheme   string // "http://" or "https://"
+	Hostname string // e.g. "example.com"
+	Port     string // e.g. "443" or "80"
+	BaseURL  string // Full base URL for web component
+}
+
+// NewServerURL parses a raw URL string and returns a ServerURL struct.
+func NewServerURL(raw string) (ServerURL, error) {
+	if raw == "" {
+		return ServerURL{}, fmt.Errorf("empty URL")
+	}
+
+	uri, err := url.Parse(raw)
+	if err != nil {
+		return ServerURL{}, fmt.Errorf("invalid server URL: %w", err)
+	}
+
+	if uri.Hostname() == "" {
+		return ServerURL{}, fmt.Errorf("invalid server URL: no hostname found")
+	}
+
+	if uri.Scheme != "http" && uri.Scheme != "https" {
+		return ServerURL{}, fmt.Errorf("invalid server URL: unsupported or missing scheme (must be http or https)")
+	}
+
+	baseURL := raw
+	if !strings.HasSuffix(baseURL, "/") {
+		baseURL += "/"
+	}
+
+	return ServerURL{
+		Raw:      raw,
+		Scheme:   uri.Scheme,
+		Hostname: uri.Hostname(),
+		Port:     uri.Port(),
+		BaseURL:  baseURL,
+	}, nil
+}
+
+// Web holds the configuration for the web interface.
+type Web struct {
+	Enabled bool
+}
+
 // Config holds the configuration for the application.
 type Config struct {
 	ListenAddrs         ListenAddrs
-	Host                string
+	ServerURL           ServerURL
 	TLS                 *TLS
 	AuthMode            AuthMode
 	InsecureAllowNoAuth bool // DANGER: no authentication even for non-loopback addresses.
 	InDocker            bool
+	Web                 Web
 	Debug               bool // deprecated
 	DataDir             string
 	LogFile             LogFile

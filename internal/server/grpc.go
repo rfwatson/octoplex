@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1"
 	connectpb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1/internalapiv1connect"
 	"git.netflux.io/rob/octoplex/internal/protocol"
+	"git.netflux.io/rob/octoplex/internal/store"
 	"git.netflux.io/rob/octoplex/internal/token"
 	"golang.org/x/sync/errgroup"
 )
@@ -49,6 +51,10 @@ func newServer(
 		clientC:       make(chan struct{}, 1),
 		logger:        logger.With("component", "server"),
 	}
+}
+
+func (s *Server) Authenticate(context.Context, *connect.Request[pb.AuthenticateRequest]) (*connect.Response[pb.AuthenticateResponse], error) {
+	return &connect.Response[pb.AuthenticateResponse]{}, nil
 }
 
 func (s *Server) Communicate(ctx context.Context, stream *connect.BidiStream[pb.Envelope, pb.Envelope]) error {
@@ -359,25 +365,34 @@ func (s *Server) StopDestination(ctx context.Context, req *connect.Request[pb.St
 }
 
 type authInterceptor struct {
-	credentials apiCredentials
-	logger      *slog.Logger
+	credentialsMode CredentialsMode
+	tokenStore      *store.TokenStore
+	logger          *slog.Logger
 }
 
-func newAuthInterceptor(credentials apiCredentials, logger *slog.Logger) authInterceptor {
-	if credentials.HashedToken == "" && !credentials.disabled {
-		panic("API authentication is enabled but no token is configured")
+func newAuthInterceptor(credentialsMode CredentialsMode, tokenStore *store.TokenStore, logger *slog.Logger) authInterceptor {
+	return authInterceptor{
+		credentialsMode: credentialsMode,
+		tokenStore:      tokenStore,
+		logger:          logger,
 	}
-
-	return authInterceptor{credentials: credentials, logger: logger}
 }
 
 func (a authInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		if ok, err := isAuthenticated(req.Header().Get("authorization"), a.credentials, a.logger); err != nil || !ok {
-			return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid credentials"))
+		if a.credentialsMode == CredentialsModeDisabled {
+			return next(ctx, req)
 		}
 
-		return next(ctx, req)
+		if ok := isAuthenticatedWithAPIToken(req.Header().Get("authorization"), a.tokenStore, a.logger); ok {
+			return next(ctx, req)
+		}
+
+		if ok := isAuthenticatedWithSessionToken(req.Header().Get("cookie"), a.tokenStore, a.logger); ok {
+			return next(ctx, req)
+		}
+
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid credentials"))
 	}
 }
 
@@ -390,43 +405,94 @@ func (a authInterceptor) WrapStreamingClient(next connect.StreamingClientFunc) c
 
 func (a authInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return connect.StreamingHandlerFunc(func(ctx context.Context, conn connect.StreamingHandlerConn) error {
-		if ok, err := isAuthenticated(conn.RequestHeader().Get("authorization"), a.credentials, a.logger); err != nil || !ok {
-			return connect.NewError(connect.CodeUnauthenticated, errors.New("invalid credentials"))
+		if a.credentialsMode == CredentialsModeDisabled {
+			return next(ctx, conn)
 		}
 
-		return next(ctx, conn)
+		if ok := isAuthenticatedWithSessionToken(conn.RequestHeader().Get("cookie"), a.tokenStore, a.logger); ok {
+			return next(ctx, conn)
+		}
+
+		if ok := isAuthenticatedWithAPIToken(conn.RequestHeader().Get("authorization"), a.tokenStore, a.logger); ok {
+			return next(ctx, conn)
+		}
+
+		return connect.NewError(connect.CodeUnauthenticated, errors.New("invalid credentials"))
 	})
 }
 
-// isAuthenticated checks if the request is authenticated using the provided
-// credentials. It returns true, nil if the request is authenticated. If the
-// request is not authenticated it should return a gRPC status with an
-// appropriate message. It is responsible for logging any significant errors
-// that occur.
-func isAuthenticated(authHeader string, credentials apiCredentials, logger *slog.Logger) (bool, error) {
-	if credentials.disabled {
-		return true, nil
-	}
-
+// isAuthenticatedWithAPIToken checks if the request is authenticated using the provided
+// API credentials. It returns true, nil if the request is authenticated. If
+// there is an error then it is responsible for logging it.
+func isAuthenticatedWithAPIToken(authHeader string, tokenStore *store.TokenStore, logger *slog.Logger) bool {
 	if authHeader == "" {
-		return false, connect.NewError(connect.CodeUnauthenticated, errors.New("no credentials provided"))
+		return false
 	}
 
 	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return false, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid authorization header format: %s", authHeader))
+		return false
 	}
 	rawToken, err := hex.DecodeString(strings.TrimPrefix(authHeader, "Bearer "))
 	if err != nil {
-		return false, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid token format: %w", err))
+		return false
 	}
 
-	if isValid, err := credentials.Matches(token.RawToken(rawToken)); err != nil || !isValid {
+	apiToken, err := tokenStore.Get(storeKeyAPIToken)
+	if err != nil {
+		logger.Error("Error retrieving API token from store", "err", err)
+		return false
+	}
+
+	if isValid, err := token.Matches(apiToken, token.RawToken(rawToken)); err != nil || !isValid {
 		if err != nil {
-			logger.Error("Error authenticating", "err", err, "raw_token", rawToken)
+			logger.Error("Error authenticating", "err", err)
 		}
 
-		return false, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid credentials"))
+		return false
 	}
 
-	return true, nil
+	return true
+}
+
+func isAuthenticatedWithSessionToken(cookieHeader string, tokenStore *store.TokenStore, logger *slog.Logger) bool {
+	if cookieHeader == "" {
+		return false
+	}
+
+	cookies, err := http.ParseCookie(cookieHeader)
+	if err != nil {
+		return false
+	}
+
+	var cookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == cookieNameSession {
+			cookie = c
+			break
+		}
+	}
+	if cookie == nil {
+		return false
+	}
+
+	rawToken, err := hex.DecodeString(cookie.Value)
+	if err != nil {
+		return false
+	}
+
+	sessionToken, err := tokenStore.Get(storeKeySessionToken)
+	if err != nil {
+		logger.Error("Error retrieving session token from store", "err", err)
+		return false
+	}
+
+	if isValid, err := token.Matches(sessionToken, token.RawToken(rawToken)); err != nil || !isValid {
+		if err != nil {
+			logger.Error("Error authenticating", "err", err)
+		}
+
+		return false
+	}
+
+	return true
 }

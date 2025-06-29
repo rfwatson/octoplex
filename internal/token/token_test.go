@@ -109,10 +109,10 @@ func TestToken(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			record, err := token.NewRecord(tc.rawToken, tc.expiresAt)
+			generatedToken, err := token.New(tc.rawToken, tc.expiresAt)
 			require.NoError(t, err)
 
-			got, err := record.Matches(tc.presentedToken)
+			got, err := token.Matches(generatedToken, tc.presentedToken)
 			if tc.wantErr != nil {
 				require.Error(t, err)
 				assert.False(t, got)

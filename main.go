@@ -45,7 +45,7 @@ var (
 const (
 	defaultListenAddr    = "127.0.0.1:8080"
 	defaultListenAddrTLS = "127.0.0.1:8443"
-	defaultHostname      = "localhost"
+	defaultServerURL     = "http://localhost:8080"
 	defaultStreamKey     = "live"
 )
 
@@ -68,8 +68,9 @@ func (e errInterrupt) ExitCode() int {
 // programmatically.
 var (
 	serverListenAddr    string
-	serverHostname      string
+	serverURL           string
 	serverAuthMode      string
+	webEnabled          bool
 	insecureAllowNoAuth bool
 	clientHost          string
 	clientTLSSkipVerify bool
@@ -472,13 +473,23 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Hidden:      clientAndServerMode,
 		},
 		&cli.StringFlag{
-			Name:        "hostname",
-			Usage:       "The public DNS name of the server",
-			DefaultText: defaultHostname,
+			Name:        "server-url",
+			Usage:       "The server URL for web and API clients to connect to",
+			DefaultText: defaultServerURL,
 			Category:    "Server",
-			Aliases:     []string{"H"},
-			Sources:     cli.EnvVars("OCTO_HOSTNAME"),
-			Destination: &serverHostname,
+			Aliases:     []string{"u"},
+			Sources:     cli.EnvVars("OCTO_SERVER_URL"),
+			Destination: &serverURL,
+			Hidden:      clientAndServerMode,
+		},
+		&cli.BoolFlag{
+			Name:        "web",
+			Usage:       "Enable the web admin interface",
+			DefaultText: "true",
+			Category:    "Server",
+			Aliases:     []string{"w"},
+			Sources:     cli.EnvVars("OCTO_WEB"),
+			Destination: &webEnabled,
 			Hidden:      clientAndServerMode,
 		},
 		&cli.BoolFlag{
@@ -694,14 +705,15 @@ func runServer(ctx context.Context, c *cli.Command, cfg config.Config, serverCfg
 		return fmt.Errorf("new docker client: %w", err)
 	}
 
-	store, err := store.New(filepath.Join(cfg.DataDir, "state.json"))
+	stateStore, err := store.New(filepath.Join(cfg.DataDir, "state.json"))
 	if err != nil {
 		return fmt.Errorf("new store: %w", err)
 	}
 
 	app, err := server.New(server.Params{
 		Config:          cfg,
-		Store:           store,
+		Store:           stateStore,
+		TokenStore:      store.NewTokenStore(cfg.DataDir, logger),
 		DockerClient:    dockerClient,
 		ListenerTLSFunc: serverCfg.listenerFunc,
 		WaitForClient:   serverCfg.waitForClient,
@@ -749,11 +761,12 @@ func runClientAndServer(ctx context.Context, c *cli.Command) error {
 
 	// Override CLI flags:
 	serverListenAddr = fmt.Sprintf("127.0.0.1:%d", lis.Addr().(*net.TCPAddr).Port) // listen on all interfaces
-	serverHostname = "localhost"                                                   // DNS name
-	serverAuthMode = "none"
-	insecureAllowNoAuth = true
-	clientHost = fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port) // point client at the correct port
-	clientTLSSkipVerify = true                                               // override default TLS verification
+	serverURL = "http://localhost:8080"                                            // server URL and DNS name
+	webEnabled = true                                                              // enable web interface
+	serverAuthMode = "none"                                                        // disable authentication
+	insecureAllowNoAuth = true                                                     // disable authentication
+	clientHost = fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port)       // point client at the correct port
+	clientTLSSkipVerify = true                                                     // override default TLS verification
 
 	// must be built after overriding flags:
 	cfg, err := parseConfig(c)
@@ -845,12 +858,18 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 		listenAddrTLS = cmp.Or(addr, defaultListenAddrTLS)
 	}
 
+	serverURL, err := config.NewServerURL(cmp.Or(serverURL, defaultServerURL))
+	if err != nil {
+		return config.Config{}, fmt.Errorf("new server URL: %w", err)
+	}
+
 	cfg := config.Config{
 		ListenAddrs:         config.ListenAddrs{Plain: listenAddrPlain, TLS: listenAddrTLS},
-		Host:                cmp.Or(serverHostname, defaultHostname),
+		ServerURL:           serverURL,
 		AuthMode:            authMode,
 		InsecureAllowNoAuth: insecureAllowNoAuth,
 		InDocker:            c.Bool("in-docker"),
+		Web:                 config.Web{Enabled: !c.IsSet("web") || webEnabled},
 		Debug:               c.Bool("debug"),
 		DataDir:             dataDir,
 		ImageNameFFMPEG:     c.String("image-name-ffmpeg"),

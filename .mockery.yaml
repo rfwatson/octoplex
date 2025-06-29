@@ -6,6 +6,9 @@ outpkg: mocks
 issue-845-fix: true
 resolve-type-alias: false
 packages:
+  git.netflux.io/rob/octoplex/internal/server:
+    interfaces:
+      TokenStore:
   git.netflux.io/rob/octoplex/internal/container:
     interfaces:
       DockerClient:

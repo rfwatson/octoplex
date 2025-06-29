@@ -33,6 +33,8 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// APIServiceAuthenticateProcedure is the fully-qualified name of the APIService's Authenticate RPC.
+	APIServiceAuthenticateProcedure = "/internalapi.v1.APIService/Authenticate"
 	// APIServiceCommunicateProcedure is the fully-qualified name of the APIService's Communicate RPC.
 	APIServiceCommunicateProcedure = "/internalapi.v1.APIService/Communicate"
 	// APIServiceListDestinationsProcedure is the fully-qualified name of the APIService's
@@ -57,6 +59,7 @@ const (
 
 // APIServiceClient is a client for the internalapi.v1.APIService service.
 type APIServiceClient interface {
+	Authenticate(context.Context, *connect.Request[v1.AuthenticateRequest]) (*connect.Response[v1.AuthenticateResponse], error)
 	Communicate(context.Context) *connect.BidiStreamForClient[v1.Envelope, v1.Envelope]
 	ListDestinations(context.Context, *connect.Request[v1.ListDestinationsRequest]) (*connect.Response[v1.ListDestinationsResponse], error)
 	AddDestination(context.Context, *connect.Request[v1.AddDestinationRequest]) (*connect.Response[v1.AddDestinationResponse], error)
@@ -77,6 +80,12 @@ func NewAPIServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 	baseURL = strings.TrimRight(baseURL, "/")
 	aPIServiceMethods := v1.File_internalapi_v1_api_proto.Services().ByName("APIService").Methods()
 	return &aPIServiceClient{
+		authenticate: connect.NewClient[v1.AuthenticateRequest, v1.AuthenticateResponse](
+			httpClient,
+			baseURL+APIServiceAuthenticateProcedure,
+			connect.WithSchema(aPIServiceMethods.ByName("Authenticate")),
+			connect.WithClientOptions(opts...),
+		),
 		communicate: connect.NewClient[v1.Envelope, v1.Envelope](
 			httpClient,
 			baseURL+APIServiceCommunicateProcedure,
@@ -124,6 +133,7 @@ func NewAPIServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 
 // aPIServiceClient implements APIServiceClient.
 type aPIServiceClient struct {
+	authenticate      *connect.Client[v1.AuthenticateRequest, v1.AuthenticateResponse]
 	communicate       *connect.Client[v1.Envelope, v1.Envelope]
 	listDestinations  *connect.Client[v1.ListDestinationsRequest, v1.ListDestinationsResponse]
 	addDestination    *connect.Client[v1.AddDestinationRequest, v1.AddDestinationResponse]
@@ -131,6 +141,11 @@ type aPIServiceClient struct {
 	removeDestination *connect.Client[v1.RemoveDestinationRequest, v1.RemoveDestinationResponse]
 	startDestination  *connect.Client[v1.StartDestinationRequest, v1.StartDestinationResponse]
 	stopDestination   *connect.Client[v1.StopDestinationRequest, v1.StopDestinationResponse]
+}
+
+// Authenticate calls internalapi.v1.APIService.Authenticate.
+func (c *aPIServiceClient) Authenticate(ctx context.Context, req *connect.Request[v1.AuthenticateRequest]) (*connect.Response[v1.AuthenticateResponse], error) {
+	return c.authenticate.CallUnary(ctx, req)
 }
 
 // Communicate calls internalapi.v1.APIService.Communicate.
@@ -170,6 +185,7 @@ func (c *aPIServiceClient) StopDestination(ctx context.Context, req *connect.Req
 
 // APIServiceHandler is an implementation of the internalapi.v1.APIService service.
 type APIServiceHandler interface {
+	Authenticate(context.Context, *connect.Request[v1.AuthenticateRequest]) (*connect.Response[v1.AuthenticateResponse], error)
 	Communicate(context.Context, *connect.BidiStream[v1.Envelope, v1.Envelope]) error
 	ListDestinations(context.Context, *connect.Request[v1.ListDestinationsRequest]) (*connect.Response[v1.ListDestinationsResponse], error)
 	AddDestination(context.Context, *connect.Request[v1.AddDestinationRequest]) (*connect.Response[v1.AddDestinationResponse], error)
@@ -186,6 +202,12 @@ type APIServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewAPIServiceHandler(svc APIServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	aPIServiceMethods := v1.File_internalapi_v1_api_proto.Services().ByName("APIService").Methods()
+	aPIServiceAuthenticateHandler := connect.NewUnaryHandler(
+		APIServiceAuthenticateProcedure,
+		svc.Authenticate,
+		connect.WithSchema(aPIServiceMethods.ByName("Authenticate")),
+		connect.WithHandlerOptions(opts...),
+	)
 	aPIServiceCommunicateHandler := connect.NewBidiStreamHandler(
 		APIServiceCommunicateProcedure,
 		svc.Communicate,
@@ -230,6 +252,8 @@ func NewAPIServiceHandler(svc APIServiceHandler, opts ...connect.HandlerOption) 
 	)
 	return "/internalapi.v1.APIService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case APIServiceAuthenticateProcedure:
+			aPIServiceAuthenticateHandler.ServeHTTP(w, r)
 		case APIServiceCommunicateProcedure:
 			aPIServiceCommunicateHandler.ServeHTTP(w, r)
 		case APIServiceListDestinationsProcedure:
@@ -252,6 +276,10 @@ func NewAPIServiceHandler(svc APIServiceHandler, opts ...connect.HandlerOption) 
 
 // UnimplementedAPIServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedAPIServiceHandler struct{}
+
+func (UnimplementedAPIServiceHandler) Authenticate(context.Context, *connect.Request[v1.AuthenticateRequest]) (*connect.Response[v1.AuthenticateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("internalapi.v1.APIService.Authenticate is not implemented"))
+}
 
 func (UnimplementedAPIServiceHandler) Communicate(context.Context, *connect.BidiStream[v1.Envelope, v1.Envelope]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("internalapi.v1.APIService.Communicate is not implemented"))

@@ -1,24 +1,23 @@
+// Package server implements the main application logic for Octoplex server.
 package server
 
 import (
 	"cmp"
 	"context"
 	"crypto/tls"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"slices"
+	"strings"
 
 	"time"
 
 	"connectrpc.com/connect"
+	connectcors "connectrpc.com/cors"
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
@@ -27,9 +26,9 @@ import (
 	"git.netflux.io/rob/octoplex/internal/mediaserver"
 	"git.netflux.io/rob/octoplex/internal/replicator"
 	"git.netflux.io/rob/octoplex/internal/store"
-	"git.netflux.io/rob/octoplex/internal/token"
 	"github.com/docker/docker/client"
 	"github.com/google/uuid"
+	"github.com/rs/cors"
 )
 
 // command is a wrapper around an event.Command that includes
@@ -41,17 +40,12 @@ type command struct {
 	doneC    chan event.Event // may be nil, if the command is asynchronous
 }
 
-type apiCredentials struct {
-	token.Record // if disabled, this is empty
-
-	disabled bool // if true, no authentication is required
-}
-
 // App is an instance of the app.
 type App struct {
 	cfg             config.Config
+	credentialsMode CredentialsMode // CredentialsMode indicates whether the API and web credentials are enabled or disabled.
 	store           *store.FileStore
-	credentials     apiCredentials
+	tokenStore      *store.TokenStore
 	eventBus        *event.Bus
 	dispatchC       chan command
 	dockerClient    container.DockerClient
@@ -65,6 +59,7 @@ type App struct {
 type Params struct {
 	Config          config.Config
 	Store           *store.FileStore
+	TokenStore      *store.TokenStore
 	DockerClient    container.DockerClient
 	ListenerTLSFunc func() (net.Listener, error) // ListenerTLSFunc overrides the configured TLS listen address. May be nil.
 	ChanSize        int
@@ -89,12 +84,12 @@ var (
 func New(params Params) (*App, error) {
 	cfg := params.Config
 
-	credentials, err := buildAPICredentials(cfg, params.Logger)
+	credentialsMode, err := initCredentials(cfg, params.TokenStore, params.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("build credentials: %w", err)
 	}
 
-	keyPairs, err := generateKeyPairs(cfg.Host, cfg.TLS, cfg.DataDir)
+	keyPairs, err := generateKeyPairs(cfg.ServerURL.Hostname, cfg.TLS, cfg.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("build key pairs: %w", err)
 	}
@@ -106,8 +101,9 @@ func New(params Params) (*App, error) {
 
 	return &App{
 		cfg:             cfg,
+		credentialsMode: credentialsMode,
 		store:           params.Store,
-		credentials:     credentials,
+		tokenStore:      params.TokenStore,
 		eventBus:        event.NewBus(params.Logger.With("component", "event_bus")),
 		dispatchC:       make(chan command, cmp.Or(params.ChanSize, defaultChanSize)),
 		dockerClient:    params.DockerClient,
@@ -131,9 +127,13 @@ func (a *App) Run(ctx context.Context) error {
 
 	internalAPI := newServer(a.DispatchSync, a.DispatchAsync, a.eventBus, a.logger)
 
-	path, handler := connectpb.NewAPIServiceHandler(internalAPI, connect.WithInterceptors(newAuthInterceptor(a.credentials, a.logger)))
+	path, handler := connectpb.NewAPIServiceHandler(internalAPI, connect.WithInterceptors(newAuthInterceptor(a.credentialsMode, a.tokenStore, a.logger)))
 	mux := http.NewServeMux()
-	mux.Handle(path, handler)
+	mux.Handle(path, newCORSMiddleware(a.cfg.ServerURL.BaseURL, handler))
+
+	if a.cfg.Web.Enabled {
+		mux.Handle("/", webHandler(a.cfg, a.credentialsMode, a.tokenStore, a.logger))
+	}
 
 	var tlsServer, plainServer *http.Server
 	tlsSrvC := make(chan error, 1)
@@ -158,7 +158,7 @@ func (a *App) Run(ctx context.Context) error {
 				MinVersion:   config.TLSMinVersion,
 				NextProtos:   []string{"h2"},
 			},
-			ErrorLog: log.New(&logWriter{a.logger}, "", 0),
+			ErrorLog: log.New(&logWriter{a.logger}, "HTTPS: ", 0),
 		}
 
 		go func() {
@@ -171,7 +171,7 @@ func (a *App) Run(ctx context.Context) error {
 		plainServer = &http.Server{
 			Addr:     a.cfg.ListenAddrs.Plain,
 			Handler:  mux,
-			ErrorLog: log.New(&logWriter{a.logger}, "", 0),
+			ErrorLog: log.New(&logWriter{a.logger}, "HTTP: ", 0),
 		}
 
 		go func() {
@@ -179,6 +179,22 @@ func (a *App) Run(ctx context.Context) error {
 			plainSrvC <- plainServer.ListenAndServe()
 		}()
 	}
+
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if tlsServer != nil {
+			if shutdownErr := tlsServer.Shutdown(shutdownCtx); shutdownErr != nil {
+				a.logger.Error("gRPC server shutdown failed", "err", shutdownErr, "tls", "true")
+			}
+		}
+		if plainServer != nil {
+			if shutdownErr := plainServer.Shutdown(shutdownCtx); shutdownErr != nil {
+				a.logger.Error("gRPC server shutdown failed", "err", shutdownErr, "tls", "false")
+			}
+		}
+	}()
 
 	if a.waitForClient {
 		if err = internalAPI.WaitForClient(ctx); err != nil {
@@ -245,7 +261,7 @@ func (a *App) Run(ctx context.Context) error {
 	srv, err := mediaserver.NewActor(ctx, mediaserver.NewActorParams{
 		RTMPAddr:        buildNetAddr(a.cfg.Sources.MediaServer.RTMP),
 		RTMPSAddr:       buildNetAddr(a.cfg.Sources.MediaServer.RTMPS),
-		Host:            a.cfg.Host,
+		Host:            a.cfg.ServerURL.Hostname,
 		KeyPairs:        a.keyPairs,
 		StreamKey:       mediaserver.StreamKey(a.cfg.Sources.MediaServer.StreamKey),
 		ImageName:       a.cfg.Sources.MediaServer.ImageName,
@@ -287,19 +303,6 @@ func (a *App) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			if tlsServer != nil {
-				if shutdownErr := tlsServer.Shutdown(shutdownCtx); shutdownErr != nil {
-					a.logger.Error("gRPC server shutdown failed", "err", shutdownErr, "tls", "true")
-				}
-			}
-			if plainServer != nil {
-				if shutdownErr := plainServer.Shutdown(shutdownCtx); shutdownErr != nil {
-					a.logger.Error("gRPC server shutdown failed", "err", shutdownErr, "tls", "false")
-				}
-			}
-			cancel()
-
 			return ctx.Err()
 		case srvErr := <-tlsSrvC:
 			if srvErr != nil && !errors.Is(srvErr, http.ErrServerClosed) {
@@ -318,6 +321,7 @@ func (a *App) Run(ctx context.Context) error {
 
 			sendAppStateChanged()
 		case cmd := <-a.dispatchC:
+			// TODO: doneC must always be called if non-nil, even if the command is unsuccessful.
 			okEvt, errEvt, err := a.handleCommand(ctx, cmd, state, repl, containerClient, startMediaServerC)
 			if err != nil {
 				if errors.Is(err, errExit) {
@@ -479,7 +483,7 @@ func (a *App) handleCommand(
 			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: err}, nil
 		}
 		a.handlePersistentStateUpdate(state)
-		return event.DestinationRemovedEvent{ID: c.ID}, nil, nil //nolint:gosimple
+		return event.DestinationRemovedEvent{ID: c.ID}, nil, nil //nolint:staticcheck
 	case event.CommandStartDestination:
 		destIndex := slices.IndexFunc(state.Destinations, func(d domain.Destination) bool {
 			return d.ID == c.ID
@@ -526,7 +530,7 @@ func (a *App) handleCommand(
 		}
 
 		startMediaServerC <- struct{}{}
-		return nil, nil, nil //nolint:gosimple
+		return nil, nil, nil //nolint:staticcheck
 	case event.CommandKillServer:
 		return nil, nil, errExit
 	default:
@@ -646,153 +650,6 @@ func (a *App) Stop(ctx context.Context) error {
 	return closeOtherInstances(ctx, containerClient)
 }
 
-// buildAPICredentials builds the API credentials based on the configuration.
-//
-// It either returns a valid set of active credentials, a set of disabled
-// credentials, or an error.
-func buildAPICredentials(cfg config.Config, logger *slog.Logger) (_ apiCredentials, err error) {
-	tokenPath := filepath.Join(cfg.DataDir, "api-token.json")
-
-	if cfg.ListenAddrs.Plain == "" && cfg.ListenAddrs.TLS == "" {
-		return apiCredentials{}, fmt.Errorf("listen addresses cannot all be empty")
-	}
-
-	isLoopback, err := isLoopback(cfg)
-	if err != nil {
-		return apiCredentials{}, fmt.Errorf("check loopback: %w", err)
-	}
-
-	var tokenExists bool
-	tokenRecord, err := readTokenRecord(tokenPath)
-	if err != nil {
-		if err != errTokenNotFound {
-			return apiCredentials{}, fmt.Errorf("read token record: %w", err)
-		}
-	} else {
-		tokenExists = true
-	}
-
-	// If auth mode is set to none, and insecure allow no auth is set, and it's a
-	// loopback address - allow no authentication regardless of whether a token
-	// exists. This is mostly for all-in-one mode.
-	if cfg.AuthMode == config.AuthModeNone && cfg.InsecureAllowNoAuth && isLoopback {
-		return apiCredentials{disabled: true}, nil
-	}
-
-	// Next, if a token exists, we always use it, regardless of the requested mode.
-	if tokenExists {
-		logger.Info("Enabling API authentication due to existing token")
-		return apiCredentials{Record: tokenRecord}, nil
-	}
-
-	// Next handle auth mode none, which is not allowed for non-loopback
-	// addresses unless explicitly enabled.
-	if cfg.AuthMode == config.AuthModeNone {
-		if !isLoopback && !cfg.InsecureAllowNoAuth {
-			return apiCredentials{}, ErrAuthenticationCannotBeDisabled
-		}
-
-		logger.Warn("WARNING: API authentication disabled. This is not recommended for production use.")
-		return apiCredentials{disabled: true}, nil
-	}
-
-	// If the listen address is a loopback address, and auth mode is set to auto, we disable authentication
-	if cfg.AuthMode == config.AuthModeAuto && isLoopback {
-		logger.Info("No authentication required when only listening on loopback addresses")
-		return apiCredentials{disabled: true}, nil
-	}
-
-	// Otherwise, generate a new token and require it.
-	rawToken, tokenRecord, err := generateAPIToken(tokenPath)
-	if err != nil {
-		return apiCredentials{}, fmt.Errorf("write API token: %w", err)
-	}
-
-	logger.Info(fmt.Sprintf("New API token generated. Store it now - it will not be shown again. TOKEN: %s", hex.EncodeToString(rawToken)))
-	return apiCredentials{Record: tokenRecord}, nil
-}
-
-func generateAPIToken(tokenPath string) (token.RawToken, token.Record, error) {
-	const tokenLenBytes = 32 // length of raw token in bytes
-	rawToken, err := token.GenerateRawToken(tokenLenBytes)
-	if err != nil {
-		return nil, token.Record{}, fmt.Errorf("generate raw token: %w", err)
-	}
-
-	tokenRecord, err := token.NewRecord(rawToken, time.Time{}) // for now, no expiry
-	if err != nil {
-		return nil, token.Record{}, fmt.Errorf("create token record: %w", err)
-	}
-
-	if err := writeTokenRecord(tokenPath, tokenRecord); err != nil {
-		return nil, token.Record{}, fmt.Errorf("write token record: %w", err)
-	}
-
-	return rawToken, tokenRecord, nil
-}
-
-var errTokenNotFound = errors.New("token not found")
-
-func readTokenRecord(tokenPath string) (token.Record, error) {
-	tokenRecordBytes, err := os.ReadFile(tokenPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return token.Record{}, errTokenNotFound
-		}
-
-		return token.Record{}, fmt.Errorf("read token file: %w", err)
-	}
-
-	var tokenRecord token.Record
-	if err := json.Unmarshal(tokenRecordBytes, &tokenRecord); err != nil {
-		return token.Record{}, fmt.Errorf("unmarshal token record: %w", err)
-	}
-
-	return tokenRecord, nil
-}
-
-func writeTokenRecord(tokenPath string, tokenRecord token.Record) error {
-	tokenRecordBytes, err := json.Marshal(tokenRecord)
-	if err != nil {
-		return fmt.Errorf("marshal token record: %w", err)
-	}
-
-	if err := os.WriteFile(tokenPath, tokenRecordBytes, 0600); err != nil {
-		return fmt.Errorf("write file: %w", err)
-	}
-
-	return nil
-}
-
-func isLoopback(cfg config.Config) (bool, error) {
-	var isLoopbacks []bool
-
-	if cfg.ListenAddrs.Plain != "" {
-		addr, err := net.ResolveTCPAddr("tcp", cfg.ListenAddrs.Plain)
-		if err != nil {
-			return false, fmt.Errorf("resolve TLS: %w", err)
-		}
-
-		isLoopbacks = append(isLoopbacks, addr.IP.IsLoopback())
-	}
-
-	if cfg.ListenAddrs.TLS != "" {
-		addr, err := net.ResolveTCPAddr("tcp", cfg.ListenAddrs.TLS)
-		if err != nil {
-			return false, fmt.Errorf("resolve plain: %w", err)
-		}
-
-		isLoopbacks = append(isLoopbacks, addr.IP.IsLoopback())
-	}
-
-	for _, isLoopback := range isLoopbacks {
-		if !isLoopback {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
 type logWriter struct {
 	logger *slog.Logger
 }
@@ -800,4 +657,15 @@ type logWriter struct {
 func (w *logWriter) Write(p []byte) (n int, err error) {
 	w.logger.Info("H2 error log", "msg", string(p))
 	return len(p), nil
+}
+
+func newCORSMiddleware(domain string, next http.Handler) http.Handler {
+	corsOptions := cors.Options{
+		AllowedOrigins: []string{strings.TrimSuffix(domain, "/")},
+		AllowedMethods: connectcors.AllowedMethods(),
+		AllowedHeaders: connectcors.AllowedHeaders(),
+		ExposedHeaders: connectcors.ExposedHeaders(),
+	}
+
+	return cors.New(corsOptions).Handler(next)
 }

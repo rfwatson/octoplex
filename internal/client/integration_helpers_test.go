@@ -101,6 +101,7 @@ func buildClientServer(
 	server, err := server.New(server.Params{
 		Config:          cfg,
 		Store:           testhelpers.NewTestStore(t, options.state),
+		TokenStore:      store.NewTokenStore(tempDir, logger),
 		ListenerTLSFunc: server.WithListener(lis),
 		DockerClient:    dockerClient,
 		WaitForClient:   true,

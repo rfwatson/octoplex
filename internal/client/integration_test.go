@@ -310,7 +310,7 @@ func TestIntegrationCustomHost(t *testing.T) {
 			ListenAddrs:         config.ListenAddrs{TLS: "localhost:8443"},
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
-			Host:                "rtmp.example.com",
+			ServerURL:           config.ServerURL{Hostname: "rtmp.example.com"},
 			Sources: config.Sources{
 				MediaServer: config.MediaServerSource{
 					RTMP: config.RTMPSource{Enabled: true},

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"git.netflux.io/rob/octoplex/internal/domain"
 	"golang.org/x/crypto/scrypt"
 )
 
@@ -41,28 +42,21 @@ func GenerateRawToken(keyLen int) (RawToken, error) {
 	return raw, nil
 }
 
-// Record represents a hashed token with its expiration time, suitable for
-// storage.
-type Record struct {
-	HashedToken string    `json:"hashed_token"`
-	ExpiresAt   time.Time `json:"expires_at,omitzero"`
-}
-
-// NewRecord creates a new TokenRecord by hashing the raw token using scrypt,
+// New creates a new TokenRecord by hashing the raw token using scrypt,
 // and returning the TokenRecord.
-func NewRecord(rawToken RawToken, expiresAt time.Time) (Record, error) {
-	if len(rawToken) < 8 {
-		return Record{}, errors.New("raw token must be at least 8 bytes long")
+func New(rawToken RawToken, expiresAt time.Time) (domain.Token, error) {
+	if len(rawToken) < 6 {
+		return domain.Token{}, errors.New("raw token must be at least 6 bytes long")
 	}
 
 	salt := make([]byte, saltLen)
 	if _, err := rand.Read(salt); err != nil {
-		return Record{}, err
+		return domain.Token{}, err
 	}
 
 	hash, err := scrypt.Key(rawToken, salt, scryptN, scryptR, scryptP, len(rawToken))
 	if err != nil {
-		return Record{}, err
+		return domain.Token{}, err
 	}
 
 	params := fmt.Sprintf("%d,%d,%d,%d", scryptN, scryptR, scryptP, len(rawToken))
@@ -70,21 +64,21 @@ func NewRecord(rawToken RawToken, expiresAt time.Time) (Record, error) {
 	hashB64 := base64.StdEncoding.EncodeToString(hash)
 	hashed := fmt.Sprintf("scrypt$%s$%s$%s", params, saltB64, hashB64)
 
-	return Record{HashedToken: hashed, ExpiresAt: expiresAt}, nil
+	return domain.Token{Hashed: hashed, ExpiresAt: expiresAt}, nil
 }
 
 // Matches checks if the given raw token matches the hashed token in the
 // TokenRecord.
-func (tr Record) Matches(rawToken RawToken) (bool, error) {
+func Matches(token domain.Token, rawToken RawToken) (bool, error) {
 	if len(rawToken) == 0 {
-		return false, errors.New("raw token is empty")
+		return false, nil
 	}
 
-	if !tr.ExpiresAt.IsZero() && time.Now().After(tr.ExpiresAt) {
+	if !token.ExpiresAt.IsZero() && time.Now().After(token.ExpiresAt) {
 		return false, ErrTokenExpired
 	}
 
-	parts := strings.Split(tr.HashedToken, "$")
+	parts := strings.Split(token.Hashed, "$")
 	if len(parts) != 4 || parts[0] != "scrypt" {
 		return false, errors.New("invalid token format")
 	}
