@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -363,7 +364,7 @@ type authInterceptor struct {
 }
 
 func newAuthInterceptor(credentials apiCredentials, logger *slog.Logger) authInterceptor {
-	if credentials.hashedToken == "" && !credentials.disabled {
+	if credentials.HashedToken == "" && !credentials.disabled {
 		panic("API authentication is enabled but no token is configured")
 	}
 
@@ -414,9 +415,12 @@ func isAuthenticated(authHeader string, credentials apiCredentials, logger *slog
 	if !strings.HasPrefix(authHeader, "Bearer ") {
 		return false, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid authorization header format: %s", authHeader))
 	}
-	rawToken := strings.TrimPrefix(authHeader, "Bearer ")
+	rawToken, err := hex.DecodeString(strings.TrimPrefix(authHeader, "Bearer "))
+	if err != nil {
+		return false, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid token format: %w", err))
+	}
 
-	if isValid, err := token.Compare(token.RawToken(rawToken), credentials.hashedToken); err != nil || !isValid {
+	if isValid, err := credentials.Matches(token.RawToken(rawToken)); err != nil || !isValid {
 		if err != nil {
 			logger.Error("Error authenticating", "err", err, "raw_token", rawToken)
 		}

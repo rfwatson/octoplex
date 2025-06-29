@@ -1,12 +1,15 @@
 package server
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"git.netflux.io/rob/octoplex/internal/config"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
+	"git.netflux.io/rob/octoplex/internal/token"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,21 +27,21 @@ func TestBuildCredentials(t *testing.T) {
 		{
 			name:             "existing token, auth mode token",
 			listenAddrs:      config.ListenAddrs{TLS: ":8443"},
-			existingToken:    "s3cr3t",
+			existingToken:    "abcdef123",
 			authMode:         config.AuthModeToken,
 			wantAuthRequired: true,
 		},
 		{
 			name:             "existing token, auth mode none",
 			listenAddrs:      config.ListenAddrs{TLS: ":8443"},
-			existingToken:    "s3cr3t",
+			existingToken:    "abcdef123",
 			authMode:         config.AuthModeNone,
 			wantAuthRequired: true,
 		},
 		{
 			name:                "existing token, auth mode none, localhost, insecure allow no auth",
 			listenAddrs:         config.ListenAddrs{TLS: "127.0.0.1:8443"},
-			existingToken:       "s3cr3t",
+			existingToken:       "abcdef123",
 			authMode:            config.AuthModeNone,
 			insecureAllowNoAuth: true,
 			wantAuthRequired:    false,
@@ -46,7 +49,7 @@ func TestBuildCredentials(t *testing.T) {
 		{
 			name:                "existing token, auth mode none, non-localhost, insecure allow no auth",
 			listenAddrs:         config.ListenAddrs{TLS: ":8443"},
-			existingToken:       "s3cr3t",
+			existingToken:       "abcdef123",
 			authMode:            config.AuthModeNone,
 			insecureAllowNoAuth: true,
 			wantAuthRequired:    true,
@@ -126,7 +129,13 @@ func TestBuildCredentials(t *testing.T) {
 			}
 
 			if tc.existingToken != "" {
-				require.NoError(t, os.WriteFile(filepath.Join(tempDir, "token.txt"), []byte(tc.existingToken), 0600))
+				tokenRecord, err := token.NewRecord(token.RawToken(tc.existingToken), time.Time{})
+				require.NoError(t, err)
+
+				tokenRecordBytes, err := json.Marshal(tokenRecord)
+				require.NoError(t, err)
+
+				require.NoError(t, os.WriteFile(filepath.Join(tempDir, "api-token.json"), tokenRecordBytes, 0600))
 			}
 
 			got, err := buildAPICredentials(cfg, logger)

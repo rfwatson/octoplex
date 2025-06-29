@@ -4,12 +4,15 @@ import (
 	"cmp"
 	"context"
 	"crypto/tls"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"slices"
 
@@ -39,8 +42,9 @@ type command struct {
 }
 
 type apiCredentials struct {
-	disabled    bool // if true, no authentication is required
-	hashedToken string
+	token.Record // if disabled, this is empty
+
+	disabled bool // if true, no authentication is required
 }
 
 // App is an instance of the app.
@@ -647,8 +651,7 @@ func (a *App) Stop(ctx context.Context) error {
 // It either returns a valid set of active credentials, a set of disabled
 // credentials, or an error.
 func buildAPICredentials(cfg config.Config, logger *slog.Logger) (_ apiCredentials, err error) {
-	const tokenLenBytes = 32 // length of raw token in bytes
-	tokenPath := filepath.Join(cfg.DataDir, "token.txt")
+	tokenPath := filepath.Join(cfg.DataDir, "api-token.json")
 
 	if cfg.ListenAddrs.Plain == "" && cfg.ListenAddrs.TLS == "" {
 		return apiCredentials{}, fmt.Errorf("listen addresses cannot all be empty")
@@ -659,11 +662,15 @@ func buildAPICredentials(cfg config.Config, logger *slog.Logger) (_ apiCredentia
 		return apiCredentials{}, fmt.Errorf("check loopback: %w", err)
 	}
 
-	hashedToken, err := token.Read(tokenPath)
-	if err != nil && !errors.Is(err, token.ErrTokenNotFound) {
-		return apiCredentials{}, fmt.Errorf("load token: %w", err)
+	var tokenExists bool
+	tokenRecord, err := readTokenRecord(tokenPath)
+	if err != nil {
+		if err != errTokenNotFound {
+			return apiCredentials{}, fmt.Errorf("read token record: %w", err)
+		}
+	} else {
+		tokenExists = true
 	}
-	tokenExists := hashedToken != ""
 
 	// If auth mode is set to none, and insecure allow no auth is set, and it's a
 	// loopback address - allow no authentication regardless of whether a token
@@ -675,7 +682,7 @@ func buildAPICredentials(cfg config.Config, logger *slog.Logger) (_ apiCredentia
 	// Next, if a token exists, we always use it, regardless of the requested mode.
 	if tokenExists {
 		logger.Info("Enabling API authentication due to existing token")
-		return apiCredentials{hashedToken: hashedToken}, nil
+		return apiCredentials{Record: tokenRecord}, nil
 	}
 
 	// Next handle auth mode none, which is not allowed for non-loopback
@@ -696,12 +703,65 @@ func buildAPICredentials(cfg config.Config, logger *slog.Logger) (_ apiCredentia
 	}
 
 	// Otherwise, generate a new token and require it.
-	rawToken, hashedToken, err := token.Write(tokenPath, tokenLenBytes)
+	rawToken, tokenRecord, err := generateAPIToken(tokenPath)
 	if err != nil {
-		return apiCredentials{}, fmt.Errorf("write token: %w", err)
+		return apiCredentials{}, fmt.Errorf("write API token: %w", err)
 	}
-	logger.Info(fmt.Sprintf("New API token generated. Store it now - it will not be shown again. TOKEN: %s", rawToken))
-	return apiCredentials{hashedToken: hashedToken}, nil
+
+	logger.Info(fmt.Sprintf("New API token generated. Store it now - it will not be shown again. TOKEN: %s", hex.EncodeToString(rawToken)))
+	return apiCredentials{Record: tokenRecord}, nil
+}
+
+func generateAPIToken(tokenPath string) (token.RawToken, token.Record, error) {
+	const tokenLenBytes = 32 // length of raw token in bytes
+	rawToken, err := token.GenerateRawToken(tokenLenBytes)
+	if err != nil {
+		return nil, token.Record{}, fmt.Errorf("generate raw token: %w", err)
+	}
+
+	tokenRecord, err := token.NewRecord(rawToken, time.Time{}) // for now, no expiry
+	if err != nil {
+		return nil, token.Record{}, fmt.Errorf("create token record: %w", err)
+	}
+
+	if err := writeTokenRecord(tokenPath, tokenRecord); err != nil {
+		return nil, token.Record{}, fmt.Errorf("write token record: %w", err)
+	}
+
+	return rawToken, tokenRecord, nil
+}
+
+var errTokenNotFound = errors.New("token not found")
+
+func readTokenRecord(tokenPath string) (token.Record, error) {
+	tokenRecordBytes, err := os.ReadFile(tokenPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return token.Record{}, errTokenNotFound
+		}
+
+		return token.Record{}, fmt.Errorf("read token file: %w", err)
+	}
+
+	var tokenRecord token.Record
+	if err := json.Unmarshal(tokenRecordBytes, &tokenRecord); err != nil {
+		return token.Record{}, fmt.Errorf("unmarshal token record: %w", err)
+	}
+
+	return tokenRecord, nil
+}
+
+func writeTokenRecord(tokenPath string, tokenRecord token.Record) error {
+	tokenRecordBytes, err := json.Marshal(tokenRecord)
+	if err != nil {
+		return fmt.Errorf("marshal token record: %w", err)
+	}
+
+	if err := os.WriteFile(tokenPath, tokenRecordBytes, 0600); err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+
+	return nil
 }
 
 func isLoopback(cfg config.Config) (bool, error) {

@@ -335,7 +335,7 @@ When you run `octoplex server start`:
 * `--auth=token`: always require an API token, even on loopback.
 * `--auth=none`: disable authentication completely, **but only for localhost binds**. If you set `--auth=none` with any non-loopback API listen addresses you must also pass `--insecure-allow-no-auth` to acknowledge the risk; otherwise the server refuses to start.
 
-> **:information_source: Tip** To regenerate a new API token, delete `token.txt` from the Octoplex data directory, and restart the server. See the `--data-dir` option in [server flags](#server-flags).
+> **:information_source: Tip** To regenerate a new API token, delete `api-token.json` from the Octoplex data directory, and restart the server. See the `--data-dir` option in [server flags](#server-flags).
 
 ### Incoming streams
 
