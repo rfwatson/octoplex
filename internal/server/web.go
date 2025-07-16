@@ -1,6 +1,11 @@
 package server
 
 import (
+	_ "embed"
+	"encoding/json"
+	"fmt"
+	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -17,52 +22,105 @@ const (
 )
 
 // TODO: improve error handling
-func webHandler(cfg config.Config, credentialsMode CredentialsMode, tokenStore TokenStore, logger *slog.Logger) http.Handler {
+func newWebHandler(cfg config.Config, internalAPI *Server, credentialsMode CredentialsMode, tokenStore TokenStore, logger *slog.Logger) (http.Handler, error) {
 	mux := http.NewServeMux()
 
-	if credentialsMode != CredentialsModeDisabled {
-		mux.Handle("POST /session", handleSessionCreate(cfg, tokenStore, logger))
-		mux.Handle("POST /session/destroy", handleSessionDestroy(cfg, tokenStore, logger))
+	mux.Handle("POST /session", handleSessionCreate(cfg, credentialsMode, tokenStore, logger))
+	mux.Handle("POST /session/destroy", handleSessionDestroy(cfg, tokenStore, logger))
+	mux.Handle("/ws", newWebSocketProxy(cfg, internalAPI, credentialsMode, tokenStore, logger).Handler())
+
+	if serveAssets {
+		subFS, err := fs.Sub(assetsFS, "assets")
+		if err != nil {
+			return nil, fmt.Errorf("sub FS: %w", err)
+		}
+
+		mux.Handle("/", http.FileServer(http.FS(subFS)))
+	} else {
+		logger.Info("Serving assets is disabled, no static files will be served")
 	}
 
-	return mux
+	return defaultHeaders(mux), nil
 }
 
-func handleSessionCreate(cfg config.Config, tokenStore TokenStore, logger *slog.Logger) http.HandlerFunc {
+func handleSessionCreate(cfg config.Config, credentialsMode CredentialsMode, tokenStore TokenStore, logger *slog.Logger) http.HandlerFunc {
+	type request struct {
+		Password string `json:"password"`
+	}
+
+	type response struct {
+		Success  bool   `json:"success"`
+		Error    string `json:"error,omitzero"`
+		Field    string `json:"field,omitzero"`
+		Redirect string `json:"redirect,omitzero"`
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		adminPassword, err := tokenStore.Get(storeKeyAdminPassword)
-		if err != nil {
-			logger.Error("Error retrieving admin password from store", "err", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Internal Server Error")) //nolint:errcheck
+		if credentialsMode == CredentialsModeDisabled {
+			logger.Warn("Session creation attempted in disabled credentials mode", "remote_addr", r.RemoteAddr)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(response{Success: false, Error: "Authentication disabled"}) //nolint:errcheck
 			return
 		}
 
-		matches, err := token.Matches(adminPassword, []byte(r.FormValue("password")))
+		adminPassword, err := tokenStore.Get(storeKeyAdminPassword)
+		if err != nil {
+			logger.Error("Error retrieving admin password from store", "err", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response{Success: false, Error: "Internal server error"}) //nolint:errcheck
+			return
+		}
+
+		reqBody, err := io.ReadAll(r.Body)
+		if err != nil {
+			logger.Error("Error reading request body", "err", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response{Success: false, Error: "Invalid request body"}) //nolint:errcheck
+			return
+		}
+
+		var req request
+		if err = json.Unmarshal(reqBody, &req); err != nil {
+			logger.Error("Error parsing request body", "err", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response{Success: false, Error: "Error parsing request body"}) //nolint:errcheck
+			return
+		}
+
+		matches, err := token.Matches(adminPassword, []byte(req.Password))
 		if err != nil {
 			logger.Error("Error comparing password", "err", err)
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Internal Server Error")) //nolint:errcheck
+			json.NewEncoder(w).Encode(response{Success: false, Error: "Internal server error"}) //nolint:errcheck
 			return
 		}
 
 		if !matches {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized")) //nolint:errcheck
+			json.NewEncoder(w).Encode(response{Success: false, Error: "Invalid password", Field: "password"}) //nolint:errcheck
 			return
 		}
 
 		sessionToken, err := generateSessionToken(cookieValidFor-time.Minute, tokenStore)
 		if err != nil {
 			logger.Error("Error generating session token", "err", err)
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Internal Server Error")) //nolint:errcheck
+			json.NewEncoder(w).Encode(response{Success: false, Error: "Internal server error"}) //nolint:errcheck
 			return
 		}
 
 		setSessionCookie(w, sessionToken, cfg.ServerURL.BaseURL)
-		w.Header().Set("Location", joinURLComponents(cfg.ServerURL.BaseURL, "/dashboard.html"))
-		w.WriteHeader(http.StatusSeeOther)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response{Success: true, Redirect: "/"}) //nolint:errcheck
 	}
 }
 
@@ -75,9 +133,18 @@ func handleSessionDestroy(cfg config.Config, tokenStore TokenStore, logger *slog
 			return
 		}
 		setSessionCookie(w, "", cfg.ServerURL.BaseURL)
-		w.Header().Set("Location", joinURLComponents(cfg.ServerURL.BaseURL, "/"))
+		w.Header().Set("Location", joinURLComponents(cfg.ServerURL.BaseURL, "/login.html"))
 		w.WriteHeader(http.StatusSeeOther)
 	}
+}
+
+func defaultHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-content-type-options", "nosniff")
+		w.Header().Set("x-frame-options", "DENY")
+		w.Header().Set("referrer-policy", "strict-origin-when-cross-origin")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func setSessionCookie(w http.ResponseWriter, sessionToken string, baseURL string) {

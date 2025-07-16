@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Build octoplex binary including embedded assets"
+
+set -euo pipefail
+
+pnpm --dir=frontend install
+pnpm --dir=frontend build
+rm -rf internal/server/assets/*
+cp -av frontend/dist/* internal/server/assets
+go build -tags assets -o octoplex .

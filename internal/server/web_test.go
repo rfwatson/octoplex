@@ -1,10 +1,10 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"strings"
 	"testing"
 	"time"
 
@@ -26,7 +26,8 @@ func TestWebHandlerSessionCreate(t *testing.T) {
 		sentPassword   string
 		tokenStoreFunc func(t *testing.T, tokenStore *mocks.TokenStore)
 		wantStatus     int
-		wantLocation   string
+		wantSuccess    bool
+		wantRedirect   string
 		wantCookie     bool
 		wantSecure     bool
 	}{
@@ -40,8 +41,9 @@ func TestWebHandlerSessionCreate(t *testing.T) {
 				tokenStore.EXPECT().Get(storeKeyAdminPassword).Return(token, nil)
 				tokenStore.EXPECT().Put(storeKeySessionToken, mock.Anything).Return(nil)
 			},
-			wantStatus:   http.StatusSeeOther,
-			wantLocation: "/dashboard.html",
+			wantStatus:   http.StatusOK,
+			wantSuccess:  true,
+			wantRedirect: "/",
 			wantCookie:   true,
 			wantSecure:   true,
 		},
@@ -56,8 +58,9 @@ func TestWebHandlerSessionCreate(t *testing.T) {
 				tokenStore.EXPECT().Get(storeKeyAdminPassword).Return(token, nil)
 				tokenStore.EXPECT().Put(storeKeySessionToken, mock.Anything).Return(nil)
 			},
-			wantStatus:   http.StatusSeeOther,
-			wantLocation: "http://localhost:8080/dashboard.html",
+			wantStatus:   http.StatusOK,
+			wantSuccess:  true,
+			wantRedirect: "/",
 			wantCookie:   true,
 			wantSecure:   false,
 		},
@@ -72,8 +75,9 @@ func TestWebHandlerSessionCreate(t *testing.T) {
 				tokenStore.EXPECT().Get(storeKeyAdminPassword).Return(token, nil)
 				tokenStore.EXPECT().Put(storeKeySessionToken, mock.Anything).Return(nil)
 			},
-			wantStatus:   http.StatusSeeOther,
-			wantLocation: "https://www.example.com/dashboard.html",
+			wantStatus:   http.StatusOK,
+			wantSuccess:  true,
+			wantRedirect: "/",
 			wantCookie:   true,
 			wantSecure:   true,
 		},
@@ -88,8 +92,9 @@ func TestWebHandlerSessionCreate(t *testing.T) {
 				tokenStore.EXPECT().Get(storeKeyAdminPassword).Return(token, nil)
 				tokenStore.EXPECT().Put(storeKeySessionToken, mock.Anything).Return(nil)
 			},
-			wantStatus:   http.StatusSeeOther,
-			wantLocation: "https://www.example.com/dashboard.html",
+			wantStatus:   http.StatusOK,
+			wantSuccess:  true,
+			wantRedirect: "/",
 			wantCookie:   true,
 			wantSecure:   true,
 		},
@@ -121,31 +126,42 @@ func TestWebHandlerSessionCreate(t *testing.T) {
 		logger := testhelpers.NewTestLogger(t)
 
 		t.Run(tc.name, func(t *testing.T) {
-			values := url.Values{}
-			values.Set("password", tc.sentPassword)
+			reqBody, err := json.Marshal(map[string]string{"password": tc.sentPassword})
+			require.NoError(t, err)
 
-			req := httptest.NewRequestWithContext(t.Context(), "POST", "/session", strings.NewReader(values.Encode()))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req := httptest.NewRequestWithContext(t.Context(), "POST", "/session", bytes.NewReader(reqBody))
+			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 
 			var tokenStore mocks.TokenStore
 			defer tokenStore.AssertExpectations(t)
 			tc.tokenStoreFunc(t, &tokenStore)
 
-			handler := webHandler(
+			handler, err := newWebHandler(
 				config.Config{
 					ServerURL: config.ServerURL{BaseURL: tc.baseURL},
 					Web:       config.Web{Enabled: true},
 				},
+				nil, // internalAPI, not used in this test
 				CredentialsModeEnabled,
 				&tokenStore,
 				logger,
 			)
+			require.NoError(t, err)
 
 			handler.ServeHTTP(rec, req)
 
 			assert.Equal(t, tc.wantStatus, rec.Code)
-			assert.Equal(t, tc.wantLocation, rec.Header().Get("Location"))
+
+			type response struct {
+				Success  bool   `json:"success"`
+				Redirect string `json:"redirect"`
+			}
+
+			var resp response
+			require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+
+			assert.Equal(t, tc.wantRedirect, resp.Redirect)
 
 			if tc.wantCookie {
 				cookie := rec.Result().Cookies()[0]
@@ -173,25 +189,25 @@ func TestWebHandlerSessionDestroy(t *testing.T) {
 	}{
 		{
 			name:         "no base URL",
-			wantLocation: "/",
+			wantLocation: "/login.html",
 			wantSecure:   true,
 		},
 		{
 			name:         "http base URL",
 			baseURL:      "http://localhost:8080",
-			wantLocation: "http://localhost:8080/",
+			wantLocation: "http://localhost:8080/login.html",
 			wantSecure:   false,
 		},
 		{
 			name:         "https base URL",
 			baseURL:      "https://www.example.com",
-			wantLocation: "https://www.example.com/",
+			wantLocation: "https://www.example.com/login.html",
 			wantSecure:   true,
 		},
 		{
 			name:         "https base URL with a trailing slash",
 			baseURL:      "https://www.example.com/",
-			wantLocation: "https://www.example.com/",
+			wantLocation: "https://www.example.com/login.html",
 			wantSecure:   true,
 		},
 	}
@@ -210,16 +226,19 @@ func TestWebHandlerSessionDestroy(t *testing.T) {
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			rec := httptest.NewRecorder()
 
-			handler := webHandler(
+			handler, err := newWebHandler(
 				config.Config{
 					DataDir:   dataDir,
 					ServerURL: config.ServerURL{BaseURL: tc.baseURL},
 					Web:       config.Web{Enabled: true},
 				},
+				nil, // internalAPI, not used in this test
 				CredentialsModeEnabled,
 				&tokenStore,
 				logger,
 			)
+			require.NoError(t, err)
+
 			handler.ServeHTTP(rec, req)
 
 			assert.Equal(t, http.StatusSeeOther, rec.Code)

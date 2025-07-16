@@ -1,3 +1,6 @@
+[tools]
+node = "24"
+
 [env]
 GOTOOLCHAIN = "go1.24.4"
 CGO_ENABLED = "0"

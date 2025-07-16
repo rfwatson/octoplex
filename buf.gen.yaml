@@ -11,5 +11,8 @@ plugins:
   - remote: buf.build/connectrpc/go
     out: internal/generated/grpc
     opt: paths=source_relative
+  - local: ./frontend/node_modules/.bin/protoc-gen-es
+    out: frontend/generated
+    opt: target=ts,import_extension=ts
 inputs:
   - directory: proto

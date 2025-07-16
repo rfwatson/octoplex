@@ -1,0 +1,617 @@
+// Dark mode theme
+:root {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --border-color: #30363d;
+  --text-primary: #f0f6fc;
+  --text-secondary: #8b949e;
+  --text-muted: #848d97;
+  --accent-success: #238636;
+  --accent-warning: #bb8009;
+  --accent-danger: #da3633;
+  --accent-info: #0969da;
+  --shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --border-radius: 8px;
+  --border-radius-sm: 6px;
+}
+
+// Global overrides
+body {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica,
+    Arial, sans-serif !important;
+  line-height: 1.5;
+}
+
+// Redefine Bootstrap's CSS custom properties to work with dark theme
+:root {
+  // Override Bootstrap's CSS custom properties
+  --bs-body-bg: var(--bg-primary);
+  --bs-body-color: var(--text-primary);
+  --bs-secondary-bg: var(--bg-secondary);
+  --bs-tertiary-bg: var(--bg-tertiary);
+  --bs-border-color: var(--border-color);
+  --bs-secondary-color: var(--text-secondary);
+
+  // Bootstrap text utilities - these are the actual CSS custom properties Bootstrap uses
+  --bs-secondary: var(--text-secondary);
+  --bs-body-color-rgb: 240, 246, 252; // --text-primary in RGB
+  --bs-secondary-color-rgb: 139, 148, 158; // --text-secondary in RGB
+
+  // The key one for .text-muted
+  --bs-secondary-color: var(--text-muted);
+
+  // Some versions of Bootstrap might use these
+  --bs-gray-600: var(--text-muted);
+  --bs-text-muted: var(--text-muted);
+}
+
+// Navbar styling
+.navbar {
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow);
+
+  .navbar-brand {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 1.25rem;
+
+    &:hover,
+    &:focus {
+      color: var(--text-primary);
+    }
+  }
+
+  .nav-link {
+    color: var(--text-secondary);
+    font-weight: 500;
+
+    &:hover,
+    &:focus {
+      color: var(--text-primary);
+    }
+  }
+}
+
+// Card styling
+.card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius) !important;
+  box-shadow: var(--shadow);
+
+  .card-header {
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0 !important;
+    padding: 1rem 1.25rem;
+
+    h5 {
+      color: var(--text-primary);
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.025em;
+    }
+  }
+
+  .card-body {
+    padding: 1.25rem;
+  }
+}
+
+// Table styling
+.table {
+  color: var(--text-primary);
+  background-color: transparent;
+
+  th {
+    background-color: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    padding: 0.875rem 0.75rem;
+  }
+
+  td {
+    background-color: transparent;
+    border-color: var(--border-color);
+    padding: 0.875rem 0.75rem;
+    vertical-align: middle;
+    color: var(--text-primary);
+  }
+
+  tbody tr {
+    background-color: transparent;
+  }
+}
+
+// Fix any remaining Bootstrap table overrides
+.table-responsive {
+  background-color: transparent;
+}
+
+// Button styling
+.btn {
+  border-radius: var(--border-radius-sm) !important;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  border-width: 1px;
+
+  &.btn-outline-success {
+    border-color: var(--accent-success);
+    color: var(--accent-success);
+    background-color: transparent;
+
+    &:hover {
+      background-color: var(--accent-success);
+      border-color: var(--accent-success);
+      color: white;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(35, 134, 54, 0.2);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  &.btn-outline-danger {
+    border-color: var(--accent-danger);
+    color: var(--accent-danger);
+    background-color: transparent;
+
+    &:hover {
+      background-color: var(--accent-danger);
+      border-color: var(--accent-danger);
+      color: white;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(218, 54, 51, 0.2);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  &.btn-outline-secondary {
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+    background-color: transparent;
+
+    &:hover:not(:disabled) {
+      background-color: var(--bg-tertiary);
+      border-color: var(--text-secondary);
+      color: var(--text-primary);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(139, 148, 158, 0.15);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &.btn-primary {
+    background-color: var(--accent-info);
+    border-color: var(--accent-info);
+    color: white;
+
+    &:hover {
+      background-color: #0861cc;
+      border-color: #0861cc;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(9, 105, 218, 0.2);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+}
+
+// Professional destination action buttons
+.destination-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+
+  .btn {
+    padding: 0.375rem 0.875rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 6px;
+    border: 1px solid;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    min-width: auto;
+
+    // Remove all Bootstrap button group styling
+    &:not(:first-child) {
+      border-left-color: inherit;
+      margin-left: 0;
+    }
+
+    &:not(:last-child) {
+      border-right-color: inherit;
+    }
+
+    // Focus styles
+    &:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    // Success button (Start)
+    &.btn-success {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border-color: #10b981;
+      color: white;
+
+      &:hover:not(:disabled) {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        border-color: #059669;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+    }
+
+    // Danger button (Stop/Remove)
+    &.btn-danger {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      border-color: #ef4444;
+      color: white;
+
+      &:hover:not(:disabled) {
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        border-color: #dc2626;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+    }
+
+    // Secondary button (Edit)
+    &.btn-secondary {
+      background: var(--bg-tertiary);
+      border-color: var(--border-color);
+      color: var(--text-secondary);
+
+      &:hover:not(:disabled) {
+        background: #374151;
+        border-color: #4b5563;
+        color: var(--text-primary);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(55, 65, 81, 0.2);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+    }
+
+    // Remove button specific styling
+    &.btn-remove {
+      background: transparent;
+      border-color: #374151;
+      color: #9ca3af;
+      padding: 0.375rem;
+      min-width: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      &:hover:not(:disabled) {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: #ef4444;
+        color: #ef4444;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+
+      i {
+        font-size: 0.875rem;
+      }
+    }
+
+    // Disabled state
+    &:disabled {
+      background: var(--bg-tertiary);
+      border-color: var(--border-color);
+      color: var(--text-muted);
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+      opacity: 0.6;
+    }
+  }
+}
+
+// Remove old btn-group-sm styling
+.btn-group-sm {
+  display: none;
+}
+
+// Badge styling with improved contrast
+.badge {
+  border-radius: var(--border-radius-sm) !important;
+  font-weight: 500;
+  padding: 0.4em 0.65em;
+
+  &.bg-success {
+    background-color: var(--accent-success);
+    color: white;
+  }
+
+  &.bg-warning {
+    background-color: var(--accent-warning);
+    color: white;
+  }
+
+  &.bg-danger {
+    background-color: var(--accent-danger);
+    color: white;
+  }
+
+  &.bg-secondary {
+    background-color: var(--text-muted);
+    color: white;
+  }
+}
+
+// Custom styles for dashboard status badges
+.source-row {
+  padding: 0.5rem 0;
+
+  .badge {
+    display: inline-block;
+    white-space: normal;
+    word-wrap: break-word;
+    max-width: 100%;
+  }
+
+  small,
+  small.text-muted {
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    font-size: 0.75rem;
+  }
+}
+
+// Clean approach - just ensure our custom properties work
+.text-muted {
+  color: var(--text-muted);
+}
+
+// Form controls
+.form-control {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm) !important;
+  color: var(--text-primary);
+
+  &:focus {
+    background-color: var(--bg-tertiary);
+    border-color: var(--accent-info);
+    box-shadow: 0 0 0 0.2rem rgba(9, 105, 218, 0.25);
+    color: var(--text-primary);
+  }
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+}
+
+.form-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+// Input group styling
+.input-group {
+  .input-group-text {
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+  }
+}
+
+// Alert/Toast styling
+.alert {
+  border-radius: var(--border-radius) !important;
+  border: none !important;
+
+  &.alert-success {
+    background-color: rgba(35, 134, 54, 0.15);
+    color: #4ac26b;
+  }
+
+  &.alert-danger {
+    background-color: rgba(218, 54, 51, 0.15);
+    color: #ff6b6b;
+  }
+}
+
+// Container and layout improvements
+.container-fluid {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+// Toast styling
+.alert.position-fixed {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+
+  &.alert-success {
+    background-color: #1a3b2e;
+    border-color: #10b981;
+    color: #4ade80;
+  }
+
+  &.alert-danger {
+    background-color: #3a1a1a;
+    border-color: #ef4444;
+    color: #fb7185;
+  }
+}
+
+// Modal styling
+.modal {
+  .modal-dialog {
+    max-width: 500px;
+  }
+
+  .modal-content {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    border-radius: 12px !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+  }
+
+  .modal-header {
+    border-bottom-color: var(--border-color);
+    background-color: var(--bg-tertiary);
+    border-radius: 12px 12px 0 0 !important;
+
+    .modal-title {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .btn-close {
+      filter: invert(1) !important;
+    }
+  }
+
+  .modal-body {
+    color: var(--text-primary);
+
+    .form-label {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .form-control {
+      background-color: var(--bg-tertiary);
+      border-color: var(--border-color);
+      color: var(--text-primary);
+
+      &:focus {
+        background-color: var(--bg-tertiary);
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
+      }
+
+      &::placeholder {
+        color: var(--text-muted);
+      }
+    }
+
+    .form-text {
+      color: var(--text-muted);
+    }
+
+    .form-check-input {
+      background-color: var(--bg-tertiary);
+      border-color: var(--border-color);
+
+      &:checked {
+        background-color: #3b82f6;
+        border-color: #3b82f6;
+      }
+
+      &:focus {
+        box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
+      }
+    }
+
+    .form-check-label {
+      color: var(--text-primary);
+    }
+
+    .invalid-feedback {
+      color: #ef4444;
+    }
+
+    .form-control.is-invalid {
+      border-color: #ef4444;
+
+      &:focus {
+        border-color: #ef4444;
+        box-shadow: 0 0 0 0.2rem rgba(239, 68, 68, 0.25);
+      }
+    }
+  }
+
+  .modal-footer {
+    border-top-color: var(--border-color);
+    background-color: var(--bg-tertiary);
+    border-radius: 0 0 12px 12px !important;
+  }
+}
+
+// Smooth transitions
+* {
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+// Responsive improvements
+@media (max-width: 767.98px) {
+  .card-body {
+    padding: 1rem;
+  }
+
+  .source-row {
+    padding: 0.375rem 0;
+  }
+
+  .destination-actions {
+    gap: 0.375rem;
+
+    .btn {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+
+      &.btn-remove {
+        padding: 0.25rem;
+        min-width: 28px;
+      }
+    }
+  }
+
+  .table-responsive {
+    min-height: 300px;
+  }
+}

@@ -76,11 +76,11 @@ type ListenAddrs struct {
 
 // ServerURL holds the parsed components of a server URL.
 type ServerURL struct {
-	Raw      string
-	Scheme   string // "http://" or "https://"
-	Hostname string // e.g. "example.com"
-	Port     string // e.g. "443" or "80"
-	BaseURL  string // Full base URL for web component
+	Raw      string // Raw is the original URL string, e.g. "https://example.com:443/"
+	Scheme   string // Scheme is the HTTP scheme, e.g. "http://" or "https://"
+	Hostname string // Hostname is the domain part of the host, e.g. "example.com"
+	Port     string // Port is the stringified port, e.g. "443" or "80"
+	BaseURL  string // Base URL is the base URL for web component, including trailing slash.
 }
 
 // NewServerURL parses a raw URL string and returns a ServerURL struct.
@@ -118,7 +118,7 @@ func NewServerURL(raw string) (ServerURL, error) {
 
 // Web holds the configuration for the web interface.
 type Web struct {
-	Enabled bool
+	Enabled bool // Enabled is true if the web interface is enabled.
 }
 
 // Config holds the configuration for the application.

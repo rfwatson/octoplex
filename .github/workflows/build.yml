@@ -23,7 +23,7 @@ jobs:
         format: true
         lint: true
         breaking: false
-  build:
+  backend:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -67,10 +67,42 @@ jobs:
       run: mise run test_ci
     - name: test_integration
       run: mise run test_integration_ci
+  frontend:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    needs:
+    - lint
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+    - name: setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10
+    - name: setup node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: 'pnpm'
+        cache-dependency-path: 'frontend/pnpm-lock.yaml'
+    - name: install dependencies
+      run: pnpm install
+      working-directory: frontend
+    - name: typescript check
+      run: pnpm tsc --noEmit
+      working-directory: frontend
+    - name: prettier check
+      run: pnpm exec prettier --single-quote --check 'src/**/*.{ts,js,scss,css,html,json}'
+      working-directory: frontend
+    - name: build frontend
+      run: pnpm build
+      working-directory: frontend
   release:
     needs:
     - lint
-    - build
+    - backend
+    - frontend
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:

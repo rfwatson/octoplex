@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
+	"strings"
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/config"
@@ -217,4 +219,80 @@ func isLoopback(cfg config.Config) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// isAuthenticatedWithAPIToken checks if the request is authenticated using the provided
+// API credentials. It returns true, nil if the request is authenticated. If
+// there is an error then it is responsible for logging it.
+func isAuthenticatedWithAPIToken(authHeader string, tokenStore TokenStore, logger *slog.Logger) bool {
+	if authHeader == "" {
+		return false
+	}
+
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return false
+	}
+	rawToken, err := hex.DecodeString(strings.TrimPrefix(authHeader, "Bearer "))
+	if err != nil {
+		return false
+	}
+
+	apiToken, err := tokenStore.Get(storeKeyAPIToken)
+	if err != nil {
+		logger.Error("Error retrieving API token from store", "err", err)
+		return false
+	}
+
+	if isValid, err := token.Matches(apiToken, token.RawToken(rawToken)); err != nil || !isValid {
+		if err != nil {
+			logger.Error("Error authenticating", "err", err)
+		}
+
+		return false
+	}
+
+	return true
+}
+
+func isAuthenticatedWithSessionToken(cookieHeader string, tokenStore TokenStore, logger *slog.Logger) bool {
+	if cookieHeader == "" {
+		return false
+	}
+
+	cookies, err := http.ParseCookie(cookieHeader)
+	if err != nil {
+		return false
+	}
+
+	var cookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == cookieNameSession {
+			cookie = c
+			break
+		}
+	}
+	if cookie == nil {
+		return false
+	}
+
+	rawToken, err := hex.DecodeString(cookie.Value)
+	if err != nil {
+		return false
+	}
+
+	sessionToken, err := tokenStore.Get(storeKeySessionToken)
+	if err != nil {
+		logger.Error("Error retrieving session token from store", "err", err)
+		return false
+	}
+
+	if isValid, err := token.Matches(sessionToken, token.RawToken(rawToken)); err != nil || !isValid {
+		if err != nil {
+			logger.Error("Error authenticating", "err", err)
+		}
+
+		return false
+	}
+
+	return true
 }

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Octoplex Dashboard</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <style>
+      .favicon-header {
+        border-radius: 4px;
+      }
+      
+      /* Custom responsive adjustments */
+      .table-responsive {
+        min-height: 400px;
+      }
+      
+      @media (max-width: 767.98px) {
+        .card-body {
+          padding: 0.75rem !important;
+        }
+        
+        .btn-group-sm .btn {
+          padding: 0.25rem 0.5rem;
+          font-size: 0.75rem;
+        }
+      }
+      
+      @media (min-width: 1200px) {
+        .container-fluid {
+          max-width: 1400px;
+          margin: 0 auto;
+        }
+      }
+      
+      /* Improve source panel spacing */
+      .source-row {
+        margin-bottom: 0.25rem;
+      }
+      
+      .source-row:last-child {
+        margin-bottom: 0;
+      }
+    </style>
+  </head>
+  <body class="d-flex flex-column min-vh-100">
+    <!-- Header -->
+    <nav class="navbar navbar-expand-lg navbar-dark border-bottom">
+      <div class="container-fluid">
+        <a class="navbar-brand fw-bold d-flex align-items-center" href="#">
+          <img src="/apple-touch-icon.png" alt="Octoplex" class="favicon-header me-2" style="width: 1.5rem; height: 1.5rem;">
+          Octoplex
+        </a>
+        <div class="navbar-nav ms-auto d-flex align-items-center">
+          <span id="connection-status" class="badge bg-secondary me-3">Connecting...</span>
+          <a class="nav-link" href="#" id="logout-link">Log out</a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Dashboard -->
+    <div class="container-fluid py-3">
+        <div class="row g-3">
+        <!-- Sidebar -->
+        <div class="col-12 col-lg-4 col-xl-3">
+          <!-- Source Panel -->
+          <div class="card mb-3">
+            <div class="card-header">
+              <h5 class="mb-0">Source</h5>
+            </div>
+            <div class="card-body">
+              <div class="row g-1">
+                <div class="col-4 source-row"><small class="text-muted">Status</small></div>
+                <div class="col-8 source-row" id="source-status">—</div>
+                <div class="col-4 source-row"><small class="text-muted">Tracks</small></div>
+                <div class="col-8 source-row" id="source-tracks">—</div>
+                <div class="col-4 source-row"><small class="text-muted">Health</small></div>
+                <div class="col-8 source-row" id="source-health">—</div>
+                <div class="col-4 source-row"><small class="text-muted">CPU %</small></div>
+                <div class="col-8 source-row" id="source-cpu">—</div>
+                <div class="col-4 source-row"><small class="text-muted">Mem MB</small></div>
+                <div class="col-8 source-row" id="source-mem">—</div>
+                <div class="col-4 source-row"><small class="text-muted">Rx Kbps</small></div>
+                <div class="col-8 source-row" id="source-rx">—</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Source URLs Panel -->
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0">Source URLs</h5>
+            </div>
+            <div class="card-body">
+              <!-- RTMP URL -->
+              <div class="mb-3" id="rtmp-url-section" style="display: none;">
+                <label class="form-label text-muted small">RTMP</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control font-monospace" id="rtmp-url-input" readonly>
+                  <button class="btn btn-outline-secondary" type="button" id="copy-rtmp-btn">
+                    Copy
+                  </button>
+                </div>
+              </div>
+              
+              <!-- RTMPS URL -->
+              <div class="mb-3" id="rtmps-url-section" style="display: none;">
+                <label class="form-label text-muted small">RTMPS</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control font-monospace" id="rtmps-url-input" readonly>
+                  <button class="btn btn-outline-secondary" type="button" id="copy-rtmps-btn">
+                    Copy
+                  </button>
+                </div>
+              </div>
+              
+              <div id="no-urls-message" class="text-muted small">
+                No source URLs available yet
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-12 col-lg-8 col-xl-9">
+          <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h5 class="mb-0">Destinations</h5>
+              <button class="btn btn-primary btn-sm" id="add-destination-btn">
+                + Add Destination
+              </button>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0" id="destinations-table">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Name</th>
+                      <th>Status</th>
+                      <th class="d-none d-md-table-cell">Container</th>
+                      <th class="d-none d-lg-table-cell">Health</th>
+                      <th class="d-none d-lg-table-cell">CPU %</th>
+                      <th class="d-none d-lg-table-cell">Mem MB</th>
+                      <th class="d-none d-xl-table-cell">Tx Kbps</th>
+                      <th width="120">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="destinations-tbody">
+                    <tr id="no-destinations-row">
+                      <td colspan="8" class="text-center text-muted py-4">
+                        <div class="d-flex flex-column align-items-center">
+                          <div class="mb-3" style="font-size: 2rem; opacity: 0.3;">
+                            📡
+                          </div>
+                          <p class="mb-2">No destinations configured</p>
+                          <small class="text-muted">Add a destination to start streaming</small>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Destination Form Modal -->
+    <div class="modal fade" id="destination-modal" tabindex="-1" aria-labelledby="destination-modal-label" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="destination-modal-label">Add Destination</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="destination-form" novalidate>
+              <div class="mb-3">
+                <label for="dest-name" class="form-label">Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="dest-name" name="name" placeholder="My stream" required>
+                <div class="invalid-feedback">Please provide a destination name.</div>
+              </div>
+              <div class="mb-3">
+                <label for="dest-url" class="form-label">RTMP URL <span class="text-danger">*</span></label>
+                <input type="url" class="form-control" id="dest-url" name="url" placeholder="rtmp://example.com/live/stream" required>
+                <div class="invalid-feedback">Please provide a valid stream URL.</div>
+              </div>
+              <div class="invalid-feedback" id="destination-error" style="display: none;">
+                <p class="mb-0">An error occurred while saving the destination. Please try again.</p>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="save-destination-btn">
+              <i class="bi bi-check-lg me-1"></i>Save Destination
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal fade" id="confirm-modal" tabindex="-1" aria-labelledby="confirm-modal-label" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="confirm-modal-label">Confirm Action</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p id="confirm-modal-message">Are you sure?</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-danger" id="confirm-modal-action">
+              <i class="bi bi-trash me-1"></i>Remove
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Logout Confirmation Modal -->
+    <div class="modal fade" id="logout-modal" tabindex="-1" aria-labelledby="logout-modal-label" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="logout-modal-label">Log Out</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>Are you sure you want to log out?</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="logout-confirm-btn">Log out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto py-3 border-top" style="background-color: var(--bg-secondary);">
+      <div class="container-fluid">
+        <div class="row align-items-center">
+          <div class="col-md-6">
+            <div class="d-flex align-items-center text-muted">
+              <!-- <small></small> -->
+            </div>
+          </div>
+          <div class="col-md-6 text-md-end">
+            <div class="footer-links">
+              <a href="#" class="text-muted me-3" style="text-decoration: none; font-size: 0.875rem;">About</a>
+              <a href="https://github.com/rfwatson/octoplex" class="text-muted me-3" style="text-decoration: none; font-size: 0.875rem;" target="_blank">GitHub</a>
+              <a href="https://github.com/rfwatson/octoplex/blob/main/LICENSE" class="text-muted" style="text-decoration: none; font-size: 0.875rem;">License</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/index.ts"></script>
+  </body>
+</html>

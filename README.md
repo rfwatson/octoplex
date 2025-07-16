@@ -281,6 +281,7 @@ Flag|Alias|Modes|Env var|Default|Description
 `--listen`|`-l`|`server`|`OCTO_LISTEN`|`127.0.0.1:8080`|Listen address for non-TLS API and web traffic.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. Use `0:0.0.0:8080` to bind to all network interfaces. Pass `none` to disable entirely.
 `--listen-tls`|`-a`|`server`|`OCTO_LISTEN_TLS`|`127.0.0.1:8443`|Listen address for TLS API and web traffic.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. Use `0:0.0.0:8443` to bind to all network interfaces. Pass `none` to disable entirely.
 `--server-url`|`-u`|`server`|`OCTO_SERVER_URL`|`http://localhost:8080`|The public address of the server, including protocol, hostname and port if necessary.
+`--web`|`-w`|`server`|`OCTO_WEB`|`true`|Enable web server
 `--auth`||`server`|`OCTO_AUTH`|`auto`|Authentication mode for clients, one of `none`, `auto` and `token`. See [Security](#security).
 `--insecure-allow-no-auth`||`server`|`OCTO_INSECURE_ALLOW_NO_AUTH`|`false`|Allow `--auth=none` when bound to non-local addresses. See [Security](#security).
 `--tls-cert`||`server` `all-in-one`|`OCTO_TLS_CERT`||Path to custom TLS certifcate (PEM-encoded, must be valid for `hostname`). Used for gRPC and RTMPS connections.

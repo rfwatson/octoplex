@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Octoplex</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <style>
+      .server-form-container {
+        transition: opacity 0.3s ease-in-out;
+      }
+      
+      .server-form-container.dimmed {
+        opacity: 0.3;
+        pointer-events: none;
+      }
+      
+      .modal-backdrop {
+        background-color: rgba(0, 0, 0, 0.6);
+      }
+      
+      .favicon-header {
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body class="d-flex flex-column min-vh-100">
+    <div class="container flex-grow-1 d-flex flex-column justify-content-center align-items-center server-form-container" id="serverFormContainer">
+      <div class="text-center mb-5">
+        <h1 class="display-1 fw-bold mb-3">
+          <img src="/apple-touch-icon.png" alt="Octoplex" class="favicon-header" style="width: calc(0.7em + 5px); height: calc(0.7em + 5px); vertical-align: baseline; margin-right: 0px;">
+          Octoplex
+        </h1>
+        <p class="lead">Octoplex is a Docker-native live video restreamer.</p>
+      </div>
+      <form class="w-100" style="max-width: 400px;" id="serverForm">
+        <div class="mb-3">
+          <label for="serverAddress" class="form-label">Server address</label>
+          <input type="text" class="form-control" id="serverAddress" name="serverAddress" placeholder="Enter server address, e.g. https://yourdomain:8080" value="http://localhost:8080" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Continue</button>
+      </form>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal fade" id="login-modal" tabindex="-1" aria-labelledby="login-modal-label" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="login-modal-label">Log In</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form class="w-100" id="loginForm" method="POST" action="/session">
+              <div class="mb-3">
+                <label for="adminPassword" class="form-label">Admin password</label>
+                <input type="password" class="form-control" id="adminPassword" name="password" placeholder="Enter the admin password" required>
+                <div class="invalid-feedback" id="password-error">Please enter the admin password.</div>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">
+                <span id="login-submit-text">Log in</span>
+                <span id="login-submit-spinner" class="spinner-border spinner-border-sm ms-2" style="display: none;"></span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto py-3 border-top" style="background-color: var(--bg-secondary);">
+      <div class="container-fluid">
+        <div class="row align-items-center">
+          <div class="col-md-6">
+            <div class="d-flex align-items-center text-muted">
+              <!-- <small></small> -->
+            </div>
+          </div>
+          <div class="col-md-6 text-md-end">
+            <div class="footer-links">
+              <a href="#" class="text-muted me-3" style="text-decoration: none; font-size: 0.875rem;">About</a>
+              <a href="https://github.com/rfwatson/octoplex" class="text-muted me-3" style="text-decoration: none; font-size: 0.875rem;" target="_blank">GitHub</a>
+              <a href="https://github.com/rfwatson/octoplex/blob/main/LICENSE" class="text-muted" style="text-decoration: none; font-size: 0.875rem;">License</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/login.ts"></script>
+  </body>
+</html>
