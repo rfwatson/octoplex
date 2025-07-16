@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const serverAddrInput = form.elements.namedItem(
     'serverAddress',
   ) as HTMLInputElement;
-  serverAddrInput.value = getServerAddr() ?? '';
+  serverAddrInput.value = getServerAddr() ?? window.location.origin;
 
   const loginForm = document.getElementById('loginForm') as HTMLFormElement;
   loginForm.addEventListener('submit', handleLoginFormSubmit);
