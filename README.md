@@ -13,12 +13,14 @@ Octoplex is a Docker-native live video restreamer.
 * Add and remove destinations on-the-fly
 * Broadcast using OBS or any RTMP encoder
 * Automatic reconnections on drop
+* Web user interface with live metrics and health
 * Terminal UI with live metrics and health
-* Scriptable CLI for automation
+* Command-line interface for scripting and automation
 
 ## Table of Contents
 
 - [Quick start](#quick-start)
+- [User interfaces](#user-interfaces)
 - [How it works](#how-it-works)
 - [Installation](#installation)
   - [Docker Engine (only if you'll run Octoplex locally)](#docker-engine-only-if-youll-run-octoplex-locally)
@@ -41,9 +43,10 @@ Octoplex is a Docker-native live video restreamer.
   - [Server flags](#server-flags)
   - [Client flags](#client-flags)
   - [All-in-one mode](#all-in-one-mode)
+- [Web interface](#web-interface)
 - [Security](#security)
   - [TLS](#tls)
-  - [API tokens](#api-tokens)
+  - [Admin password and API tokens](#admin-password-and-api-tokens)
   - [Incoming streams](#incoming-streams)
 - [Restreaming with Octoplex](#restreaming-with-octoplex)
   - [Restreaming with OBS](#restreaming-with-obs)
@@ -69,7 +72,7 @@ See the [Installation](#installation) section below.
 
 2. **Launch all-in-one mode**
 
-Starts the server _and_ the terminal UI in a single process &mdash; ideal for local testing.
+Starts the server and the terminal UI in a single process &mdash; ideal for local testing.
 
 ```shell
 octoplex run
@@ -89,8 +92,20 @@ Or, if your encoder supports **RTMPS**:
 rtmps://localhost:1936/live        # self-signed TLS certificate by default
 ```
 
-That's it &mdash; your local restreamer is live.
-Add destinations and start relaying from the TUI or CLI; see [Interacting with Octoplex](#interacting-with-octoplex).
+That's it: your local restreamer is live. :tada:
+
+## User interfaces
+
+Octoplex provides two interactive user interfaces with equivalent functionality:
+
+* **Terminal UI** - Launch in your terminal for a text-based interface with real-time metrics and interactive controls.
+* **Web UI** - Launch in your browser for a graphical user interface.
+
+If you followed the [Quick Start](#quick-start) section, then you've already
+launched the terminal UI! You can try out the web interface now by visiting
+[http://localhost:8080](http://localhost:8080).
+
+See [Web interface](#web-interface) for more.
 
 ## How it works
 
@@ -262,6 +277,7 @@ Subcommand|Description
 `octoplex run`|Launch both server and client in a single process
 `octoplex server start`|Start the Octoplex server
 `octoplex server stop`|Stop the Octoplex server
+`octoplex server credentials reset`|Regenerate API token and admin password, and print to stdout
 `octoplex client start`|Start the Octoplex TUI client
 `octoplex client destination list`|List existing destinations
 `octoplex client destination add`|Add a destination
@@ -277,7 +293,7 @@ Subcommand|Description
 Flag|Alias|Modes|Env var|Default|Description
 ---|---|---|---|---|---
 `--help`|`-h`|All|||Show help
-`--data-dir`||`server` `all-in-one`|`OCTO_DATA_DIR`|`$HOME/.local/state/octoplex` (Linux) or`$HOME/Library/Caches/octoplex` (macOS)|Directory for storing persistent state and logs
+`--data-dir`||`server` `all-in-one` `credentials`|`OCTO_DATA_DIR`|`$HOME/.local/state/octoplex` (Linux) or`$HOME/Library/Caches/octoplex` (macOS)|Directory for storing persistent state and logs
 `--listen`|`-l`|`server`|`OCTO_LISTEN`|`127.0.0.1:8080`|Listen address for non-TLS API and web traffic.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. Use `0:0.0.0:8080` to bind to all network interfaces. Pass `none` to disable entirely.
 `--listen-tls`|`-a`|`server`|`OCTO_LISTEN_TLS`|`127.0.0.1:8443`|Listen address for TLS API and web traffic.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. Use `0:0.0.0:8443` to bind to all network interfaces. Pass `none` to disable entirely.
 `--server-url`|`-u`|`server`|`OCTO_SERVER_URL`|`http://localhost:8080`|The public address of the server, including protocol, hostname and port if necessary.
@@ -299,7 +315,7 @@ Flag|Alias|Modes|Env var|Default|Description
 
 Flag|Alias|Default|Description
 ---|---|---|---
-`--help`|`-h`||||Show help
+`--help`|`-h`||Show help
 `--host`|`-H`|`localhost:8443`|Remote Octoplex server to connect to
 `--tls-skip-verify`|`-k`|`false`|Skip TLS certificate verification (insecure)
 `--api-token`|`-t`||API token. See [Security](#security).
@@ -309,34 +325,47 @@ Flag|Alias|Default|Description
 
 :information_source: When running in all-in-one mode (`octoplex run`) some flags may be overridden or unavailable.
 
+## Web interface
+
+Octoplex provides a built-in web interface that allows you to manage your live streams from any browser.
+
+> **:information_source: Note:** The web interface is enabled by default. To disable it, launch Octoplex with `octoplex server start --web=false`.
+
+The web interface is served from your server URL. By default this is
+`http://localhost:8080` (or `https://localhost:8443`) and can be configured to
+a custom URL with the `--server-url` flag (or `OCTO_SERVER_URL` environment
+variable. See [Server flags](#server-flags) for more details.
+
 ## Security
 
 Read this section before putting Octoplex on any network you don't fully control.
 
-### TLS
+### Authentication
 
-By default, the Octoplex server listens for HTTP and API traffic on ports 8080
-(plain text) and 8443 (TLS with a self-signed certificate). Both listeners are
-bound to 127.0.0.1 unless explicitly configured otherwise. See [Server
-flags](#server-flags) for full configuration options.
+Octoplex automatically protects its internal API **and** web interface whenever
+it binds to anything other than localhost.
 
-When deploying on untrusted networks, ensure that plain-text ports are only
-accessible behind a TLS-enabled reverse proxy. To disable non-TLS listeners
-entirely, use `--listen=none` with `octoplex server start`, or set the
-`OCTO_LISTEN=none` environment variable.
-
-### API tokens
-
-Octoplex automatically protects its internal API whenever it binds to anything other
-than localhost.
+> **:information_source: Tip:** Octoplex never requires authentication in all-in-mode mode (`octoplex run`) which is designed for quick, secure local testing.
 
 When you run `octoplex server start`:
 
-* `--auth=auto` (the default): if the API is bound only to **localhost/loopback addresses**, Octoplex requires no authentication; if it's bound to **any other network interface** the server securely generates a random API token, logs it once on startup, hashes it to disk, and requires every client call to include `--api-token "<API_TOKEN>"`.
-* `--auth=token`: always require an API token, even on loopback.
+* `--auth=auto` (the default): if the API is bound only to **localhost/loopback addresses**, Octoplex requires no authentication; if it's bound to **any other network interface** then both the web interface and API require authentication. See [Admin password and API tokens](#admin-password-and-api-tokens).
+* `--auth=token`: always require authentication, even on loopback.
 * `--auth=none`: disable authentication completely, **but only for localhost binds**. If you set `--auth=none` with any non-loopback API listen addresses you must also pass `--insecure-allow-no-auth` to acknowledge the risk; otherwise the server refuses to start.
 
-> **:information_source: Tip** To regenerate a new API token, delete `api-token.json` from the Octoplex data directory, and restart the server. See the `--data-dir` option in [server flags](#server-flags).
+### Admin password and API tokens
+
+The first time Octoplex server starts with authentication enabled it generates and securely stores:
+
+* an admin password - for accessing the web interface
+* an API token - for the terminal UI and CLI
+
+They are both printed to the logs exactly once, on first startup. After this, you won't be able to retrieve them again, but you can regenerate them:
+
+```shell
+octoplex server credentials reset     # add --data-dir "<YOUR_DATA_DIR>" if needed
+# { "api_token": "foo", "admin_password": "bar" }
+```
 
 ### Incoming streams
 
@@ -350,6 +379,18 @@ octoplex server start --stream-key "<YOUR_UNIQUE_STREAM_KEY>" ...
 ```
 
 See [server flags](#server-flags) for more.
+
+### TLS
+
+By default, the Octoplex server listens for HTTP and API traffic on ports 8080
+(plain text) and 8443 (TLS with a self-signed certificate). Both listeners are
+bound to 127.0.0.1 unless explicitly configured otherwise. See [Server
+flags](#server-flags) for full configuration options.
+
+When deploying on untrusted networks, ensure that plain-text ports are only
+accessible behind a TLS-enabled reverse proxy. To disable non-TLS listeners
+entirely, use `--listen=none` with `octoplex server start`, or set the
+`OCTO_LISTEN=none` environment variable.
 
 ## Restreaming with Octoplex
 
