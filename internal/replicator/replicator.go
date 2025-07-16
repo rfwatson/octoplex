@@ -97,7 +97,7 @@ func (a *Actor) StartDestination(url string) <-chan State {
 		a.nextIndex++
 		a.currURLs[url] = struct{}{}
 
-		a.logger.Info("Starting live stream", "url", url)
+		a.logger.Info("Starting live stream")
 
 		containerStateC, errC := a.containerClient.RunContainer(a.ctx, container.RunContainerParams{
 			Name: componentName + "-" + strconv.Itoa(a.nextIndex),
@@ -175,7 +175,7 @@ func (a *Actor) StopDestination(url string) {
 			return
 		}
 
-		a.logger.Info("Stopping live stream", "url", url)
+		a.logger.Info("Stopping live stream")
 
 		if err := a.containerClient.RemoveContainers(
 			a.ctx,
@@ -185,7 +185,7 @@ func (a *Actor) StopDestination(url string) {
 			}),
 		); err != nil {
 			// TODO: error handling
-			a.logger.Error("Failed to stop live stream", "url", url, "err", err)
+			a.logger.Error("Failed to stop live stream", "err", err)
 		}
 
 		delete(a.currURLs, url)

@@ -435,7 +435,7 @@ func (a *App) handleCommand(
 			return nil, event.AddDestinationFailedEvent{URL: c.URL, Err: err}, nil
 		}
 		a.handlePersistentStateUpdate(state)
-		a.logger.Info("Destination added", "id", destinationID, "name", c.DestinationName, "url", c.URL)
+		a.logger.Info("Destination added", "id", destinationID, "name", c.DestinationName)
 		return event.DestinationAddedEvent{ID: destinationID}, nil, nil
 	case event.CommandUpdateDestination:
 		if isLive(state, c.ID) {
@@ -464,7 +464,7 @@ func (a *App) handleCommand(
 			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Err: err}, nil
 		}
 		a.handlePersistentStateUpdate(state)
-		a.logger.Info("Destination updated", "id", c.ID, "name", dest.Name, "url", dest.URL)
+		a.logger.Info("Destination updated", "id", c.ID, "name", dest.Name)
 		return event.DestinationUpdatedEvent{ID: c.ID}, nil, nil
 	case event.CommandRemoveDestination:
 		newState := a.store.Get()
@@ -488,7 +488,7 @@ func (a *App) handleCommand(
 			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: err}, nil
 		}
 		a.handlePersistentStateUpdate(state)
-		a.logger.Info("Destination removed", "id", c.ID, "name", dest.Name, "url", dest.URL)
+		a.logger.Info("Destination removed", "id", c.ID, "name", dest.Name)
 		return event.DestinationRemovedEvent{ID: c.ID}, nil, nil //nolint:staticcheck
 	case event.CommandStartDestination:
 		destIndex := slices.IndexFunc(state.Destinations, func(d domain.Destination) bool {
@@ -505,7 +505,7 @@ func (a *App) handleCommand(
 
 		dest := state.Destinations[destIndex]
 		doneC := repl.StartDestination(dest.URL)
-		a.logger.Info("Destination started", "id", c.ID, "name", dest.Name, "url", dest.URL)
+		a.logger.Info("Destination started", "id", c.ID, "name", dest.Name)
 		go func() {
 			select {
 			case state := <-doneC:
@@ -529,7 +529,7 @@ func (a *App) handleCommand(
 		}
 
 		repl.StopDestination(state.Destinations[destIndex].URL)
-		a.logger.Info("Destination stopped", "id", c.ID, "name", state.Destinations[destIndex].Name, "url", state.Destinations[destIndex].URL)
+		a.logger.Info("Destination stopped", "id", c.ID, "name", state.Destinations[destIndex].Name)
 		return event.DestinationStoppedEvent{ID: c.ID}, nil, nil //nolint:staticcheck
 	case event.CommandCloseOtherInstance:
 		if err := closeOtherInstances(ctx, containerClient); err != nil {
