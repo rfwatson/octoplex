@@ -14,8 +14,11 @@ jobs:
       contents: read
     steps:
     - uses: actions/checkout@v4
-    - uses: ludeeus/action-shellcheck@2.0.0
-    - uses: actions/checkout@v4
+    - uses: jdx/mise-action@v2
+      with:
+        experimental: true
+    - name: shellcheck
+      run: shellcheck ./mise/tasks/*
     - uses: bufbuild/buf-action@v1
       with:
         push: false
@@ -30,11 +33,6 @@ jobs:
     needs:
     - lint
     steps:
-    - name: install mise
-      run: |
-        curl https://mise.run | sh
-        echo "$HOME/.local/share/mise/bin" >> $GITHUB_PATH
-        echo "$HOME/.local/share/mise/shims" >> $GITHUB_PATH
     - name: install OS dependencies
       run: |
         sudo apt-get -y update && \
@@ -47,6 +45,9 @@ jobs:
         ffmpeg-version: release
     - name: checkout
       uses: actions/checkout@v4
+    - uses: jdx/mise-action@v2
+      with:
+        experimental: true
     - name: Setup Go 1.24.5
       uses: actions/setup-go@v5
       with:
@@ -59,6 +60,8 @@ jobs:
       run: mise run check_goimports
     - name: check_gomod
       run: mise run check_gomod
+    - name: check_gogenerate
+      run: mise run check_gogenerate
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v7
       with:
@@ -76,16 +79,9 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v4
-    - name: setup pnpm
-      uses: pnpm/action-setup@v4
+    - uses: jdx/mise-action@v2
       with:
-        version: 10
-    - name: setup node
-      uses: actions/setup-node@v4
-      with:
-        node-version: '24'
-        cache: 'pnpm'
-        cache-dependency-path: 'frontend/pnpm-lock.yaml'
+        experimental: true
     - name: install dependencies
       run: pnpm install
       working-directory: frontend
@@ -113,6 +109,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+      - name: install dependencies
+        run: pnpm install
+        working-directory: frontend
       - name: Setup Go 1.24.5
         uses: actions/setup-go@v5
         with:

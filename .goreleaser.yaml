@@ -2,12 +2,7 @@ version: 2
 
 before:
   hooks:
-    - go mod tidy
     - go generate ./...
-    - pnpm --dir=frontend install --frozen-lockfile
-    - pnpm --dir=frontend run build
-    - rm -rf internal/server/assets/*
-    - cp -av frontend/dist/* internal/server/assets
 
 builds:
   - env:

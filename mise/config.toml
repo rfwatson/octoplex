@@ -1,54 +1,70 @@
 [tools]
 node = "24"
+buf = "1"
+shellcheck = "latest"
+
+[hooks]
+postinstall = 'corepack enable'
+
+[settings]
+experimental = true
 
 [env]
 GOTOOLCHAIN = "go1.24.5"
 CGO_ENABLED = "0"
+_.path = ["{{config_root}}/frontend/node_modules/.bin"]
+
+[tasks.pnpm_install]
+description = "Install frontend dependencies"
+dir = "{{config_root}}/frontend"
+run = "pnpm install"
+sources = ["{{config_root}}/frontend/package.json"]
+outputs = ["{{config_root}}/frontend/node_modules/.pnpm/lock.yaml"]
 
 [tasks.test]
 description = "Run tests"
-dir = "{{cwd}}"
+dir = "{{config_root}}"
 run = "go test -v ./..."
 alias = "t"
 
 [tasks.test_integration]
 description = "Run integration tests"
-dir = "{{cwd}}"
+dir = "{{config_root}}"
 run = "go test -v -count 1 -p 1 -tags=integration -run TestIntegration ./..."
 alias = "ti"
 
 [tasks.test_ci]
 description = "Run tests in CI"
-dir = "{{cwd}}"
+dir = "{{config_root}}"
 run = "go test -v -count 1 -race ./..."
 env = { CGO_ENABLED = "1" }
 
 [tasks.test_integration_ci]
 description = "Run integration tests in CI"
-dir = "{{cwd}}"
+dir = "{{config_root}}"
 run = "go test -v -count 1 -race -p 1 -tags=integration -run TestIntegration ./..."
 env = { CGO_ENABLED = "1" }
 
 [tasks.lint]
 description = "Run linters"
-dir = "{{cwd}}"
+dir = "{{config_root}}"
 run = "golangci-lint run"
 alias = "l"
 
 [tasks.fmt]
 description = "Run formatter"
-dir = "{{cwd}}"
+dir = "{{config_root}}"
 run = "goimports -w ."
 alias = "f"
 
 [tasks.generate_mocks]
 description = "Generate mocks"
-dir = "{{cwd}}"
+dir = "{{config_root}}"
 run = "go tool mockery"
 alias = "m"
 
 [tasks.generate_proto]
 description = "Generate gRPC files from proto"
-dir = "{{cwd}}"
+dir = "{{config_root}}"
 run = "buf generate"
 alias = "p"
