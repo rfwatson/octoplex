@@ -210,3 +210,22 @@ func TestInitCredentials(t *testing.T) {
 		})
 	}
 }
+
+func TestResetCredentials(t *testing.T) {
+	dataDir := t.TempDir()
+	cfg := config.Config{
+		DataDir: dataDir,
+	}
+	var tokenStore mocks.TokenStore
+	defer tokenStore.AssertExpectations(t)
+	tokenStore.EXPECT().Delete(storeKeyAPIToken).Return(nil)
+	tokenStore.EXPECT().Delete(storeKeyAdminPassword).Return(nil)
+	tokenStore.EXPECT().Delete(storeKeySessionToken).Return(nil)
+	tokenStore.EXPECT().Put(storeKeyAPIToken, mock.Anything).Return(nil)
+	tokenStore.EXPECT().Put(storeKeyAdminPassword, mock.Anything).Return(nil)
+
+	apiToken, adminPassword, err := ResetCredentials(cfg, &tokenStore)
+	require.NoError(t, err)
+	assert.NotEmpty(t, apiToken)
+	assert.NotEmpty(t, adminPassword)
+}

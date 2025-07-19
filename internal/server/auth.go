@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -153,24 +154,33 @@ func initAdminPassword(tokenStore TokenStore, logger *slog.Logger) error {
 		return nil
 	}
 
-	const passwordLenBytes = 8 // length of raw password in bytes
-	rawPasswordBytes, err := token.GenerateRawToken(passwordLenBytes)
+	rawPassword, err := generateAdminPassword(tokenStore)
 	if err != nil {
-		return fmt.Errorf("generate raw token: %w", err)
-	}
-	rawPassword := base64.RawStdEncoding.EncodeToString(rawPasswordBytes)
-
-	adminPassword, err := token.New([]byte(rawPassword), time.Time{}) // passwords do not expire
-	if err != nil {
-		return fmt.Errorf("create token: %w", err)
-	}
-
-	if err := tokenStore.Put(storeKeyAdminPassword, adminPassword); err != nil {
-		return fmt.Errorf("write token: %w", err)
+		return fmt.Errorf("generate admin password: %w", err)
 	}
 
 	logger.Info(fmt.Sprintf("New admin password generated. Store it now - it will not be shown again. ADMIN PASSWORD: %s", rawPassword))
 	return nil
+}
+
+func generateAdminPassword(tokenStore TokenStore) (token.RawToken, error) {
+	const passwordLenBytes = 8 // length of raw password in bytes
+	rawPasswordBytes, err := token.GenerateRawToken(passwordLenBytes)
+	if err != nil {
+		return nil, fmt.Errorf("generate raw token: %w", err)
+	}
+	rawPassword := token.RawToken(base64.RawStdEncoding.EncodeToString(rawPasswordBytes))
+
+	adminPassword, err := token.New(rawPassword, time.Time{}) // passwords do not expire
+	if err != nil {
+		return nil, fmt.Errorf("create token: %w", err)
+	}
+
+	if err := tokenStore.Put(storeKeyAdminPassword, adminPassword); err != nil {
+		return nil, fmt.Errorf("write token: %w", err)
+	}
+
+	return rawPassword, nil
 }
 
 func generateSessionToken(validFor time.Duration, tokenStore TokenStore) (string, error) {
@@ -295,4 +305,32 @@ func isAuthenticatedWithSessionToken(cookieHeader string, tokenStore TokenStore,
 	}
 
 	return true
+}
+
+// ResetCredentials resets the API token and the admin password. It returns the
+// raw token strings that can be presented to the user.
+func ResetCredentials(cfg config.Config, tokenStore TokenStore) (string, string, error) {
+	if err := tokenStore.Delete(storeKeyAPIToken); err != nil && !errors.Is(err, store.ErrTokenNotFound) {
+		return "", "", fmt.Errorf("delete API token: %w", err)
+	}
+
+	if err := tokenStore.Delete(storeKeyAdminPassword); err != nil && !errors.Is(err, store.ErrTokenNotFound) {
+		return "", "", fmt.Errorf("delete admin password: %w", err)
+	}
+
+	if err := tokenStore.Delete(storeKeySessionToken); err != nil && !errors.Is(err, store.ErrTokenNotFound) {
+		return "", "", fmt.Errorf("delete session token: %w", err)
+	}
+
+	apiToken, err := generateAPIToken(tokenStore)
+	if err != nil {
+		return "", "", fmt.Errorf("generate API token: %w", err)
+	}
+
+	adminPassword, err := generateAdminPassword(tokenStore)
+	if err != nil {
+		return "", "", fmt.Errorf("generate admin password: %w", err)
+	}
+
+	return hex.EncodeToString(apiToken), string(adminPassword), nil
 }

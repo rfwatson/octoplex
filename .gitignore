@@ -5,3 +5,4 @@ dist/
 /octoplex
 token.txt
 /internal/server/assets/*
+debug.test*

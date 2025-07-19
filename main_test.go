@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"regexp"
@@ -613,6 +614,33 @@ func TestIntegrationClientServerStream(t *testing.T) {
 			<-done
 		})
 	}
+}
+
+func TestResetCredentials(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	dataDir := t.TempDir()
+	var stdout, stderr concurrentBuffer
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		err := run(ctx, &stdout, &stderr, []string{"octoplex", "server", "credentials", "reset", "--data-dir", dataDir})
+		require.NoError(t, err)
+	}()
+
+	<-done
+
+	var output struct {
+		APIToken      string `json:"api_token"`
+		AdminPassword string `json:"admin_password"`
+	}
+
+	require.NoError(t, json.Unmarshal([]byte(stdout.String()), &output))
+	assert.NotEmpty(t, output.APIToken)
+	assert.NotEmpty(t, output.AdminPassword)
 }
 
 type concurrentBuffer struct {

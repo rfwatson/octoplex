@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -129,6 +130,51 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 						Action: func(ctx context.Context, c *cli.Command) error {
 							// Delegate to start command:
 							return c.Root().Command("server").Command("start").Action(ctx, c)
+						},
+					},
+					{
+						Name:        "credentials",
+						Usage:       "Manage server credentials",
+						Description: "Manage server credentials.",
+						Commands: []*cli.Command{
+							{
+								Name:        "reset",
+								Usage:       "Reset server credentials, and print them to stdout.",
+								Description: "Reset the server credentials, and print them to stdout.",
+								Flags:       []cli.Flag{flagDataDir()},
+								Action: func(ctx context.Context, c *cli.Command) error {
+									cfg, err := parseConfig(c)
+									if err != nil {
+										return fmt.Errorf("parse config: %w", err)
+									}
+
+									logger, err := buildServerLogger(cfg, stderr, true)
+									if err != nil {
+										return fmt.Errorf("build logger: %w", err)
+									}
+
+									apiToken, adminPassword, err := server.ResetCredentials(cfg, store.NewTokenStore(cfg.DataDir, logger))
+									if err != nil {
+										return fmt.Errorf("reset credentials: %w", err)
+									}
+
+									output := struct {
+										ApiToken      string `json:"api_token"`
+										AdminPassword string `json:"admin_password,omitzero"`
+									}{ApiToken: apiToken, AdminPassword: adminPassword}
+
+									bytes, err := json.MarshalIndent(output, "", "  ")
+									if err != nil {
+										return fmt.Errorf("marshal output: %w", err)
+									}
+
+									if _, err := stdout.Write(bytes); err != nil {
+										return fmt.Errorf("write: %w", err)
+									}
+
+									return nil
+								},
+							},
 						},
 					},
 				},
@@ -581,22 +627,7 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Category:    "Sources",
 			DefaultText: "127.0.0.1:1936",
 		},
-		&cli.StringFlag{
-			Name:     "data-dir",
-			Usage:    "Path to the data directory for storing state, logs, etc",
-			Category: "General",
-			DefaultText: func() string {
-				switch runtime.GOOS {
-				case "darwin":
-					return "$HOME/Library/Caches/octoplex/"
-				case "windows":
-					panic("not implemented")
-				default:
-					return "$HOME/.local/state/octoplex/"
-				}
-			}(),
-			Sources: cli.EnvVars("OCTO_DATA_DIR"),
-		},
+		flagDataDir(),
 		&cli.StringFlag{
 			Name:        "image-name-mediamtx",
 			Usage:       "OCI-compatible image name for the MediaMTX server",
@@ -611,6 +642,25 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			DefaultText: replicator.DefaultImageNameFFMPEG,
 			Sources:     cli.EnvVars("OCTO_IMAGE_NAME_FFMPEG"),
 		},
+	}
+}
+
+func flagDataDir() *cli.StringFlag {
+	return &cli.StringFlag{
+		Name:     "data-dir",
+		Usage:    "Path to the data directory for storing state, logs, etc",
+		Category: "General",
+		DefaultText: func() string {
+			switch runtime.GOOS {
+			case "darwin":
+				return "$HOME/Library/Caches/octoplex/"
+			case "windows":
+				panic("not implemented")
+			default:
+				return "$HOME/.local/state/octoplex/"
+			}
+		}(),
+		Sources: cli.EnvVars("OCTO_DATA_DIR"),
 	}
 }
 
