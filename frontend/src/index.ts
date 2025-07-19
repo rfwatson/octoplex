@@ -4,6 +4,12 @@ import { getServerAddr } from './helpers';
 import type { AppState, AppCommand, AppEvent } from './types.ts';
 import { WebSocketCommunicator } from './websocket-communicator.ts';
 
+enum StartState {
+  NOT_STARTED = 'not_started',
+  STARTING = 'starting',
+  STARTED = 'started',
+}
+
 class Dashboard {
   private communicator: WebSocketCommunicator | null = null;
   private state: AppState = {
@@ -30,6 +36,7 @@ class Dashboard {
     destinations: [],
   };
   private isConnected = false;
+  private destinationIdsToStartState: Map<string, StartState> = new Map();
 
   async init() {
     let serverAddr = getServerAddr();
@@ -78,10 +85,40 @@ class Dashboard {
     window.location.href = '/login.html';
   }
 
+  private getStartState(destinationId: string): StartState {
+    return (
+      this.destinationIdsToStartState.get(destinationId) ||
+      StartState.NOT_STARTED
+    );
+  }
+
+  private containerStatusToStartState(containerStatus: string): StartState {
+    switch (containerStatus) {
+      case 'pulling':
+      case 'created':
+        return StartState.STARTING;
+      case 'running':
+      case 'restarting':
+      case 'paused':
+      case 'removing':
+        return StartState.STARTED;
+      default:
+        return StartState.NOT_STARTED;
+    }
+  }
+
   private handleEvent(event: AppEvent) {
     switch (event.type) {
       case 'appStateChanged':
         this.state = event.state;
+
+        for (const dest of this.state.destinations) {
+          this.destinationIdsToStartState.set(
+            dest.id,
+            this.containerStatusToStartState(dest.container.status),
+          );
+        }
+
         this.updateUI();
         break;
 
@@ -114,6 +151,11 @@ class Dashboard {
         break;
       case 'destinationStreamExited':
         console.log(`Destination stream exited:`, event);
+
+        if (this.destinationIdsToStartState.has(event.id)) {
+          this.destinationIdsToStartState.set(event.id, StartState.NOT_STARTED);
+        }
+
         this.showToast(
           `Stream to ${event.name} exited: ${event.error}`,
           'error',
@@ -223,15 +265,38 @@ class Dashboard {
     }
   }
 
+  private handleDestinationClick(event: MouseEvent) {
+    const target = (event.target as HTMLElement).closest('button');
+    if (!target) {
+      return;
+    }
+    const destinationId = target.closest('tr')?.dataset.destinationId;
+    if (!destinationId) {
+      console.warn('No destination ID found in target');
+      return;
+    }
+
+    switch (target.dataset.buttonType) {
+      case 'start':
+        this.startDestination(destinationId);
+        break;
+      case 'stop':
+        this.stopDestination(destinationId);
+        break;
+      case 'edit':
+        this.editDestination(destinationId);
+        break;
+      case 'remove':
+        this.removeDestination(destinationId);
+        break;
+    }
+  }
+
   private updateDestinationsTable() {
     const tbody = document.getElementById('destinations-tbody');
     if (!tbody) return;
 
     const noDestRow = document.getElementById('no-destinations-row');
-
-    // Clear existing rows except the "no destinations" row
-    const existingRows = tbody.querySelectorAll('tr:not(#no-destinations-row)');
-    existingRows.forEach((row) => row.remove());
 
     if (this.state.destinations.length === 0) {
       if (noDestRow) noDestRow.style.display = '';
@@ -240,54 +305,105 @@ class Dashboard {
 
     if (noDestRow) noDestRow.style.display = 'none';
 
-    // Add destination rows
-    this.state.destinations.forEach((dest) => {
-      const row = document.createElement('tr');
+    // First, remove any rows that no longer have a corresponding destination.
+    for (const row of tbody.querySelectorAll('tr[data-destination-id]')) {
+      const destId = (row as HTMLTableRowElement).dataset.destinationId;
+      if (!this.state.destinations.some((d) => d.id === destId)) {
+        row.remove();
+      }
+    }
 
-      const isLive = dest.status === 'live';
+    // Add or update rows for each destination.
+    this.state.destinations.forEach((dest) => {
+      // Check if the row exists, and re-use it if so.
+      // This is to try to avoid dropped events when the table is updated.
+      let row = tbody.querySelector(
+        "tr[data-destination-id='" + dest.id + "']",
+      ) as HTMLTableRowElement | null;
+
+      const isLive = this.getStartState(dest.id) !== StartState.NOT_STARTED;
       const canStart = this.state.source.live && !isLive;
 
-      row.innerHTML = `
-        <td>${this.escapeHtml(dest.name)}</td>
-        <td>
-          ${
-            isLive
-              ? '<span class="badge bg-success"><i class="bi bi-play-fill me-1"></i>Sending</span>'
-              : dest.status === 'starting'
-                ? '<span class="badge bg-warning"><i class="bi bi-arrow-clockwise me-1"></i>Starting</span>'
-                : '<span class="badge bg-secondary"><i class="bi bi-stop-fill me-1"></i>Off-air</span>'
-          }
-        </td>
-        <td class="d-none d-md-table-cell">${dest.container.status || '—'}</td>
-        <td class="d-none d-lg-table-cell">${dest.status === 'live' ? 'healthy' : '—'}</td>
-        <td class="d-none d-lg-table-cell">${dest.container.status === 'running' ? Number(dest.container.cpuPercent).toFixed(1) : '—'}</td>
-        <td class="d-none d-lg-table-cell">${dest.container.status === 'running' ? (Number(dest.container.memoryUsageBytes) / 1000 / 1000).toFixed(1) : '—'}</td>
-        <td class="d-none d-xl-table-cell">${dest.container.status === 'running' ? Number(dest.container.txRate).toString() : '—'}</td>
+      if (!row) {
+        row = document.createElement('tr') as HTMLTableRowElement;
+        row.dataset.destinationId = dest.id;
+        row.innerHTML = `
+        <td></td>
+        <td></td>
+        <td class="d-none d-md-table-cell"></td>
+        <td class="d-none d-lg-table-cell"></td>
+        <td class="d-none d-lg-table-cell"></td>
+        <td class="d-none d-lg-table-cell"></td>
+        <td class="d-none d-xl-table-cell"></td>
         <td>
           <div class="destination-actions">
-            ${
-              isLive
-                ? `<button type="button" class="btn btn-danger" onclick="dashboard.stopDestination('${dest.id}')">
-                   <i class="bi bi-stop-fill me-1"></i>Stop
-                 </button>`
-                : canStart
-                  ? `<button type="button" class="btn btn-success" onclick="dashboard.startDestination('${dest.id}')">
-                     <i class="bi bi-play-fill me-1"></i>Start
-                   </button>`
-                  : `<button type="button" class="btn btn-secondary" disabled>
-                     <i class="bi bi-play-fill me-1"></i>Start
-                   </button>`
-            }
-            <button type="button" class="btn btn-secondary d-none d-sm-inline-block" onclick="dashboard.editDestination('${dest.id}')" ${isLive ? 'disabled' : ''}>
-              <i class="bi bi-pencil me-1"></i>Edit
-            </button>
-            <button type="button" class="btn btn-remove" onclick="dashboard.removeDestination('${dest.id}')" title="Remove destination">
-              <i class="bi bi-trash"></i>
-            </button>
+            <button type="button" class="btn btn-success" data-button-type="start"><i class="bi bi-play-fill me-1"></i>Start</button>
+            <button type="button" class="btn btn-secondary d-none d-sm-inline-block" data-button-type="edit"><i class="bi bi-pencil me-1"></i>Edit</button>
+            <button type="button" class="btn btn-remove" title="Remove destination" data-button-type="remove"><i class="bi bi-trash"></i></button>
           </div>
         </td>
       `;
-      tbody.appendChild(row);
+        tbody.appendChild(row);
+      }
+
+      row.querySelector('td:first-child')!.textContent = this.escapeHtml(
+        dest.name,
+      );
+
+      const statusEl = isLive
+        ? '<span class="badge bg-success"><i class="bi bi-play-fill me-1"></i>Sending</span>'
+        : dest.status === 'starting'
+          ? '<span class="badge bg-warning"><i class="bi bi-arrow-clockwise me-1"></i>Starting</span>'
+          : '<span class="badge bg-secondary"><i class="bi bi-stop-fill me-1"></i>Off-air</span>';
+      row.querySelector('td:nth-child(2)')!.innerHTML = statusEl;
+
+      row.querySelector('td:nth-child(3)')!.textContent =
+        dest.container.status || '—';
+
+      row.querySelector('td:nth-child(4)')!.textContent =
+        dest.status === 'live' ? 'healthy' : '—';
+
+      row.querySelector('td:nth-child(5)')!.textContent =
+        dest.container.status === 'running'
+          ? Number(dest.container.cpuPercent).toFixed(1)
+          : '—';
+
+      row.querySelector('td:nth-child(6)')!.textContent =
+        dest.container.status === 'running'
+          ? (Number(dest.container.memoryUsageBytes) / 1000 / 1000).toFixed(1)
+          : '—';
+
+      row.querySelector('td:nth-child(7)')!.textContent =
+        dest.container.status === 'running'
+          ? Number(dest.container.txRate).toString()
+          : '—';
+
+      const startStopButton = row.querySelector(
+        '.destination-actions button:first-child',
+      ) as HTMLButtonElement;
+      if (isLive) {
+        startStopButton.textContent = 'Stop';
+        startStopButton.className = 'btn btn-danger';
+        startStopButton.innerHTML = `<i class="bi bi-stop-fill me-1"></i>Stop`;
+        startStopButton.dataset.buttonType = 'stop';
+      } else if (canStart) {
+        startStopButton.textContent = 'Start';
+        startStopButton.disabled = false;
+        startStopButton.className = 'btn btn-success';
+        startStopButton.innerHTML = `<i class="bi bi-play fill me-1"></i>Start`;
+        startStopButton.dataset.buttonType = 'start';
+      } else {
+        startStopButton.textContent = 'Start';
+        startStopButton.className = 'btn btn-secondary';
+        startStopButton.innerHTML = `<i class="bi bi-play fill me-1"></i>Start`;
+        startStopButton.disabled = true;
+        startStopButton.dataset.buttonType = 'start';
+      }
+
+      const editButton = row.querySelector(
+        '.destination-actions button:nth-child(2)',
+      ) as HTMLButtonElement;
+      editButton.disabled = isLive;
     });
   }
 
@@ -344,6 +460,11 @@ class Dashboard {
     // Save destination button
     const saveBtn = document.getElementById('save-destination-btn');
     saveBtn?.addEventListener('click', () => this.saveDestination());
+
+    const tbody = document.getElementById('destinations-tbody');
+    tbody?.addEventListener('click', (e) => {
+      this.handleDestinationClick(e);
+    });
 
     // Copy URL buttons
     const copyRtmpBtn = document.getElementById('copy-rtmp-btn');
@@ -452,6 +573,10 @@ class Dashboard {
   }
 
   async startDestination(destinationId: string) {
+    if (this.getStartState(destinationId) !== StartState.NOT_STARTED) {
+      return;
+    }
+
     console.log('Start destination:', destinationId);
     await this.sendCommand({
       type: 'startDestination',
@@ -460,6 +585,10 @@ class Dashboard {
   }
 
   async stopDestination(destinationId: string) {
+    if (this.getStartState(destinationId) === StartState.NOT_STARTED) {
+      return;
+    }
+
     console.log('Stop destination:', destinationId);
     await this.sendCommand({
       type: 'stopDestination',
@@ -480,9 +609,14 @@ class Dashboard {
     const destination = this.state.destinations.find(
       (d) => d.id === destinationId,
     );
-    const isLive = destination?.status === 'live';
+    if (!destination) {
+      return;
+    }
 
-    const message = isLive
+    const started =
+      this.getStartState(destinationId) !== StartState.NOT_STARTED;
+
+    const message = started
       ? 'This destination is currently live. Force remove?'
       : 'Are you sure you want to remove this destination?';
 
@@ -495,7 +629,7 @@ class Dashboard {
     await this.sendCommand({
       type: 'removeDestination',
       id: destinationId,
-      force: isLive,
+      force: started,
     });
   }
 
@@ -636,13 +770,26 @@ class Dashboard {
     const formData = new FormData(form);
     const destinationId = form.dataset.destinationId;
 
+    const isUpdate = !!destinationId;
+    if (
+      isUpdate &&
+      this.destinationIdsToStartState.get(destinationId) !==
+        StartState.NOT_STARTED
+    ) {
+      this.showToast(
+        'You cannot update a destination while it is live.',
+        'error',
+      );
+      return;
+    }
+
     const data = {
       name: formData.get('name') as string,
       url: formData.get('url') as string,
     };
 
     try {
-      if (destinationId) {
+      if (isUpdate) {
         await this.sendCommand({
           type: 'updateDestination',
           id: destinationId,

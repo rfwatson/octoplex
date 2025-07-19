@@ -155,12 +155,7 @@ body {
       background-color: var(--accent-success);
       border-color: var(--accent-success);
       color: white;
-      transform: translateY(-1px);
       box-shadow: 0 2px 4px rgba(35, 134, 54, 0.2);
-    }
-
-    &:active {
-      transform: translateY(0);
     }
   }
 
@@ -173,12 +168,7 @@ body {
       background-color: var(--accent-danger);
       border-color: var(--accent-danger);
       color: white;
-      transform: translateY(-1px);
       box-shadow: 0 2px 4px rgba(218, 54, 51, 0.2);
-    }
-
-    &:active {
-      transform: translateY(0);
     }
   }
 
@@ -191,12 +181,7 @@ body {
       background-color: var(--bg-tertiary);
       border-color: var(--text-secondary);
       color: var(--text-primary);
-      transform: translateY(-1px);
       box-shadow: 0 2px 4px rgba(139, 148, 158, 0.15);
-    }
-
-    &:active {
-      transform: translateY(0);
     }
 
     &:disabled {
@@ -213,12 +198,7 @@ body {
     &:hover {
       background-color: #0861cc;
       border-color: #0861cc;
-      transform: translateY(-1px);
       box-shadow: 0 2px 4px rgba(9, 105, 218, 0.2);
-    }
-
-    &:active {
-      transform: translateY(0);
     }
   }
 }
@@ -265,12 +245,7 @@ body {
       &:hover:not(:disabled) {
         background: linear-gradient(135deg, #059669 0%, #047857 100%);
         border-color: #059669;
-        transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-      }
-
-      &:active {
-        transform: translateY(0);
       }
     }
 
@@ -283,12 +258,7 @@ body {
       &:hover:not(:disabled) {
         background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
         border-color: #dc2626;
-        transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-      }
-
-      &:active {
-        transform: translateY(0);
       }
     }
 
@@ -302,12 +272,7 @@ body {
         background: #374151;
         border-color: #4b5563;
         color: var(--text-primary);
-        transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(55, 65, 81, 0.2);
-      }
-
-      &:active {
-        transform: translateY(0);
       }
     }
 
@@ -326,12 +291,7 @@ body {
         background: rgba(239, 68, 68, 0.1);
         border-color: #ef4444;
         color: #ef4444;
-        transform: translateY(-1px);
         box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
-      }
-
-      &:active {
-        transform: translateY(0);
       }
 
       i {
