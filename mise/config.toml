@@ -2,7 +2,7 @@
 node = "24"
 
 [env]
-GOTOOLCHAIN = "go1.24.4"
+GOTOOLCHAIN = "go1.24.5"
 CGO_ENABLED = "0"
 
 [tasks.test]
