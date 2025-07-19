@@ -77,6 +77,9 @@ var (
 	clientTLSSkipVerify bool
 )
 
+//go:generate mise run build_assets
+//go:generate buf generate
+//go:generate go tool mockery
 func main() {
 	if err := run(context.Background(), os.Stdout, os.Stderr, os.Args); err != nil {
 		os.Exit(1)

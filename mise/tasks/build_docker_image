@@ -11,5 +11,6 @@ CONTEXTDIR="tmp/dockerbuild"
 TARGET="${IMAGENAME:-octoplex:latest}"
 
 mkdir -p $CONTEXTDIR
-go build -o $CONTEXTDIR/octoplex .
+go generate ./...
+go build -tags assets -o $CONTEXTDIR/octoplex .
 docker build -t "$TARGET" -f Dockerfile $CONTEXTDIR

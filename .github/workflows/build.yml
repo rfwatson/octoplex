@@ -47,6 +47,18 @@ jobs:
         ffmpeg-version: release
     - name: checkout
       uses: actions/checkout@v4
+    - name: setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10
+    - name: setup node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: 'pnpm'
+        cache-dependency-path: 'frontend/pnpm-lock.yaml'
+    - name: buf setup
+      uses: bufbuild/buf-setup-action@v1.50.0
     - name: Setup Go 1.24.5
       uses: actions/setup-go@v5
       with:
@@ -59,6 +71,8 @@ jobs:
       run: mise run check_goimports
     - name: check_gomod
       run: mise run check_gomod
+    - name: check_gogenerate
+      run: mise run check_gogenerate
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v7
       with:
@@ -122,6 +136,16 @@ jobs:
           sudo apt-get -y update && \
             sudo apt-get -y --no-install-recommends install \
               libx11-dev
+      - name: setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: 'frontend/pnpm-lock.yaml'
       - name: log in to ghcr.io
         uses: docker/login-action@v2
         with:
