@@ -4,6 +4,50 @@ Thanks for contributing to Octoplex!
 
 ## Development
 
+### Quick start
+
+1. Install Mise
+
+See https://mise.jdx.dev/installing-mise.html
+
+```shell
+curl https://mise.run | sh
+```
+
+2. Clone repo
+
+```shell
+git clone https://github.com/rfwatson/octoplex.git
+cd octoplex
+mise install
+go generate ./...
+```
+
+3. Run Octoplex
+
+Run the Go server:
+
+```shell
+go run . server start --server-url http://localhost:5173
+```
+
+In a different terminal, run the Vite dev server:
+
+```
+cd frontend/
+pnpm run dev
+```
+
+Now you can visit http://localhost:5173 to launch the web interface.
+
+4. Run the TUI client:
+
+In yet another terminal:
+
+```shell
+go run . client start --tls-skip-verify
+```
+
 ### Mise
 
 Octoplex uses [mise](https://mise.jdx.dev/installing-mise.html) as a task
@@ -19,17 +63,7 @@ Command|Shortcut|Description
 `mise run format`|`mise run f`|Run formatter
 `mise run generate_mocks`|`mise run m`|Re-generate mocks
 
-### Tests
-
-#### Integration tests
-
-The integration tests (mostly in `/internal/app/integration_test.go`) attempt
-to exercise the entire app, including launching containers and rendering the
-terminal output.
-
-Sometimes they can be flaky. Always ensure there are no stale Docker containers
-present from previous runs, and that nothing is listening or attempting to
-broadcast to localhost:1935 or localhost:1936.
+See `mise/config.yml` and `mise/tasks` for more.
 
 ## Opening a pull request
 
