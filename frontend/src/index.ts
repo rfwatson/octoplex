@@ -298,13 +298,6 @@ class Dashboard {
 
     const noDestRow = document.getElementById('no-destinations-row');
 
-    if (this.state.destinations.length === 0) {
-      if (noDestRow) noDestRow.style.display = '';
-      return;
-    }
-
-    if (noDestRow) noDestRow.style.display = 'none';
-
     // First, remove any rows that no longer have a corresponding destination.
     for (const row of tbody.querySelectorAll('tr[data-destination-id]')) {
       const destId = (row as HTMLTableRowElement).dataset.destinationId;
@@ -312,6 +305,13 @@ class Dashboard {
         row.remove();
       }
     }
+
+    if (this.state.destinations.length === 0) {
+      if (noDestRow) noDestRow.style.display = '';
+      return;
+    }
+
+    if (noDestRow) noDestRow.style.display = 'none';
 
     // Add or update rows for each destination.
     this.state.destinations.forEach((dest) => {
