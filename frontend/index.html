@@ -156,7 +156,7 @@
                             📡
                           </div>
                           <p class="mb-2">No destinations configured</p>
-                          <small class="text-muted">Add a destination to start streaming</small>
+                          <small class="text-muted">Add a destination to start re-streaming</small>
                         </div>
                       </td>
                     </tr>
@@ -181,12 +181,12 @@
             <form id="destination-form" novalidate>
               <div class="mb-3">
                 <label for="dest-name" class="form-label">Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="dest-name" name="name" placeholder="My stream" required>
+                <input type="text" class="form-control" id="dest-name" name="name" placeholder="e.g. YouTube" required>
                 <div class="invalid-feedback">Please provide a destination name.</div>
               </div>
               <div class="mb-3">
                 <label for="dest-url" class="form-label">RTMP URL <span class="text-danger">*</span></label>
-                <input type="url" class="form-control" id="dest-url" name="url" placeholder="rtmp://example.com/live/stream" required>
+                <input type="url" class="form-control" id="dest-url" name="url" placeholder="rtmp://rtmp.example.com/live" required>
                 <div class="invalid-feedback">Please provide a valid stream URL.</div>
               </div>
               <div class="invalid-feedback" id="destination-error" style="display: none;">
