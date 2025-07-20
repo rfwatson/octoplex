@@ -21,6 +21,12 @@ import (
 )
 
 // DefaultServerAddr is the default address for the client to connect to.
+//
+// This is the TLS address, which non-browser clients can connect to as long as
+// they disable TLS verification.
+//
+// Alternatively, the client can be configured to point to a plaintext listener
+// which is localhost:8080 by default.
 const DefaultServerAddr = "localhost:8443"
 
 // App is the client application.
