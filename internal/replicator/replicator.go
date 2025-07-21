@@ -115,9 +115,8 @@ func (a *Actor) StartDestination(url string) <-chan State {
 					container.LabelURL:       url,
 				},
 			},
-			HostConfig:         &typescontainer.HostConfig{NetworkMode: "default"},
-			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth1", Tx: "eth0"},
-			Logs:               container.LogConfig{Stderr: true},
+			HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
+			Logs:       container.LogConfig{Stderr: true},
 			ShouldRestart: func(_ int64, restartCount int, logs [][]byte, runningTime time.Duration) (bool, error) {
 				// Try to infer if the container failed to start.
 				//

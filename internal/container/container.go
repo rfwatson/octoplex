@@ -139,10 +139,10 @@ type stats struct {
 // getStats returns a channel that will receive container stats. The channel is
 // never closed, but any spawned goroutines will exit when the context is
 // cancelled.
-func (a *Client) getStats(containerID string, networkCountConfig NetworkCountConfig) <-chan stats {
+func (a *Client) getStats(containerID string) <-chan stats {
 	ch := make(chan stats)
 
-	go handleStats(a.ctx, containerID, a.apiClient, networkCountConfig, a.logger, ch)
+	go handleStats(a.ctx, containerID, a.apiClient, a.logger, ch)
 
 	return ch
 }
@@ -170,12 +170,6 @@ func (a *Client) getLogs(ctx context.Context, containerID string, cfg LogConfig)
 	go getLogs(ctx, containerID, a.apiClient, cfg, ch, a.logger)
 
 	return ch
-}
-
-// NetworkCountConfig holds configuration for observing network traffic.
-type NetworkCountConfig struct {
-	Rx string // the network name to count the Rx bytes
-	Tx string // the network name to count the Tx bytes
 }
 
 // CopyFileConfig holds configuration for a single file which should be copied
@@ -207,16 +201,15 @@ const defaultRestartInterval = 10 * time.Second
 
 // RunContainerParams are the parameters for running a container.
 type RunContainerParams struct {
-	Name               string
-	ChanSize           int
-	ContainerConfig    *container.Config
-	HostConfig         *container.HostConfig
-	NetworkingConfig   *network.NetworkingConfig
-	NetworkCountConfig NetworkCountConfig
-	CopyFiles          []CopyFileConfig
-	Logs               LogConfig
-	ShouldRestart      ShouldRestartFunc
-	RestartInterval    time.Duration // defaults to 10 seconds
+	Name             string
+	ChanSize         int
+	ContainerConfig  *container.Config
+	HostConfig       *container.HostConfig
+	NetworkingConfig *network.NetworkingConfig
+	CopyFiles        []CopyFileConfig
+	Logs             LogConfig
+	ShouldRestart    ShouldRestartFunc
+	RestartInterval  time.Duration // defaults to 10 seconds
 }
 
 // RunContainer runs a container with the given parameters.
@@ -253,6 +246,9 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 		containerConfig.Labels[LabelApp] = domain.AppName
 		containerConfig.Labels[LabelAppID] = a.id.String()
 
+		hostConfig := *params.HostConfig
+		hostConfig.NetworkMode = container.NetworkMode(a.networkID)
+
 		var name string
 		if params.Name != "" {
 			name = domain.AppName + "-" + a.id.String() + "-" + params.Name
@@ -261,7 +257,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 		createResp, err := a.apiClient.ContainerCreate(
 			ctx,
 			&containerConfig,
-			params.HostConfig,
+			&hostConfig,
 			params.NetworkingConfig,
 			nil,
 			name,
@@ -301,7 +297,6 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 			cancel,
 			createResp.ID,
 			params.ContainerConfig.Image,
-			params.NetworkCountConfig,
 			params.Logs,
 			params.ShouldRestart,
 			cmp.Or(params.RestartInterval, defaultRestartInterval),
@@ -398,7 +393,6 @@ func (a *Client) runContainerLoop(
 	cancel context.CancelFunc,
 	containerID string,
 	imageName string,
-	networkCountConfig NetworkCountConfig,
 	logConfig LogConfig,
 	shouldRestartFunc ShouldRestartFunc,
 	restartInterval time.Duration,
@@ -409,7 +403,7 @@ func (a *Client) runContainerLoop(
 
 	containerRespC := make(chan containerWaitResponse)
 	containerErrC := make(chan error, 1)
-	statsC := a.getStats(containerID, networkCountConfig)
+	statsC := a.getStats(containerID)
 	eventsC := a.getEvents(containerID)
 
 	go func() {

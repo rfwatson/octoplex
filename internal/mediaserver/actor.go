@@ -237,9 +237,8 @@ func (a *Actor) Start(ctx context.Context) error {
 				NetworkMode:  "default",
 				PortBindings: portBindings,
 			},
-			NetworkCountConfig: container.NetworkCountConfig{Rx: "eth0", Tx: "eth1"},
-			Logs:               container.LogConfig{Stdout: true},
-			CopyFiles:          copyFiles,
+			Logs:      container.LogConfig{Stdout: true},
+			CopyFiles: copyFiles,
 		},
 	)
 

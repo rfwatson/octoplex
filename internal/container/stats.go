@@ -1,7 +1,6 @@
 package container
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,13 +15,9 @@ func handleStats(
 	ctx context.Context,
 	containerID string,
 	apiClient DockerClient,
-	networkCountConfig NetworkCountConfig,
 	logger *slog.Logger,
 	ch chan<- stats,
 ) {
-	networkNameRx := cmp.Or(networkCountConfig.Rx, "eth0")
-	networkNameTx := cmp.Or(networkCountConfig.Tx, "eth0")
-
 	statsReader, err := apiClient.ContainerStats(ctx, containerID, true)
 	if err != nil {
 		// TODO: error handling?
@@ -65,8 +60,19 @@ func handleStats(
 			break
 		}
 
-		rxBytes := statsResp.Networks[networkNameRx].RxBytes
-		txBytes := statsResp.Networks[networkNameTx].TxBytes
+		// Get the first network, which is the only one.
+		var networkName string
+		for name := range statsResp.Networks {
+			networkName = name
+			break
+		}
+		if networkName == "" {
+			logger.Warn("No network stats found", "id", shortID(containerID))
+			continue
+		}
+
+		rxBytes := statsResp.Networks[networkName].RxBytes
+		txBytes := statsResp.Networks[networkName].TxBytes
 
 		if statsResp.PreRead.IsZero() || rxBytes < lastRxBytes || txBytes < lastTxBytes {
 			// Container restarted
