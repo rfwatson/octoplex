@@ -21,6 +21,7 @@ Octoplex is a Docker-native live video restreamer.
 
 - [Quick start](#quick-start)
 - [User interfaces](#user-interfaces)
+  - [Screenshots](#screenshots)
 - [How it works](#how-it-works)
 - [Installation](#installation)
   - [Docker Engine (only if you'll run Octoplex locally)](#docker-engine-only-if-youll-run-octoplex-locally)
@@ -106,6 +107,16 @@ launched the terminal UI! You can try out the web interface now by visiting
 [http://localhost:8080](http://localhost:8080).
 
 See [Web interface](#web-interface) for more.
+
+### Screenshots
+
+Web:
+
+![Octoplex web interface](/assets/octoplex-web.png)
+
+Terminal UI:
+
+![Octoplex terminal user interface](/assets/octoplex-tui.png)
 
 ## How it works
 
