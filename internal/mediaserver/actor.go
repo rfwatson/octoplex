@@ -454,14 +454,14 @@ func (s *Actor) RTMPInternalURL() string {
 // via the container hostname (i.e. mediaserver). In this case, it does not
 // need to be exposed publicly.
 //
-// When running outside Docker, the URL must be accessible from the server via
-// the defined host, which is localhost by default but could be user-defined.
+// When running outside Docker, it's assumed that Octoplex is running on the
+// Docker host, so the API should be accessible over localhost.
 func (s *Actor) pathURL(path string) string {
 	var hostname string
 	if s.inDocker {
 		hostname = componentName
 	} else {
-		hostname = s.host
+		hostname = "localhost"
 	}
 
 	return fmt.Sprintf("https://api:%s@%s:%d/v3/paths/get/%s", s.pass, hostname, s.apiPort, path)
