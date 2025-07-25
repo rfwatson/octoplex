@@ -22,8 +22,8 @@ const (
 )
 
 // TODO: refresh session token automatically on incoming HTTP request
-// TODO: refresh session token automatically on WebSocket connection
-// TODO: improve error handling
+// TODO: refresh session periodically during WebSocket connection?
+// TODO: improve error responses
 func newWebHandler(cfg config.Config, internalAPI *Server, credentialsMode CredentialsMode, tokenStore TokenStore, logger *slog.Logger) (http.Handler, error) {
 	mux := http.NewServeMux()
 

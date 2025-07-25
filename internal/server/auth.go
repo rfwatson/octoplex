@@ -307,6 +307,20 @@ func isAuthenticatedWithSessionToken(cookieHeader string, tokenStore TokenStore,
 	return true
 }
 
+func refreshSessionToken(tokenStore TokenStore, logger *slog.Logger) error {
+	sessionToken, err := tokenStore.Get(storeKeySessionToken)
+	if err != nil {
+		return fmt.Errorf("get session token: %w", err)
+	}
+
+	sessionToken.ExpiresAt = time.Now().Add(cookieValidFor)
+	if err := tokenStore.Put(storeKeySessionToken, sessionToken); err != nil {
+		return fmt.Errorf("update session token: %w", err)
+	}
+
+	return nil
+}
+
 // ResetCredentials resets the API token and the admin password. It returns the
 // raw token strings that can be presented to the user.
 func ResetCredentials(cfg config.Config, tokenStore TokenStore) (string, string, error) {

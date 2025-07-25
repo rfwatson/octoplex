@@ -9,12 +9,14 @@ import (
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/config"
+	"git.netflux.io/rob/octoplex/internal/domain"
 	"git.netflux.io/rob/octoplex/internal/event"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1"
 	mocks "git.netflux.io/rob/octoplex/internal/generated/mocks/server"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"git.netflux.io/rob/octoplex/internal/token"
 	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
@@ -45,6 +47,9 @@ func TestWebSocketProxyCredentialsDisabled(t *testing.T) {
 			name: "credentials enabled, credentials provided",
 			tokenStoreFunc: func(t *testing.T, tokenStore *mocks.TokenStore) {
 				tokenStore.EXPECT().Get("session-token").Return(sessionToken, nil)
+				tokenStore.EXPECT().Put("session-token", mock.MatchedBy(func(t domain.Token) bool {
+					return t.ExpiresAt.After(time.Now().Add(cookieValidFor - (5 * time.Second)))
+				})).Return(nil)
 			},
 			credentialsMode: CredentialsModeEnabled,
 			cookieHeader:    "octoplex-session=" + hex.EncodeToString([]byte(rawToken)),
@@ -56,6 +61,8 @@ func TestWebSocketProxyCredentialsDisabled(t *testing.T) {
 			logger := testhelpers.NewTestLogger(t)
 
 			var tokenStore mocks.TokenStore
+			defer tokenStore.AssertExpectations(t)
+
 			if tc.tokenStoreFunc != nil {
 				tc.tokenStoreFunc(t, &tokenStore)
 			}
