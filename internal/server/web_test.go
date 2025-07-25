@@ -169,7 +169,7 @@ func TestWebHandlerSessionCreate(t *testing.T) {
 				assert.NotZero(t, cookie.Value)
 				assert.Equal(t, "/", cookie.Path)
 				assert.NotZero(t, cookie.Expires)
-				assert.Less(t, cookie.Expires, time.Now().Add(25*time.Hour))
+				assert.Less(t, cookie.Expires, time.Now().Add(8*24*time.Hour))
 				assert.Equal(t, tc.wantSecure, cookie.Secure)
 				assert.True(t, cookie.HttpOnly)
 				assert.Equal(t, http.SameSiteStrictMode, cookie.SameSite)

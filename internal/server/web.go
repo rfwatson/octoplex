@@ -18,9 +18,11 @@ import (
 const (
 	cookiePath        = "/"
 	cookieNameSession = "octoplex-session"
-	cookieValidFor    = 24 * time.Hour
+	cookieValidFor    = 7 * 24 * time.Hour
 )
 
+// TODO: refresh session token automatically on incoming HTTP request
+// TODO: refresh session token automatically on WebSocket connection
 // TODO: improve error handling
 func newWebHandler(cfg config.Config, internalAPI *Server, credentialsMode CredentialsMode, tokenStore TokenStore, logger *slog.Logger) (http.Handler, error) {
 	mux := http.NewServeMux()
