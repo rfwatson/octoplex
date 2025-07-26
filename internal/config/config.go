@@ -127,7 +127,8 @@ type Config struct {
 	ServerURL           ServerURL
 	TLS                 *TLS
 	AuthMode            AuthMode
-	InsecureAllowNoAuth bool // DANGER: no authentication even for non-loopback addresses.
+	InsecureAllowNoAuth bool   // DANGER: no authentication even for non-loopback addresses.
+	DockerHost          string // DockerHost is the host to connect to the Docker daemon, falls back to Docker SDK's FromEnv(). Empty if not explicitly set.
 	InDocker            bool
 	Web                 Web
 	Debug               bool // deprecated

@@ -17,3 +17,4 @@ packages:
       httpClient:
         config:
           mockname: HTTPClient
+      ContainerClient:

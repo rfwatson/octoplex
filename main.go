@@ -162,9 +162,9 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 									}
 
 									output := struct {
-										ApiToken      string `json:"api_token"`
+										APIToken      string `json:"api_token"`
 										AdminPassword string `json:"admin_password,omitzero"`
-									}{ApiToken: apiToken, AdminPassword: adminPassword}
+									}{APIToken: apiToken, AdminPassword: adminPassword}
 
 									bytes, err := json.MarshalIndent(output, "", "  ")
 									if err != nil {
@@ -541,6 +541,13 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Destination: &webEnabled,
 			Hidden:      clientAndServerMode,
 		},
+		&cli.StringFlag{
+			Name:     "docker-host",
+			Usage:    "The Docker host to connect to, e.g. ssh://user@host:2375. If not set, falls back to the Docker SDK's DOCKER_HOST environment variable or the default Unix socket.",
+			Category: "Server",
+			Sources:  cli.EnvVars("OCTO_DOCKER_HOST"),
+			Hidden:   clientAndServerMode,
+		},
 		&cli.BoolFlag{
 			Name:     "in-docker",
 			Usage:    "Configure the server to run inside Docker",
@@ -750,10 +757,12 @@ func runServer(ctx context.Context, c *cli.Command, cfg config.Config, serverCfg
 		}()
 	}
 
-	dockerClient, err := dockerclient.NewClientWithOpts(
-		dockerclient.FromEnv,
-		dockerclient.WithAPIVersionNegotiation(),
-	)
+	hostOpt := dockerclient.FromEnv
+	if cfg.DockerHost != "" {
+		hostOpt = dockerclient.WithHost(cfg.DockerHost)
+	}
+
+	dockerClient, err := dockerclient.NewClientWithOpts(hostOpt, dockerclient.WithAPIVersionNegotiation())
 	if err != nil {
 		return fmt.Errorf("new docker client: %w", err)
 	}
@@ -921,6 +930,7 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 		ServerURL:           serverURL,
 		AuthMode:            authMode,
 		InsecureAllowNoAuth: insecureAllowNoAuth,
+		DockerHost:          cmp.Or(c.String("docker-host"), os.Getenv("DOCKER_HOST")),
 		InDocker:            c.Bool("in-docker"),
 		Web:                 config.Web{Enabled: !c.IsSet("web") || webEnabled},
 		Debug:               c.Bool("debug"),

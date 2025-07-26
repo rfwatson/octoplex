@@ -73,6 +73,7 @@ type Client struct {
 	wg           sync.WaitGroup
 	apiClient    DockerClient
 	inDocker     bool
+	hasDockerNet bool // hasDockerNet is true if this client is running inside a Docker container and is connected to the Octoplex network.
 	networkID    string
 	cancelFuncs  map[string]context.CancelFunc
 	pulledImages map[string]struct{}
@@ -101,24 +102,37 @@ func NewClient(ctx context.Context, params NewParams) (*Client, error) {
 		return nil, fmt.Errorf("network create: %w", err)
 	}
 
-	if params.InDocker {
+	// connectDockerNetwork attempts to connect the current container (based on
+	// the hostname) to the Octoplex-defined network. If we are not running as a
+	// container this is a no-op. If connecting fails, it's not a fatal error. We
+	// can try to handle networking differently, although there are scenarios
+	// where it may fail.
+	connectDockerNetwork := func() bool {
+		if !params.InDocker {
+			return false
+		}
+
 		containerID, err := selfContainerID()
 		if err != nil {
-			return nil, fmt.Errorf("get self ID: %w", err)
+			params.Logger.Info("Unable to get self container ID, not connecting to network", "err", err)
+			return false
 		}
 		if err := params.APIClient.NetworkConnect(ctx, network.ID, containerID, nil); err != nil {
-			return nil, fmt.Errorf("network connect: %w", err)
+			params.Logger.Info("Unable to connect to Octoplex network", "err", err)
+			return false
 		}
+
+		return true
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-
 	client := &Client{
 		id:           id,
 		ctx:          ctx,
 		cancel:       cancel,
 		apiClient:    params.APIClient,
 		inDocker:     params.InDocker,
+		hasDockerNet: connectDockerNetwork(),
 		networkID:    network.ID,
 		cancelFuncs:  make(map[string]context.CancelFunc),
 		pulledImages: make(map[string]struct{}),
@@ -134,6 +148,12 @@ type stats struct {
 	memoryUsageBytes uint64
 	rxRate, txRate   int
 	rxSince          time.Time
+}
+
+// HasDockerNetwork returns true if the client is running inside a Docker
+// container, and is connected to the Octoplex network.
+func (c *Client) HasDockerNetwork() bool {
+	return c.hasDockerNet
 }
 
 // getStats returns a channel that will receive container stats. The channel is

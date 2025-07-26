@@ -3,6 +3,7 @@ package mediaserver
 import (
 	"testing"
 
+	mocks "git.netflux.io/rob/octoplex/internal/generated/mocks/mediaserver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -39,28 +40,53 @@ func TestPathURL(t *testing.T) {
 	)
 
 	testCases := []struct {
-		name     string
-		inDocker bool
-		want     string
+		name             string
+		dockerHost       string
+		inDocker         bool
+		hasDockerNetwork bool
+		want             string
 	}{
 		{
-			name:     "not in docker",
-			inDocker: false,
-			want:     "https://api:s3cr3t@localhost:9997/v3/paths/get/live",
+			name:       "not in docker",
+			dockerHost: "localhost",
+			inDocker:   false,
+			want:       "https://api:s3cr3t@localhost:9997/v3/paths/get/live",
 		},
 		{
-			name:     "in docker",
-			inDocker: true,
-			want:     "https://api:s3cr3t@mediaserver:9997/v3/paths/get/live",
+			name:             "in docker, not connected to Octoplex network",
+			dockerHost:       "localhost",
+			inDocker:         true,
+			hasDockerNetwork: false,
+			want:             "https://api:s3cr3t@localhost:9997/v3/paths/get/live",
+		},
+		{
+			name:             "in docker, not connected to Octoplex network, custom Docker host",
+			dockerHost:       "my.docker.com",
+			inDocker:         true,
+			hasDockerNetwork: false,
+			want:             "https://api:s3cr3t@my.docker.com:9997/v3/paths/get/live",
+		},
+		{
+			name:             "in docker, connected to Octoplex network",
+			dockerHost:       "localhost",
+			inDocker:         true,
+			hasDockerNetwork: true,
+			want:             "https://api:s3cr3t@mediaserver:9997/v3/paths/get/live",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			var containerClient mocks.ContainerClient
+			defer containerClient.AssertExpectations(t)
+			containerClient.EXPECT().HasDockerNetwork().Return(tc.hasDockerNetwork)
+
 			actor := &Actor{
-				apiPort:  9997,
-				pass:     pass,
-				inDocker: tc.inDocker,
+				apiPort:         9997,
+				pass:            pass,
+				dockerHost:      tc.dockerHost,
+				inDocker:        tc.inDocker,
+				containerClient: &containerClient,
 			}
 
 			assert.Equal(t, tc.want, actor.pathURL(path))

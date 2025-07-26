@@ -307,7 +307,7 @@ func isAuthenticatedWithSessionToken(cookieHeader string, tokenStore TokenStore,
 	return true
 }
 
-func refreshSessionToken(tokenStore TokenStore, logger *slog.Logger) error {
+func refreshSessionToken(tokenStore TokenStore, _ *slog.Logger) error {
 	sessionToken, err := tokenStore.Get(storeKeySessionToken)
 	if err != nil {
 		return fmt.Errorf("get session token: %w", err)

@@ -313,7 +313,8 @@ Flag|Alias|Modes|Env var|Default|Description
 `--insecure-allow-no-auth`||`server`|`OCTO_INSECURE_ALLOW_NO_AUTH`|`false`|Allow `--auth=none` when bound to non-local addresses. See [Security](#security).
 `--tls-cert`||`server` `all-in-one`|`OCTO_TLS_CERT`||Path to custom TLS certifcate (PEM-encoded, must be valid for `hostname`). Used for gRPC and RTMPS connections.
 `--tls-key`||`server` `all-in-one`|`OCTO_TLS_KEY`||Path to custom TLS key (PEM-encoded, must be valid for `hostname`). Used for gRPC and RTMPS connections.
-`--in-docker`||`server`|`OCTO_DOCKER`|`false`|Configure Octoplex to run inside Docker
+`--docker-host`||`server`|`OCTO_DOCKER_HOST`||Optional. The Docker host to connect to, e.g. `ssh://user@host:2375`. If not set, falls back to the Docker SDK's DOCKER_HOST environment variable or the default Unix socket.
+`--in-docker`||`server`|`OCTO_DOCKER`|`false`|Configure Octoplex to run inside Docker. Set automatically to true in the Dockerfile.
 `--stream-key`||`server` `all-in-one`|`OCTO_STREAM_KEY`|`live`|Stream key, e.g. `rtmp://rtmp.example.com/live`
 `--rtmp-enabled`||`server` `all-in-one`||`true`|Enable RTMP server
 `--rtmp-listen`||`server` `all-in-one`||`127.0.0.1:1935`|Listen address for RTMP sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen`.
@@ -452,10 +453,13 @@ ffmpeg -i input.mp4 -c copy -f flv rtmps://localhost:1936/live
 :warning: By design, Octoplex needs to launch and terminate Docker containers
 on your host. If you run Octoplex inside Docker with a bind-mounted Docker
 socket, it effectively has root-level access to your server. Evaluate the
-security trade-offs carefully. If you're unsure, consider running Octoplex
-directly on the host rather than in a container.
+security trade-offs carefully. If you're unsure, consider connecting through a
+proxy or just running Octoplex as a daemon (non-container) process on the
+Docker host.
 
-:information_source: Note: Running the TUI client from Docker is not
+:dolphin: **Tip**: The Docker host to connect to can be configured with the `--docker-host` flag or `OCTO_DOCKER_HOST` environment variable. See [Server flags](#server-flags).
+
+:information_source: **Tip**: Running the TUI client from Docker is not
 recommended. Install Octoplex natively via Homebrew or download a release from
 GitHub instead. See [Installation](#Installation) for details.
 

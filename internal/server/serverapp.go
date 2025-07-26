@@ -266,6 +266,7 @@ func (a *App) Run(ctx context.Context) error {
 		RTMPAddr:        buildNetAddr(a.cfg.Sources.MediaServer.RTMP),
 		RTMPSAddr:       buildNetAddr(a.cfg.Sources.MediaServer.RTMPS),
 		Host:            a.cfg.ServerURL.Hostname,
+		DockerHost:      a.cfg.DockerHost,
 		KeyPairs:        a.keyPairs,
 		StreamKey:       mediaserver.StreamKey(a.cfg.Sources.MediaServer.StreamKey),
 		ImageName:       a.cfg.Sources.MediaServer.ImageName,

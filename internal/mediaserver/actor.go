@@ -5,9 +5,11 @@ import (
 	"cmp"
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	typescontainer "github.com/docker/docker/api/types/container"
@@ -32,6 +34,7 @@ const (
 	defaultRTMPPort                      = 1935                    // default RTMP host port for the media server
 	defaultRTMPSPort                     = 1936                    // default RTMPS host port for the media server
 	defaultHost                          = "localhost"             // default mediaserver host name
+	defaultDockerHost                    = "localhost"             // default hostname to connect to Docker containers
 	defaultChanSize                      = 64                      // default channel size for asynchronous non-error channels
 	defaultStreamKey           StreamKey = "live"                  // Default stream key. See [StreamKey].
 	componentName                        = "mediaserver"           // component name, used for Docker hostname and labels
@@ -50,16 +53,25 @@ const DefaultImageNameMediaMTX = "ghcr.io/rfwatson/mediamtx-alpine:latest"
 // action is an action to be performed by the actor.
 type action func()
 
+// ContainerClient isolates *container.Client.
+type ContainerClient interface {
+	ContainersWithLabels(map[string]string) container.LabelOptions
+	HasDockerNetwork() bool
+	RemoveContainers(context.Context, container.LabelOptions) error
+	RunContainer(context.Context, container.RunContainerParams) (<-chan domain.Container, <-chan error)
+}
+
 // Actor is responsible for managing the media server.
 type Actor struct {
 	actorC              chan action
 	stateC              chan domain.Source
 	chanSize            int
-	containerClient     *container.Client
+	containerClient     ContainerClient
 	rtmpAddr            domain.NetAddr
 	rtmpsAddr           domain.NetAddr
 	apiPort             int
 	host                string
+	dockerHost          string
 	streamKey           StreamKey
 	imageName           string
 	updateStateInterval time.Duration
@@ -80,12 +92,13 @@ type NewActorParams struct {
 	RTMPSAddr           OptionalNetAddr // defaults to disabled, or 127.0.0.1:1936
 	APIPort             int             // defaults to 9997
 	Host                string          // defaults to "localhost"
+	DockerHost          string          // defaults to "localhost" (used for connecting to Docker containers)
 	StreamKey           StreamKey       // defaults to "live"
 	ImageName           string          // defaults to "ghcr.io/rfwatson/mediamtx-alpine:latest"
 	ChanSize            int             // defaults to 64
 	UpdateStateInterval time.Duration   // defaults to 5 seconds
 	KeyPairs            domain.KeyPairs
-	ContainerClient     *container.Client
+	ContainerClient     ContainerClient
 	InDocker            bool
 	Logger              *slog.Logger
 }
@@ -108,12 +121,25 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 		return nil, fmt.Errorf("build API client: %w", err)
 	}
 
+	dockerHost := defaultDockerHost
+	if params.DockerHost != "" {
+		uri, err := url.Parse(params.DockerHost)
+		if err != nil {
+			return nil, fmt.Errorf("parse Docker host URL: %w", err)
+		}
+		if uri.Hostname() == "" {
+			return nil, errors.New("docker host URL must not be empty")
+		}
+		dockerHost = uri.Hostname()
+	}
+
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
 	return &Actor{
 		rtmpAddr:            toRTMPAddr(params.RTMPAddr, defaultRTMPPort),
 		rtmpsAddr:           toRTMPAddr(params.RTMPSAddr, defaultRTMPSPort),
 		apiPort:             cmp.Or(params.APIPort, defaultAPIPort),
 		host:                cmp.Or(params.Host, defaultHost),
+		dockerHost:          dockerHost,
 		streamKey:           cmp.Or(params.StreamKey, defaultStreamKey),
 		imageName:           cmp.Or(params.ImageName, DefaultImageNameMediaMTX),
 		updateStateInterval: cmp.Or(params.UpdateStateInterval, defaultUpdateStateInterval),
@@ -132,13 +158,24 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 
 func (a *Actor) Start(ctx context.Context) error {
 	var portSpecs []string
-	portSpecs = append(portSpecs, fmt.Sprintf("127.0.0.1:%d:9997", a.apiPort))
+
+	// If we are not connected to the Octoplex network, publishing the port on
+	// 0.0.0.0 is necessary to ensure it is possible to connect to the
+	// mediaserver container from the orchestrator process.
+	publishIP := "127.0.0.1"
+	if !a.containerClient.HasDockerNetwork() {
+		publishIP = "0.0.0.0"
+	}
+	portSpecs = append(portSpecs, fmt.Sprintf("%s:%d:9997", publishIP, a.apiPort))
+
+	// RTMP ports bind to 127.0.0.1 by default.
 	if !a.rtmpAddr.IsZero() {
 		portSpecs = append(portSpecs, fmt.Sprintf("%s:%d:%d", a.rtmpAddr.IP, a.rtmpAddr.Port, 1935))
 	}
 	if !a.rtmpsAddr.IsZero() {
 		portSpecs = append(portSpecs, fmt.Sprintf("%s:%d:%d", a.rtmpsAddr.IP, a.rtmpsAddr.Port, 1936))
 	}
+
 	exposedPorts, portBindings, err := nat.ParsePortSpecs(portSpecs)
 	if err != nil {
 		return fmt.Errorf("parse port specs: %w", err)
@@ -458,10 +495,10 @@ func (s *Actor) RTMPInternalURL() string {
 // Docker host, so the API should be accessible over localhost.
 func (s *Actor) pathURL(path string) string {
 	var hostname string
-	if s.inDocker {
+	if s.containerClient.HasDockerNetwork() {
 		hostname = componentName
 	} else {
-		hostname = "localhost"
+		hostname = s.dockerHost
 	}
 
 	return fmt.Sprintf("https://api:%s@%s:%d/v3/paths/get/%s", s.pass, hostname, s.apiPort, path)
