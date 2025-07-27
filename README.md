@@ -457,7 +457,7 @@ security trade-offs carefully. If you're unsure, consider connecting through a
 proxy or just running Octoplex as a daemon (non-container) process on the
 Docker host.
 
-:dolphin: **Tip**: The Docker host to connect to can be configured with the `--docker-host` flag or `OCTO_DOCKER_HOST` environment variable. See [Server flags](#server-flags).
+:whale: **Tip**: The Docker host to connect to can be configured with the `--docker-host` flag or `OCTO_DOCKER_HOST` environment variable. See [Server flags](#server-flags).
 
 :information_source: **Tip**: Running the TUI client from Docker is not
 recommended. Install Octoplex natively via Homebrew or download a release from
