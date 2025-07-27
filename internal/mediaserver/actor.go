@@ -351,26 +351,26 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 }
 
 // C returns a channel that will receive the current state of the media server.
-func (s *Actor) C() <-chan domain.Source {
-	return s.stateC
+func (a *Actor) C() <-chan domain.Source {
+	return a.stateC
 }
 
 // State returns the current state of the media server.
 //
 // Blocks if the actor is not started yet.
-func (s *Actor) State() domain.Source {
+func (a *Actor) State() domain.Source {
 	resultChan := make(chan domain.Source)
-	s.actorC <- func() {
-		resultChan <- *s.state
+	a.actorC <- func() {
+		resultChan <- *a.state
 	}
 	return <-resultChan
 }
 
 // Close closes the media server actor.
-func (s *Actor) Close() error {
-	if err := s.containerClient.RemoveContainers(
+func (a *Actor) Close() error {
+	if err := a.containerClient.RemoveContainers(
 		context.Background(),
-		s.containerClient.ContainersWithLabels(map[string]string{container.LabelComponent: componentName}),
+		a.containerClient.ContainersWithLabels(map[string]string{container.LabelComponent: componentName}),
 	); err != nil {
 		return fmt.Errorf("remove containers: %w", err)
 	}
@@ -380,27 +380,27 @@ func (s *Actor) Close() error {
 
 // actorLoop is the main loop of the media server actor. It exits when the
 // actor is closed, or the parent context is cancelled.
-func (s *Actor) actorLoop(ctx context.Context, containerStateC <-chan domain.Container, errC <-chan error) {
-	updateStateT := time.NewTicker(s.updateStateInterval)
+func (a *Actor) actorLoop(ctx context.Context, containerStateC <-chan domain.Container, errC <-chan error) {
+	updateStateT := time.NewTicker(a.updateStateInterval)
 	updateStateT.Stop() // only start when the container starts
 	defer updateStateT.Stop()
 
-	sendState := func() { s.stateC <- *s.state }
+	sendState := func() { a.stateC <- *a.state }
 
 	for {
 		select {
 		case containerState := <-containerStateC:
-			if containerState.Status == domain.ContainerStatusRunning && s.state.Container.Status != domain.ContainerStatusRunning {
+			if containerState.Status == domain.ContainerStatusRunning && a.state.Container.Status != domain.ContainerStatusRunning {
 				// The container has moved into running state.
 				// Start polling the API.
-				updateStateT.Reset(s.updateStateInterval)
+				updateStateT.Reset(a.updateStateInterval)
 			}
 
-			s.state.Container = containerState
+			a.state.Container = containerState
 
-			if s.state.Container.Status == domain.ContainerStatusExited {
+			if a.state.Container.Status == domain.ContainerStatusExited {
 				updateStateT.Stop()
-				s.handleContainerExit(nil)
+				a.handleContainerExit(nil)
 			}
 
 			sendState()
@@ -415,27 +415,27 @@ func (s *Actor) actorLoop(ctx context.Context, containerStateC <-chan domain.Con
 			}
 
 			if err != nil {
-				s.logger.Error("Error from container client", "err", err, "id", shortID(s.state.Container.ID))
+				a.logger.Error("Error from container client", "err", err, "id", shortID(a.state.Container.ID))
 			}
 
 			updateStateT.Stop()
-			s.handleContainerExit(err)
+			a.handleContainerExit(err)
 
 			sendState()
 		case <-updateStateT.C:
-			path, err := fetchPath(s.pathURL(string(s.streamKey)), s.apiClient)
+			path, err := fetchPath(a.pathURL(string(a.streamKey)), a.apiClient)
 			if err != nil {
-				s.logger.Error("Error fetching path", "err", err)
+				a.logger.Error("Error fetching path", "err", err)
 				continue
 			}
 
-			if path.Ready != s.state.Live {
-				s.state.Live = path.Ready
-				s.state.LiveChangedAt = time.Now()
-				s.state.Tracks = path.Tracks
+			if path.Ready != a.state.Live {
+				a.state.Live = path.Ready
+				a.state.LiveChangedAt = time.Now()
+				a.state.Tracks = path.Tracks
 				sendState()
 			}
-		case action, ok := <-s.actorC:
+		case action, ok := <-a.actorC:
 			if !ok {
 				continue
 			}
@@ -447,42 +447,42 @@ func (s *Actor) actorLoop(ctx context.Context, containerStateC <-chan domain.Con
 }
 
 // TODO: refactor to use container.Err?
-func (s *Actor) handleContainerExit(err error) {
-	if s.state.Container.ExitCode != nil {
-		s.state.ExitReason = fmt.Sprintf("Server process exited with code %d.", *s.state.Container.ExitCode)
+func (a *Actor) handleContainerExit(err error) {
+	if a.state.Container.ExitCode != nil {
+		a.state.ExitReason = fmt.Sprintf("Server process exited with code %d.", *a.state.Container.ExitCode)
 	} else {
-		s.state.ExitReason = "Server process exited unexpectedly."
+		a.state.ExitReason = "Server process exited unexpectedly."
 	}
 	if err != nil {
-		s.state.ExitReason += "\n\n" + err.Error()
+		a.state.ExitReason += "\n\n" + err.Error()
 	}
 
-	s.state.Live = false
+	a.state.Live = false
 }
 
 // RTMPURL returns the RTMP URL for the media server, accessible from the host.
-func (s *Actor) RTMPURL() string {
-	if s.rtmpAddr.IsZero() {
+func (a *Actor) RTMPURL() string {
+	if a.rtmpAddr.IsZero() {
 		return ""
 	}
 
-	return fmt.Sprintf("rtmp://%s:%d/%s", s.host, s.rtmpAddr.Port, s.streamKey)
+	return fmt.Sprintf("rtmp://%s:%d/%s", a.host, a.rtmpAddr.Port, a.streamKey)
 }
 
 // RTMPSURL returns the RTMPS URL for the media server, accessible from the host.
-func (s *Actor) RTMPSURL() string {
-	if s.rtmpsAddr.IsZero() {
+func (a *Actor) RTMPSURL() string {
+	if a.rtmpsAddr.IsZero() {
 		return ""
 	}
 
-	return fmt.Sprintf("rtmps://%s:%d/%s", s.host, s.rtmpsAddr.Port, s.streamKey)
+	return fmt.Sprintf("rtmps://%s:%d/%s", a.host, a.rtmpsAddr.Port, a.streamKey)
 }
 
 // RTMPInternalURL returns the RTMP URL for the media server, accessible from
 // the app network.
-func (s *Actor) RTMPInternalURL() string {
+func (a *Actor) RTMPInternalURL() string {
 	// Container port, not host port:
-	return fmt.Sprintf("rtmp://mediaserver:1935/%s?user=api&pass=%s", s.streamKey, s.pass)
+	return fmt.Sprintf("rtmp://mediaserver:1935/%s?user=api&pass=%s", a.streamKey, a.pass)
 }
 
 // pathURL returns the URL for fetching a path.
@@ -493,22 +493,22 @@ func (s *Actor) RTMPInternalURL() string {
 //
 // When running outside Docker, it's assumed that Octoplex is running on the
 // Docker host, so the API should be accessible over localhost.
-func (s *Actor) pathURL(path string) string {
+func (a *Actor) pathURL(path string) string {
 	var hostname string
-	if s.containerClient.HasDockerNetwork() {
+	if a.containerClient.HasDockerNetwork() {
 		hostname = componentName
 	} else {
-		hostname = s.dockerHost
+		hostname = a.dockerHost
 	}
 
-	return fmt.Sprintf("https://api:%s@%s:%d/v3/paths/get/%s", s.pass, hostname, s.apiPort, path)
+	return fmt.Sprintf("https://api:%s@%s:%d/v3/paths/get/%s", a.pass, hostname, a.apiPort, path)
 }
 
 // healthCheckURL returns the URL for the health check, accessible from the
 // container. It is logged to Docker's events log so must not include
 // credentials.
-func (s *Actor) healthCheckURL() string {
-	return fmt.Sprintf("https://localhost:%d/v3/paths/list", s.apiPort)
+func (a *Actor) healthCheckURL() string {
+	return fmt.Sprintf("https://localhost:%d/v3/paths/list", a.apiPort)
 }
 
 // shortID returns the first 12 characters of the given container ID.

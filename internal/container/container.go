@@ -159,10 +159,10 @@ func (c *Client) HasDockerNetwork() bool {
 // getStats returns a channel that will receive container stats. The channel is
 // never closed, but any spawned goroutines will exit when the context is
 // cancelled.
-func (a *Client) getStats(containerID string) <-chan stats {
+func (c *Client) getStats(containerID string) <-chan stats {
 	ch := make(chan stats)
 
-	go handleStats(a.ctx, containerID, a.apiClient, a.logger, ch)
+	go handleStats(c.ctx, containerID, c.apiClient, c.logger, ch)
 
 	return ch
 }
@@ -170,24 +170,24 @@ func (a *Client) getStats(containerID string) <-chan stats {
 // getEvents returns a channel that will receive container events. The channel is
 // never closed, but any spawned goroutines will exit when the context is
 // cancelled.
-func (a *Client) getEvents(containerID string) <-chan events.Message {
+func (c *Client) getEvents(containerID string) <-chan events.Message {
 	ch := make(chan events.Message)
 
-	go handleEvents(a.ctx, containerID, a.apiClient, a.logger, ch)
+	go handleEvents(c.ctx, containerID, c.apiClient, c.logger, ch)
 
 	return ch
 }
 
 // getLogs returns a channel (which is never closed) that will receive
 // container logs.
-func (a *Client) getLogs(ctx context.Context, containerID string, cfg LogConfig) <-chan []byte {
+func (c *Client) getLogs(ctx context.Context, containerID string, cfg LogConfig) <-chan []byte {
 	if !cfg.Stdout && !cfg.Stderr {
 		return nil
 	}
 
 	ch := make(chan []byte)
 
-	go getLogs(ctx, containerID, a.apiClient, cfg, ch, a.logger)
+	go getLogs(ctx, containerID, c.apiClient, cfg, ch, c.logger)
 
 	return ch
 }
@@ -241,7 +241,7 @@ type RunContainerParams struct {
 //
 // Panics if ShouldRestart is non-nil and the host config defines a restart
 // policy of its own.
-func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<-chan domain.Container, <-chan error) {
+func (c *Client) RunContainer(ctx context.Context, params RunContainerParams) (<-chan domain.Container, <-chan error) {
 	if params.ShouldRestart != nil && !params.HostConfig.RestartPolicy.IsNone() {
 		panic("shouldRestart and restart policy are mutually exclusive")
 	}
@@ -251,30 +251,30 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 	errC := make(chan error, 1)
 	sendError := func(err error) { errC <- err }
 
-	a.wg.Add(1)
+	c.wg.Add(1)
 	go func() {
-		defer a.wg.Done()
+		defer c.wg.Done()
 		defer close(errC)
 
-		if err := a.pullImageIfNeeded(ctx, params.ContainerConfig.Image, containerStateC); err != nil {
-			a.logger.Warn("Error pulling image", "err", err)
+		if err := c.pullImageIfNeeded(ctx, params.ContainerConfig.Image, containerStateC); err != nil {
+			c.logger.Warn("Error pulling image", "err", err)
 		}
 
 		containerConfig := *params.ContainerConfig
 		containerConfig.Labels = make(map[string]string)
 		maps.Copy(containerConfig.Labels, params.ContainerConfig.Labels)
 		containerConfig.Labels[LabelApp] = domain.AppName
-		containerConfig.Labels[LabelAppID] = a.id.String()
+		containerConfig.Labels[LabelAppID] = c.id.String()
 
 		hostConfig := *params.HostConfig
-		hostConfig.NetworkMode = container.NetworkMode(a.networkID)
+		hostConfig.NetworkMode = container.NetworkMode(c.networkID)
 
 		var name string
 		if params.Name != "" {
-			name = domain.AppName + "-" + a.id.String() + "-" + params.Name
+			name = domain.AppName + "-" + c.id.String() + "-" + params.Name
 		}
 
-		createResp, err := a.apiClient.ContainerCreate(
+		createResp, err := c.apiClient.ContainerCreate(
 			ctx,
 			&containerConfig,
 			&hostConfig,
@@ -288,31 +288,31 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 		}
 		containerStateC <- domain.Container{ID: createResp.ID, Status: domain.ContainerStatusCreated}
 
-		if err = a.apiClient.NetworkConnect(ctx, a.networkID, createResp.ID, nil); err != nil {
+		if err = c.apiClient.NetworkConnect(ctx, c.networkID, createResp.ID, nil); err != nil {
 			sendError(fmt.Errorf("network connect: %w", err))
 			return
 		}
 
-		if err = a.copyFilesToContainer(ctx, createResp.ID, params.CopyFiles); err != nil {
+		if err = c.copyFilesToContainer(ctx, createResp.ID, params.CopyFiles); err != nil {
 			sendError(fmt.Errorf("copy files to container: %w", err))
 			return
 		}
 
-		if err = a.apiClient.ContainerStart(ctx, createResp.ID, container.StartOptions{}); err != nil {
+		if err = c.apiClient.ContainerStart(ctx, createResp.ID, container.StartOptions{}); err != nil {
 			sendError(fmt.Errorf("container start: %w", err))
 			return
 		}
-		a.logger.Info("Started container", "id", shortID(createResp.ID), "duration", time.Since(now))
+		c.logger.Info("Started container", "id", shortID(createResp.ID), "duration", time.Since(now))
 
 		containerStateC <- domain.Container{ID: createResp.ID, Status: domain.ContainerStatusRunning}
 
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithCancel(ctx)
-		a.mu.Lock()
-		a.cancelFuncs[createResp.ID] = cancel
-		a.mu.Unlock()
+		c.mu.Lock()
+		c.cancelFuncs[createResp.ID] = cancel
+		c.mu.Unlock()
 
-		a.runContainerLoop(
+		c.runContainerLoop(
 			ctx,
 			cancel,
 			createResp.ID,
@@ -328,7 +328,7 @@ func (a *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 	return containerStateC, errC
 }
 
-func (a *Client) copyFilesToContainer(ctx context.Context, containerID string, fileConfigs []CopyFileConfig) error {
+func (c *Client) copyFilesToContainer(ctx context.Context, containerID string, fileConfigs []CopyFileConfig) error {
 	if len(fileConfigs) == 0 {
 		return nil
 	}
@@ -359,7 +359,7 @@ func (a *Client) copyFilesToContainer(ctx context.Context, containerID string, f
 		return fmt.Errorf("close tar writer: %w", err)
 	}
 
-	if err := a.apiClient.CopyToContainer(ctx, containerID, "/", &buf, container.CopyToContainerOptions{}); err != nil {
+	if err := c.apiClient.CopyToContainer(ctx, containerID, "/", &buf, container.CopyToContainerOptions{}); err != nil {
 		return fmt.Errorf("copy to container: %w", err)
 	}
 
@@ -378,22 +378,22 @@ type pullProgress struct {
 }
 
 // pullImageIfNeeded pulls the image if it has not already been pulled.
-func (a *Client) pullImageIfNeeded(ctx context.Context, imageName string, containerStateC chan<- domain.Container) error {
-	a.mu.Lock()
-	_, ok := a.pulledImages[imageName]
-	a.mu.Unlock()
+func (c *Client) pullImageIfNeeded(ctx context.Context, imageName string, containerStateC chan<- domain.Container) error {
+	c.mu.Lock()
+	_, ok := c.pulledImages[imageName]
+	c.mu.Unlock()
 
 	if ok {
 		return nil
 	}
 
-	if err := handleImagePull(ctx, imageName, a.apiClient, containerStateC, a.logger); err != nil {
+	if err := handleImagePull(ctx, imageName, c.apiClient, containerStateC, c.logger); err != nil {
 		return err
 	}
 
-	a.mu.Lock()
-	a.pulledImages[imageName] = struct{}{}
-	a.mu.Unlock()
+	c.mu.Lock()
+	c.pulledImages[imageName] = struct{}{}
+	c.mu.Unlock()
 
 	return nil
 }
@@ -408,7 +408,7 @@ type containerWaitResponse struct {
 
 // runContainerLoop is the control loop for a single container. It returns only
 // when the container exits.
-func (a *Client) runContainerLoop(
+func (c *Client) runContainerLoop(
 	ctx context.Context,
 	cancel context.CancelFunc,
 	containerID string,
@@ -423,12 +423,12 @@ func (a *Client) runContainerLoop(
 
 	containerRespC := make(chan containerWaitResponse)
 	containerErrC := make(chan error, 1)
-	statsC := a.getStats(containerID)
-	eventsC := a.getEvents(containerID)
+	statsC := c.getStats(containerID)
+	eventsC := c.getEvents(containerID)
 
 	go func() {
 		var restartCount int
-		for a.waitForContainerExit(ctx, containerID, containerRespC, containerErrC, logConfig, shouldRestartFunc, restartInterval, restartCount) {
+		for c.waitForContainerExit(ctx, containerID, containerRespC, containerErrC, logConfig, shouldRestartFunc, restartInterval, restartCount) {
 			restartCount++
 		}
 	}()
@@ -444,7 +444,7 @@ func (a *Client) runContainerLoop(
 	for {
 		select {
 		case resp := <-containerRespC:
-			a.logger.Info("Container entered non-running state", "exit_code", resp.StatusCode, "id", shortID(containerID), "restarting", resp.restarting)
+			c.logger.Info("Container entered non-running state", "exit_code", resp.StatusCode, "id", shortID(containerID), "restarting", resp.restarting)
 
 			var containerState string
 			var containerErr error
@@ -476,7 +476,7 @@ func (a *Client) runContainerLoop(
 		case err := <-containerErrC:
 			// TODO: verify error handling
 			if err != context.Canceled {
-				a.logger.Error("Error setting container wait", "err", err, "id", shortID(containerID))
+				c.logger.Error("Error setting container wait", "err", err, "id", shortID(containerID))
 			}
 			errC <- err
 			return
@@ -501,7 +501,7 @@ func (a *Client) runContainerLoop(
 				case events.ActionHealthStatusUnhealthy:
 					state.HealthState = "unhealthy"
 				default:
-					a.logger.Warn("Unknown health status", "status", evt.Action)
+					c.logger.Warn("Unknown health status", "status", evt.Action)
 					state.HealthState = "unknown"
 				}
 				sendState()
@@ -520,7 +520,7 @@ func (a *Client) runContainerLoop(
 
 // waitForContainerExit blocks while it waits for a container to exit, and restarts
 // it if configured to do so.
-func (a *Client) waitForContainerExit(
+func (c *Client) waitForContainerExit(
 	ctx context.Context,
 	containerID string,
 	containerRespC chan<- containerWaitResponse,
@@ -532,8 +532,8 @@ func (a *Client) waitForContainerExit(
 ) bool {
 	var logs [][]byte
 	startedWaitingAt := time.Now()
-	respC, errC := a.apiClient.ContainerWait(ctx, containerID, container.WaitConditionNextExit)
-	logsC := a.getLogs(ctx, containerID, logConfig)
+	respC, errC := c.apiClient.ContainerWait(ctx, containerID, container.WaitConditionNextExit)
+	logsC := c.getLogs(ctx, containerID, logConfig)
 
 	timer := time.NewTimer(restartInterval)
 	defer timer.Stop()
@@ -543,7 +543,7 @@ func (a *Client) waitForContainerExit(
 		select {
 		case resp := <-respC:
 			exit := func(err error) {
-				a.logger.Info("Container exited", "id", shortID(containerID), "should_restart", "false", "exit_code", resp.StatusCode, "restart_count", restartCount)
+				c.logger.Info("Container exited", "id", shortID(containerID), "should_restart", "false", "exit_code", resp.StatusCode, "restart_count", restartCount)
 				containerRespC <- containerWaitResponse{
 					WaitResponse: resp,
 					restarting:   false,
@@ -556,9 +556,9 @@ func (a *Client) waitForContainerExit(
 			// logging is not enabled, log the container logs at ERROR level for
 			// debugging.
 			// TODO: parameterize
-			if resp.StatusCode != 0 && !a.logger.Enabled(ctx, slog.LevelDebug) {
+			if resp.StatusCode != 0 && !c.logger.Enabled(ctx, slog.LevelDebug) {
 				for _, line := range logs {
-					a.logger.Error("Container log", "id", shortID(containerID), "log", string(line))
+					c.logger.Error("Container log", "id", shortID(containerID), "log", string(line))
 				}
 			}
 
@@ -576,7 +576,7 @@ func (a *Client) waitForContainerExit(
 				return false
 			}
 
-			a.logger.Info("Container exited", "id", shortID(containerID), "should_restart", "true", "exit_code", resp.StatusCode, "restart_count", restartCount)
+			c.logger.Info("Container exited", "id", shortID(containerID), "should_restart", "true", "exit_code", resp.StatusCode, "restart_count", restartCount)
 			timer.Reset(restartInterval)
 
 			containerRespC <- containerWaitResponse{
@@ -586,15 +586,15 @@ func (a *Client) waitForContainerExit(
 			}
 			// Don't return yet. Wait for the timer to fire.
 		case <-timer.C:
-			a.logger.Info("Container restarting", "id", shortID(containerID), "restart_count", restartCount)
-			if err := a.apiClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
+			c.logger.Info("Container restarting", "id", shortID(containerID), "restart_count", restartCount)
+			if err := c.apiClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 				containerErrC <- fmt.Errorf("container start: %w", err)
 				return false
 			}
-			a.logger.Info("Restarted container", "id", shortID(containerID))
+			c.logger.Info("Restarted container", "id", shortID(containerID))
 			return true
 		case line := <-logsC:
-			a.logger.Debug("Container log", "id", shortID(containerID), "log", string(line))
+			c.logger.Debug("Container log", "id", shortID(containerID), "log", string(line))
 			// TODO: limit max stored lines
 			logs = append(logs, line)
 		case err := <-errC:
@@ -609,52 +609,52 @@ func (a *Client) waitForContainerExit(
 }
 
 // Close closes the client, stopping and removing all running containers.
-func (a *Client) Close() error {
-	a.cancel()
+func (c *Client) Close() error {
+	c.cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), stopTimeout)
 	defer cancel()
 
-	containerList, err := a.containersMatchingLabels(ctx, a.instanceLabels())
+	containerList, err := c.containersMatchingLabels(ctx, c.instanceLabels())
 	if err != nil {
 		return fmt.Errorf("container list: %w", err)
 	}
 
 	for _, container := range containerList {
-		if err := a.removeContainer(ctx, container.ID); err != nil {
-			a.logger.Error("Error removing container:", "err", err, "id", shortID(container.ID))
+		if err := c.removeContainer(ctx, container.ID); err != nil {
+			c.logger.Error("Error removing container:", "err", err, "id", shortID(container.ID))
 		}
 	}
 
-	a.wg.Wait()
+	c.wg.Wait()
 
-	if a.networkID != "" {
-		if a.inDocker {
+	if c.networkID != "" {
+		if c.inDocker {
 			containerID, err := selfContainerID()
 			if err != nil {
-				a.logger.Error("Error getting self ID", "err", err)
+				c.logger.Error("Error getting self ID", "err", err)
 			} else {
-				if err := a.apiClient.NetworkDisconnect(ctx, a.networkID, containerID, true); err != nil {
-					a.logger.Error("Error disconnecting from network", "err", err)
+				if err := c.apiClient.NetworkDisconnect(ctx, c.networkID, containerID, true); err != nil {
+					c.logger.Error("Error disconnecting from network", "err", err)
 				}
 			}
 		}
 
-		if err := a.apiClient.NetworkRemove(ctx, a.networkID); err != nil {
-			a.logger.Error("Error removing network", "err", err)
+		if err := c.apiClient.NetworkRemove(ctx, c.networkID); err != nil {
+			c.logger.Error("Error removing network", "err", err)
 		}
 	}
 
-	return a.apiClient.Close()
+	return c.apiClient.Close()
 }
 
-func (a *Client) removeContainer(ctx context.Context, id string) error {
-	a.mu.Lock()
-	cancel, ok := a.cancelFuncs[id]
+func (c *Client) removeContainer(ctx context.Context, id string) error {
+	c.mu.Lock()
+	cancel, ok := c.cancelFuncs[id]
 	if ok {
-		delete(a.cancelFuncs, id)
+		delete(c.cancelFuncs, id)
 	}
-	a.mu.Unlock()
+	c.mu.Unlock()
 
 	if ok {
 		cancel()
@@ -664,17 +664,17 @@ func (a *Client) removeContainer(ctx context.Context, id string) error {
 		// removal. But there are legitimate occasions where the cancel function
 		// would not exist (e.g. during startup check) and in general the state of
 		// the Docker engine is preferred to local state in this package.
-		a.logger.Debug("removeContainer: cancelFunc not found", "id", shortID(id))
+		c.logger.Debug("removeContainer: cancelFunc not found", "id", shortID(id))
 	}
 
-	a.logger.Info("Stopping container", "id", shortID(id))
+	c.logger.Info("Stopping container", "id", shortID(id))
 	stopTimeout := int(stopTimeout.Seconds())
-	if err := a.apiClient.ContainerStop(ctx, id, container.StopOptions{Timeout: &stopTimeout}); err != nil {
+	if err := c.apiClient.ContainerStop(ctx, id, container.StopOptions{Timeout: &stopTimeout}); err != nil {
 		return fmt.Errorf("container stop: %w", err)
 	}
 
-	a.logger.Info("Removing container", "id", shortID(id))
-	if err := a.apiClient.ContainerRemove(ctx, id, container.RemoveOptions{Force: true}); err != nil {
+	c.logger.Info("Removing container", "id", shortID(id))
+	if err := c.apiClient.ContainerRemove(ctx, id, container.RemoveOptions{Force: true}); err != nil {
 		return fmt.Errorf("container remove: %w", err)
 	}
 
@@ -682,8 +682,8 @@ func (a *Client) removeContainer(ctx context.Context, id string) error {
 }
 
 // ContainerRunning checks if a container with the given labels is running.
-func (a *Client) ContainerRunning(ctx context.Context, labelOptions LabelOptions) (bool, error) {
-	containers, err := a.containersMatchingLabels(ctx, labelOptions())
+func (c *Client) ContainerRunning(ctx context.Context, labelOptions LabelOptions) (bool, error) {
+	containers, err := c.containersMatchingLabels(ctx, labelOptions())
 	if err != nil {
 		return false, fmt.Errorf("container list: %w", err)
 	}
@@ -698,15 +698,15 @@ func (a *Client) ContainerRunning(ctx context.Context, labelOptions LabelOptions
 }
 
 // RemoveContainers removes all containers with the given labels.
-func (a *Client) RemoveContainers(ctx context.Context, labelOptions LabelOptions) error {
-	containers, err := a.containersMatchingLabels(ctx, labelOptions())
+func (c *Client) RemoveContainers(ctx context.Context, labelOptions LabelOptions) error {
+	containers, err := c.containersMatchingLabels(ctx, labelOptions())
 	if err != nil {
 		return fmt.Errorf("container list: %w", err)
 	}
 
 	for _, container := range containers {
-		if err := a.removeContainer(ctx, container.ID); err != nil {
-			a.logger.Error("Error removing container:", "err", err, "id", shortID(container.ID))
+		if err := c.removeContainer(ctx, container.ID); err != nil {
+			c.logger.Error("Error removing container:", "err", err, "id", shortID(container.ID))
 		}
 	}
 
@@ -715,33 +715,33 @@ func (a *Client) RemoveContainers(ctx context.Context, labelOptions LabelOptions
 
 // RemoveUnusedNetworks removes all networks that are not used by any
 // container.
-func (a *Client) RemoveUnusedNetworks(ctx context.Context) error {
-	networks, err := a.otherNetworks(ctx)
+func (c *Client) RemoveUnusedNetworks(ctx context.Context) error {
+	networks, err := c.otherNetworks(ctx)
 	if err != nil {
 		return fmt.Errorf("other networks: %w", err)
 	}
 
 	for _, network := range networks {
-		a.logger.Info("Removing network", "id", shortID(network.ID))
-		if err = a.apiClient.NetworkRemove(ctx, network.ID); err != nil {
-			a.logger.Error("Error removing network", "err", err, "id", shortID(network.ID))
+		c.logger.Info("Removing network", "id", shortID(network.ID))
+		if err = c.apiClient.NetworkRemove(ctx, network.ID); err != nil {
+			c.logger.Error("Error removing network", "err", err, "id", shortID(network.ID))
 		}
 	}
 
 	return nil
 }
 
-func (a *Client) otherNetworks(ctx context.Context) ([]network.Summary, error) {
+func (c *Client) otherNetworks(ctx context.Context) ([]network.Summary, error) {
 	filterArgs := filters.NewArgs()
 	filterArgs.Add("label", LabelApp+"="+domain.AppName)
 
-	networks, err := a.apiClient.NetworkList(ctx, network.ListOptions{Filters: filterArgs})
+	networks, err := c.apiClient.NetworkList(ctx, network.ListOptions{Filters: filterArgs})
 	if err != nil {
 		return nil, fmt.Errorf("network list: %w", err)
 	}
 
 	return slices.DeleteFunc(networks, func(n network.Summary) bool {
-		return n.ID == a.networkID
+		return n.ID == c.networkID
 	}), nil
 }
 
@@ -750,9 +750,9 @@ type LabelOptions func() map[string]string
 
 // ContainersWithLabels returns a LabelOptions function that returns the labels for
 // this app instance.
-func (a *Client) ContainersWithLabels(extraLabels map[string]string) LabelOptions {
+func (c *Client) ContainersWithLabels(extraLabels map[string]string) LabelOptions {
 	return func() map[string]string {
-		return a.instanceLabels(extraLabels)
+		return c.instanceLabels(extraLabels)
 	}
 }
 
@@ -764,21 +764,21 @@ func AllContainers() LabelOptions {
 	}
 }
 
-func (a *Client) containersMatchingLabels(ctx context.Context, labels map[string]string) ([]container.Summary, error) {
+func (c *Client) containersMatchingLabels(ctx context.Context, labels map[string]string) ([]container.Summary, error) {
 	filterArgs := filters.NewArgs()
 	for k, v := range labels {
 		filterArgs.Add("label", k+"="+v)
 	}
-	return a.apiClient.ContainerList(ctx, container.ListOptions{
+	return c.apiClient.ContainerList(ctx, container.ListOptions{
 		All:     true,
 		Filters: filterArgs,
 	})
 }
 
-func (a *Client) instanceLabels(extraLabels ...map[string]string) map[string]string {
+func (c *Client) instanceLabels(extraLabels ...map[string]string) map[string]string {
 	labels := map[string]string{
 		LabelApp:   domain.AppName,
-		LabelAppID: a.id.String(),
+		LabelAppID: c.id.String(),
 	}
 
 	for _, el := range extraLabels {
