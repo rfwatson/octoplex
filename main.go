@@ -548,13 +548,6 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Sources:  cli.EnvVars("OCTO_DOCKER_HOST"),
 			Hidden:   clientAndServerMode,
 		},
-		&cli.BoolFlag{
-			Name:     "in-docker",
-			Usage:    "Configure the server to run inside Docker",
-			Category: "Server",
-			Sources:  cli.EnvVars("OCTO_DOCKER"),
-			Hidden:   clientAndServerMode,
-		},
 		&cli.StringFlag{
 			Name:        "auth",
 			Usage:       "Authentication mode for the server",
@@ -931,7 +924,7 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 		AuthMode:            authMode,
 		InsecureAllowNoAuth: insecureAllowNoAuth,
 		DockerHost:          cmp.Or(c.String("docker-host"), os.Getenv("DOCKER_HOST")),
-		InDocker:            c.Bool("in-docker"),
+		InDocker:            os.Getenv("OCTO_DOCKER") == "true",
 		Web:                 config.Web{Enabled: !c.IsSet("web") || webEnabled},
 		Debug:               c.Bool("debug"),
 		DataDir:             dataDir,

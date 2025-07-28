@@ -314,7 +314,6 @@ Flag|Alias|Modes|Env var|Default|Description
 `--tls-cert`||`server` `all-in-one`|`OCTO_TLS_CERT`||Path to custom TLS certifcate (PEM-encoded, must be valid for `hostname`). Used for gRPC and RTMPS connections.
 `--tls-key`||`server` `all-in-one`|`OCTO_TLS_KEY`||Path to custom TLS key (PEM-encoded, must be valid for `hostname`). Used for gRPC and RTMPS connections.
 `--docker-host`||`server`|`OCTO_DOCKER_HOST`||Optional. The Docker host to connect to, e.g. `ssh://user@host:2375`. If not set, falls back to the Docker SDK's DOCKER_HOST environment variable or the default Unix socket.
-`--in-docker`||`server`|`OCTO_DOCKER`|`false`|Configure Octoplex to run inside Docker. Set automatically to true in the Dockerfile.
 `--stream-key`||`server` `all-in-one`|`OCTO_STREAM_KEY`|`live`|Stream key, e.g. `rtmp://rtmp.example.com/live`
 `--rtmp-enabled`||`server` `all-in-one`||`true`|Enable RTMP server
 `--rtmp-listen`||`server` `all-in-one`||`127.0.0.1:1935`|Listen address for RTMP sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen`.
