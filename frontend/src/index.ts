@@ -1,6 +1,6 @@
 import { ConnectError } from '@connectrpc/connect';
 import { Modal } from 'bootstrap';
-import { getServerAddr } from './helpers';
+import { getServerAddr, joinUrl } from './helpers';
 import type { AppState, AppCommand, AppEvent } from './types.ts';
 import { WebSocketCommunicator } from './websocket-communicator.ts';
 
@@ -62,6 +62,13 @@ class Dashboard {
 
       // Setup UI event listeners
       this.setupEventListeners();
+
+      // Refresh the session immediately, and also periodically.
+      const refreshSessionInterval = 60 * 60 * 1000; // 1 hour
+      this.refreshSession(serverAddr);
+      setInterval(() => {
+        this.refreshSession(serverAddr);
+      }, refreshSessionInterval);
 
       console.log('Dashboard initialized successfully');
     } catch (error) {
@@ -858,6 +865,17 @@ class Dashboard {
 
       bootstrapModal.show();
     });
+  }
+
+  private async refreshSession(serverAddr: string) {
+    try {
+      await fetch(joinUrl(serverAddr, 'session', 'refresh'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (error) {
+      console.warn('Failed to refresh session:', error);
+    }
   }
 }
 

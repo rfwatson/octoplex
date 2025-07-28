@@ -21,14 +21,13 @@ const (
 	cookieValidFor    = 7 * 24 * time.Hour
 )
 
-// TODO: refresh session token automatically on incoming HTTP request
-// TODO: refresh session periodically during WebSocket connection?
 // TODO: improve error responses
 func newWebHandler(cfg config.Config, internalAPI *Server, credentialsMode CredentialsMode, tokenStore TokenStore, logger *slog.Logger) (http.Handler, error) {
 	mux := http.NewServeMux()
 
 	mux.Handle("POST /session", handleSessionCreate(cfg, credentialsMode, tokenStore, logger))
 	mux.Handle("POST /session/destroy", handleSessionDestroy(cfg, tokenStore, logger))
+	mux.Handle("POST /session/refresh", handleSessionRefresh(cfg, credentialsMode, tokenStore, logger))
 	mux.Handle("/ws", newWebSocketProxy(cfg, internalAPI, credentialsMode, tokenStore, logger).Handler())
 
 	if serveAssets {
@@ -137,6 +136,36 @@ func handleSessionDestroy(cfg config.Config, tokenStore TokenStore, logger *slog
 		setSessionCookie(w, "", cfg.ServerURL.BaseURL)
 		w.Header().Set("Location", joinURLComponents(cfg.ServerURL.BaseURL, "/login.html"))
 		w.WriteHeader(http.StatusSeeOther)
+	}
+}
+
+func handleSessionRefresh(cfg config.Config, credentialsMode CredentialsMode, tokenStore TokenStore, logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if credentialsMode == CredentialsModeDisabled {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if !isAuthenticatedWithSessionToken(r.Header.Get("cookie"), tokenStore, logger) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		if err := refreshSessionToken(tokenStore, logger); err != nil {
+			logger.Error("Error refreshing session token", "err", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		sessionTokenCookie, err := r.Cookie(cookieNameSession)
+		if err != nil {
+			logger.Warn("Session token cookie not found", "err", err)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		setSessionCookie(w, sessionTokenCookie.Value, cfg.ServerURL.BaseURL)
+
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

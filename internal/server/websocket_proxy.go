@@ -58,10 +58,6 @@ func (p *WebSocketProxy) Handler() http.HandlerFunc {
 				p.handleUnauthorized(r, conn)
 				return
 			}
-
-			if err := refreshSessionToken(p.tokenStore, p.logger); err != nil {
-				p.logger.Warn("Failed to refresh session token", "error", err)
-			}
 		}
 
 		p.logger.Info("WebSocket client connected", "remote_addr", r.RemoteAddr)

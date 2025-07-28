@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"git.netflux.io/rob/octoplex/internal/config"
+	"git.netflux.io/rob/octoplex/internal/domain"
 	mocks "git.netflux.io/rob/octoplex/internal/generated/mocks/server"
 	"git.netflux.io/rob/octoplex/internal/testhelpers"
 	"git.netflux.io/rob/octoplex/internal/token"
@@ -252,6 +254,133 @@ func TestWebHandlerSessionDestroy(t *testing.T) {
 			assert.Equal(t, tc.wantSecure, cookie.Secure)
 			assert.True(t, cookie.HttpOnly)
 			assert.Equal(t, http.SameSiteStrictMode, cookie.SameSite)
+		})
+	}
+}
+
+func TestWebHandlerSessionRefresh(t *testing.T) {
+	const sessionToken = "s3cr3t"
+
+	testCases := []struct {
+		name            string
+		credentialsMode CredentialsMode
+		baseURL         string
+		cookieToSend    string
+		tokenStoreFunc  func(t *testing.T, tokenStore *mocks.TokenStore)
+		wantStatus      int
+		wantCookie      bool
+		wantSecure      bool
+	}{
+		{
+			name:            "credentials disabled",
+			credentialsMode: CredentialsModeDisabled,
+			wantStatus:      http.StatusNoContent,
+		},
+		{
+			name:            "credentials enabled, no credentials",
+			credentialsMode: CredentialsModeEnabled,
+			baseURL:         "http://localhost:8080",
+			cookieToSend:    "",
+			wantStatus:      http.StatusUnauthorized,
+			wantCookie:      false,
+		},
+		{
+			name:            "credentials enabled, invalid credentials",
+			credentialsMode: CredentialsModeEnabled,
+			baseURL:         "http://localhost:8080",
+			cookieToSend:    hex.EncodeToString([]byte("nope")),
+			tokenStoreFunc: func(t *testing.T, tokenStore *mocks.TokenStore) {
+				token, err := token.New(token.RawToken(sessionToken), time.Time{})
+				require.NoError(t, err)
+
+				tokenStore.EXPECT().Get(storeKeySessionToken).Return(token, nil)
+			},
+			wantStatus: http.StatusUnauthorized,
+			wantCookie: false,
+		},
+		{
+			name:            "credentials enabled, HTTP base URL, successful refresh",
+			credentialsMode: CredentialsModeEnabled,
+			baseURL:         "http://localhost:8080",
+			cookieToSend:    hex.EncodeToString([]byte(sessionToken)),
+			tokenStoreFunc: func(t *testing.T, tokenStore *mocks.TokenStore) {
+				token, err := token.New(token.RawToken(sessionToken), time.Time{})
+				require.NoError(t, err)
+
+				tokenStore.EXPECT().Get(storeKeySessionToken).Return(token, nil)
+				tokenStore.EXPECT().Put(storeKeySessionToken, mock.MatchedBy(func(t domain.Token) bool {
+					return t.ExpiresAt.After(time.Now().Add(cookieValidFor - (5 * time.Second)))
+				})).Return(nil)
+			},
+			wantStatus: http.StatusNoContent,
+			wantCookie: true,
+			wantSecure: false,
+		},
+		{
+			name:            "credentials enabled, HTTPS base URL, successful refresh",
+			credentialsMode: CredentialsModeEnabled,
+			baseURL:         "https://localhost:8080",
+			cookieToSend:    hex.EncodeToString([]byte(sessionToken)),
+			tokenStoreFunc: func(t *testing.T, tokenStore *mocks.TokenStore) {
+				token, err := token.New(token.RawToken(sessionToken), time.Time{})
+				require.NoError(t, err)
+
+				tokenStore.EXPECT().Get(storeKeySessionToken).Return(token, nil)
+				tokenStore.EXPECT().Put(storeKeySessionToken, mock.MatchedBy(func(t domain.Token) bool {
+					return t.ExpiresAt.After(time.Now().Add(cookieValidFor - (5 * time.Second)))
+				})).Return(nil)
+			},
+			wantStatus: http.StatusNoContent,
+			wantCookie: true,
+			wantSecure: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		logger := testhelpers.NewTestLogger(t)
+
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), "POST", "/session/refresh", nil)
+			if tc.cookieToSend != "" {
+				req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: tc.cookieToSend})
+			}
+			rec := httptest.NewRecorder()
+
+			var tokenStore mocks.TokenStore
+			defer tokenStore.AssertExpectations(t)
+			if tc.tokenStoreFunc != nil {
+				tc.tokenStoreFunc(t, &tokenStore)
+			}
+
+			handler, err := newWebHandler(
+				config.Config{
+					ServerURL: config.ServerURL{BaseURL: tc.baseURL},
+					Web:       config.Web{Enabled: true},
+				},
+				nil, // internalAPI, not used in this test
+				tc.credentialsMode,
+				&tokenStore,
+				logger,
+			)
+			require.NoError(t, err)
+
+			handler.ServeHTTP(rec, req)
+
+			assert.Equal(t, tc.wantStatus, rec.Code)
+
+			if tc.wantCookie {
+				cookie := rec.Result().Cookies()[0]
+				assert.Equal(t, cookie.Name, cookieNameSession)
+				assert.NotZero(t, cookie.Value)
+				assert.Equal(t, "/", cookie.Path)
+				assert.NotZero(t, cookie.Expires)
+				assert.Less(t, cookie.Expires, time.Now().Add(8*24*time.Hour))
+				assert.Equal(t, tc.wantSecure, cookie.Secure)
+				assert.True(t, cookie.HttpOnly)
+				assert.Equal(t, http.SameSiteStrictMode, cookie.SameSite)
+			} else {
+				assert.Empty(t, rec.Result().Cookies(), "expected no cookies, but got one")
+			}
 		})
 	}
 }
