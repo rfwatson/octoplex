@@ -999,7 +999,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			contents := getContents()
 
 			assert.True(c, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
-			assert.True(c, contentsIncludes(contents, "validate: destination URL must be an RTMP URL"), "expected to see invalid RTMP URL error")
+			assert.True(c, contentsIncludes(contents, "URL must be an RTMP URL"), "expected to see invalid RTMP URL error")
 		},
 		waitTime,
 		time.Second,
@@ -1019,7 +1019,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			contents := getContents()
 
 			assert.True(c, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
-			assert.True(c, contentsIncludes(contents, "validate: destination URL must be an RTMP URL"), "expected to see invalid RTMP URL error")
+			assert.True(c, contentsIncludes(contents, "URL must be an RTMP URL"), "expected to see invalid RTMP URL error")
 		},
 		waitTime,
 		time.Second,
@@ -1065,7 +1065,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			contents := getContents()
 
 			assert.True(c, contentsIncludes(contents, "Configuration update failed:"), "expected to see config update error")
-			assert.True(c, contentsIncludes(contents, "validate: duplicate destination URL: rtmp://"), "expected to see config update error")
+			assert.True(c, contentsIncludes(contents, "URL is a duplicate of another URL"), "expected to see config update error")
 		},
 		waitTime,
 		time.Second,

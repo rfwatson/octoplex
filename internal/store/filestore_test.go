@@ -23,7 +23,8 @@ func TestFilestore(t *testing.T) {
 	state := st.Get()
 	assert.Zero(t, state)
 
-	require.NoError(t, st.Set(store.State{Destinations: []store.Destination{{Name: "test", URL: "rtmp://localhost/live"}}}))
+	_, err = st.Set(store.State{Destinations: []store.Destination{{Name: "test", URL: "rtmp://localhost/live"}}})
+	require.NoError(t, err)
 	state = st.Get()
 	assert.Len(t, state.Destinations, 1)
 	assert.Equal(t, "test", state.Destinations[0].Name)
@@ -51,32 +52,32 @@ func TestFilestoreValidation(t *testing.T) {
 		{
 			name:    "empty destination name",
 			in:      `{"destinations":[{"name":"","url":"rtmp://localhost/live"}]}`,
-			wantErr: "validate: destination name cannot be empty",
+			wantErr: "stored state is invalid: [name]",
 		},
 		{
 			name:    "destination name contains only whitespace",
 			in:      `{"destinations":[{"name":"   ","url":"rtmp://localhost/live"}]}`,
-			wantErr: "validate: destination name cannot be empty",
+			wantErr: "stored state is invalid: [name]",
 		},
 		{
 			name:    "invalid destination URL",
 			in:      `{"destinations":[{"name":"test","url":"invalid-url"}]}`,
-			wantErr: "validate: destination URL must be an RTMP URL",
+			wantErr: "stored state is invalid: [url]",
 		},
 		{
 			name:    "invalid scheme",
 			in:      `{"destinations":[{"name":"test","url":"invalid-scheme://localhost/live"}]}`,
-			wantErr: "validate: destination URL must be an RTMP URL",
+			wantErr: "stored state is invalid: [url]",
 		},
 		{
 			name:    "duplicate destination",
 			in:      `{"destinations":[{"name":"test","url":"rtmp://localhost/live"},{"name":"test2","url":"rtmp://localhost/live"}]}`,
-			wantErr: "validate: duplicate destination URL: rtmp://localhost/live",
+			wantErr: "stored state is invalid: [url]",
 		},
 		{
 			name:    "multiple invalid destinations",
 			in:      `{"destinations":[{"name":"test","url":"invalid-url"},{"name":"test2","url":"invalid-scheme://localhost/live"}]}`,
-			wantErr: "validate: destination URL must be an RTMP URL\ndestination URL must be an RTMP URL",
+			wantErr: "stored state is invalid: [url]",
 		},
 	}
 

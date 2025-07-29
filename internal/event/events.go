@@ -72,8 +72,9 @@ func (e DestinationAddedEvent) EventName() Name {
 
 // AddDestinationFailedEvent is emitted when a destination fails to be added.
 type AddDestinationFailedEvent struct {
-	URL string
-	Err error
+	URL              string
+	Err              error
+	ValidationErrors domain.ValidationErrors
 }
 
 func (e AddDestinationFailedEvent) EventName() Name {
@@ -91,8 +92,9 @@ func (e DestinationUpdatedEvent) EventName() Name {
 
 // UpdateDestinationFailedEvent is emitted when a destination fails to be updated.
 type UpdateDestinationFailedEvent struct {
-	ID  uuid.UUID
-	Err error
+	ID               uuid.UUID
+	Err              error
+	ValidationErrors domain.ValidationErrors
 }
 
 func (e UpdateDestinationFailedEvent) EventName() Name {

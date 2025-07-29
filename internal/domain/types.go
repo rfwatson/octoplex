@@ -149,3 +149,11 @@ type Token struct {
 	Hashed    string
 	ExpiresAt time.Time // may be zero value, meaning no expiration
 }
+
+// ValidationErrors is a map of field names to validation errors.
+type ValidationErrors map[string][]string
+
+// Append appends a message to the provided field.
+func (ve ValidationErrors) Append(field, message string) {
+	ve[field] = append(ve[field], message)
+}

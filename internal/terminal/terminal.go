@@ -278,11 +278,11 @@ func (ui *UI) Run(ctx context.Context) error {
 				case event.DestinationAddedEvent:
 					ui.handleDestinationAdded(evt)
 				case event.AddDestinationFailedEvent:
-					ui.handleDestinationEventError(evt.Err)
+					ui.handleDestinationEventError(evt.Err, evt.ValidationErrors)
 				case event.DestinationUpdatedEvent:
 					ui.handleDestinationUpdated(evt)
 				case event.UpdateDestinationFailedEvent:
-					ui.handleDestinationEventError(evt.Err)
+					ui.handleDestinationEventError(evt.Err, evt.ValidationErrors)
 				case event.StartDestinationFailedEvent:
 					ui.handleStartDestinationFailed(evt)
 				case event.DestinationStreamExitedEvent:
@@ -290,7 +290,7 @@ func (ui *UI) Run(ctx context.Context) error {
 				case event.DestinationRemovedEvent:
 					ui.handleDestinationRemoved(evt)
 				case event.RemoveDestinationFailedEvent:
-					ui.handleDestinationEventError(evt.Err)
+					ui.handleDestinationEventError(evt.Err, nil)
 				case event.OtherInstanceDetectedEvent:
 					ui.handleOtherInstanceDetected(evt)
 				case event.FatalErrorOccurredEvent:
@@ -1008,10 +1008,20 @@ func (ui *UI) handleDestinationRemoved(event.DestinationRemovedEvent) {
 	ui.selectPreviousDestination()
 }
 
-func (ui *UI) handleDestinationEventError(err error) {
+func (ui *UI) handleDestinationEventError(err error, validationErrors domain.ValidationErrors) {
+	var msg string
+	switch {
+	case err != nil:
+		msg = "Something went wrong. Check the server error logs for details."
+	case len(validationErrors) > 0:
+		msg = formatValidationErrors(validationErrors)
+	default:
+		msg = "An unknown error occurred." // Should never happen.
+	}
+
 	ui.showModal(
 		pageNameConfigUpdateFailed,
-		"Configuration update failed:\n\n"+err.Error(),
+		"Configuration update failed:\n\n"+msg,
 		[]string{"Ok"},
 		false,
 		func(int, string) {
@@ -1155,4 +1165,25 @@ func rightPad(s string, n int) string {
 		return s[:n]
 	}
 	return s + strings.Repeat(" ", n-len(s))
+}
+
+func formatValidationErrors(errs domain.ValidationErrors) string {
+	var sb strings.Builder
+	var fieldIndex int
+
+	for _, fieldErrors := range errs {
+		for i, val := range fieldErrors {
+			sb.WriteString(val)
+			if i < len(fieldErrors)-1 {
+				sb.WriteString(", ")
+			}
+		}
+
+		if fieldIndex < len(errs)-1 {
+			sb.WriteString(", ")
+		}
+		fieldIndex++
+	}
+
+	return sb.String()
 }

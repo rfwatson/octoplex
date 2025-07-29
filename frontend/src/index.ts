@@ -136,7 +136,7 @@ class Dashboard {
       case 'addDestinationFailed':
       case 'updateDestinationFailed':
         console.error('Destination operation failed:', event);
-        this.handleSaveDestinationError(event.error);
+        this.handleSaveDestinationError(event.error, event.validationErrors);
         break;
 
       case 'destinationAdded':
@@ -701,20 +701,38 @@ class Dashboard {
   }
 
   // handleSaveDestinationError handles a server error when saving a destination.
-  //
-  // TODO: improve error handling consistency between client-side and
-  // server-side errors.
-  private handleSaveDestinationError(msg: string) {
+  private handleSaveDestinationError(
+    err: string,
+    validationErrors: { [key: string]: string[] },
+  ) {
     const form = document.getElementById('destination-form') as HTMLFormElement;
 
     if (!form) return;
 
-    const errElement = form.querySelector(
-      '#destination-error',
-    ) as HTMLDivElement;
-    errElement.style.display = 'block';
+    if (err != '') {
+      const errElement = form.querySelector(
+        '#destination-error',
+      ) as HTMLDivElement;
+      errElement.style.display = 'block';
+      (errElement.querySelector('p') as HTMLParagraphElement).textContent =
+        'Something went wrong. Check the server error logs for details.';
+      return;
+    }
 
-    (errElement.querySelector('p') as HTMLParagraphElement).textContent = msg;
+    for (const [fieldName, msg] of Object.entries(validationErrors)) {
+      const el = form.elements.namedItem(fieldName) as HTMLInputElement;
+      if (!el) {
+        continue;
+      }
+
+      el.classList.add('is-invalid');
+      const feedbackEl = el.nextElementSibling as HTMLDivElement;
+      if (!feedbackEl) {
+        continue;
+      }
+
+      feedbackEl.textContent = msg[0];
+    }
   }
 
   private clearSaveDestinationError() {
@@ -722,57 +740,23 @@ class Dashboard {
 
     if (!form) return;
 
+    for (const el of form.elements) {
+      el.classList.remove('is-invalid');
+      const feedbackEl = el.nextElementSibling as HTMLDivElement;
+      if (feedbackEl) {
+        el.textContent = '';
+      }
+    }
+
     (form.querySelector('#destination-error') as HTMLDivElement).style.display =
       'none';
   }
 
-  private validateForm(form: HTMLFormElement): boolean {
-    const name = (
-      form.elements.namedItem('name') as HTMLInputElement
-    ).value.trim();
-    const url = (
-      form.elements.namedItem('url') as HTMLInputElement
-    ).value.trim();
-
-    let valid = true;
-
-    // Validate name
-    const nameInput = form.elements.namedItem('name') as HTMLInputElement;
-    if (!name) {
-      nameInput.classList.add('is-invalid');
-      valid = false;
-    } else {
-      nameInput.classList.remove('is-invalid');
-    }
-
-    // Validate URL
-    const urlInput = form.elements.namedItem('url') as HTMLInputElement;
-    if (!url) {
-      urlInput.classList.add('is-invalid');
-      return false;
-    }
-
-    try {
-      new URL(url);
-      urlInput.classList.remove('is-invalid');
-    } catch {
-      urlInput.classList.add('is-invalid');
-      return false;
-    }
-
-    return valid;
-  }
-
   private async saveDestination() {
-    const form = document.getElementById('destination-form') as HTMLFormElement;
-    if (!form) return;
-
     this.clearSaveDestinationError();
 
-    if (!this.validateForm(form)) {
-      form.classList.add('was-validated');
-      return;
-    }
+    const form = document.getElementById('destination-form') as HTMLFormElement;
+    if (!form) return;
 
     const formData = new FormData(form);
     const destinationId = form.dataset.destinationId;

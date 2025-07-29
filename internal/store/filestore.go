@@ -2,13 +2,15 @@ package store
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
+	"iter"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"git.netflux.io/rob/octoplex/internal/domain"
 	"github.com/google/uuid"
 )
 
@@ -75,8 +77,8 @@ func readFile(path string) (*FileStore, error) {
 		return nil, fmt.Errorf("unmarshal: %w", err)
 	}
 
-	if err = validate(state); err != nil {
-		return nil, fmt.Errorf("validate: %w", err)
+	if validationErrors := validate(state); len(validationErrors) > 0 {
+		return nil, fmt.Errorf("stored state is invalid: %v", collectIter(maps.Keys(validationErrors)))
 	}
 
 	return &FileStore{path: path, state: &state}, nil
@@ -88,50 +90,61 @@ func (s *FileStore) Get() State {
 }
 
 // Set sets the state of the store to the provided state.
-func (s *FileStore) Set(state State) error {
-	if err := validate(state); err != nil {
-		return fmt.Errorf("validate: %w", err)
+func (s *FileStore) Set(state State) (domain.ValidationErrors, error) {
+	if validationErrors := validate(state); len(validationErrors) > 0 {
+		return validationErrors, nil
 	}
 
 	bytes, err := json.Marshal(state)
 	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
+		return nil, fmt.Errorf("marshal: %w", err)
 	}
 	if err := os.WriteFile(s.path, bytes, 0644); err != nil {
-		return fmt.Errorf("write file: %w", err)
+		return nil, fmt.Errorf("write file: %w", err)
 	}
 
 	s.state = &state
 
-	return nil
+	return nil, nil
 }
 
 // TODO: validate URL format
 // TODO: this doesn't really belong here, move somewhere else
-func validate(state State) error {
-	var err error
-
+func validate(state State) domain.ValidationErrors {
+	errs := make(domain.ValidationErrors)
 	urlCounts := make(map[string]int)
 
 	for _, dest := range state.Destinations {
 		if len(strings.TrimSpace(dest.Name)) == 0 {
-			err = errors.Join(err, errors.New("destination name cannot be empty"))
+			errs.Append("name", "Name cannot be empty")
 		}
 
 		if u, urlErr := url.Parse(dest.URL); urlErr != nil {
-			err = errors.Join(err, fmt.Errorf("invalid destination URL: %w", urlErr))
+			errs.Append("url", "URL is invalid")
 		} else if u.Scheme != "rtmp" {
-			err = errors.Join(err, errors.New("destination URL must be an RTMP URL"))
+			errs.Append("url", "URL must be an RTMP URL")
+		} else if strings.TrimSpace(u.Hostname()) == "" {
+			errs.Append("url", "URL hostname must not be empty")
 		}
 
 		urlCounts[dest.URL]++
 	}
 
-	for url, count := range urlCounts {
+	for _, count := range urlCounts {
 		if count > 1 {
-			err = errors.Join(err, fmt.Errorf("duplicate destination URL: %s", url))
+			errs.Append("url", "URL is a duplicate of another URL")
+			break
 		}
 	}
 
-	return err
+	return errs
+}
+
+func collectIter[V any](seq iter.Seq[V]) []V {
+	var out []V
+	seq(func(v V) bool {
+		out = append(out, v)
+		return true
+	})
+	return out
 }

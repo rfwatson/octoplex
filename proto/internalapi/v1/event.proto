@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package internalapi.v1;
 
+import "google/protobuf/struct.proto";
 import "internalapi/v1/domain.proto";
 
 option go_package = "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1";
@@ -54,6 +55,7 @@ message DestinationAddedEvent {
 message AddDestinationFailedEvent {
   string url = 1;
   string error = 2;
+  map<string, google.protobuf.ListValue> validation_errors = 3;
 }
 
 message DestinationUpdatedEvent {
@@ -63,6 +65,7 @@ message DestinationUpdatedEvent {
 message UpdateDestinationFailedEvent {
   bytes id = 1;
   string error = 2;
+  map<string, google.protobuf.ListValue> validation_errors = 3;
 }
 
 message DestinationRemovedEvent {

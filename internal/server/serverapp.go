@@ -431,9 +431,12 @@ func (a *App) handleCommand(
 			Name: c.DestinationName,
 			URL:  c.URL,
 		})
-		if err := a.store.Set(newState); err != nil {
+		if validationErrors, err := a.store.Set(newState); err != nil {
 			a.logger.Error("Add destination failed", "err", err)
 			return nil, event.AddDestinationFailedEvent{URL: c.URL, Err: err}, nil
+		} else if len(validationErrors) > 0 {
+			a.logger.Info("Add destination failed", "validation_errors", validationErrors)
+			return nil, event.AddDestinationFailedEvent{URL: c.URL, ValidationErrors: validationErrors}, nil
 		}
 		a.handlePersistentStateUpdate(state)
 		a.logger.Info("Destination added", "id", destinationID, "name", c.DestinationName)
@@ -460,9 +463,12 @@ func (a *App) handleCommand(
 			dest.URL = c.URL.Value
 		}
 
-		if err := a.store.Set(newState); err != nil {
+		if validationErrors, err := a.store.Set(newState); err != nil {
 			a.logger.Error("Update destination failed", "err", err)
 			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Err: err}, nil
+		} else if len(validationErrors) > 0 {
+			a.logger.Info("Update destination failed", "validation_errors", validationErrors)
+			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, ValidationErrors: validationErrors}, nil
 		}
 		a.handlePersistentStateUpdate(state)
 		a.logger.Info("Destination updated", "id", c.ID, "name", dest.Name)
@@ -484,9 +490,12 @@ func (a *App) handleCommand(
 		repl.StopDestination(dest.URL) // no-op if not live
 		newState.Destinations = slices.Delete(newState.Destinations, idx, idx+1)
 
-		if err := a.store.Set(newState); err != nil {
+		if validationErrors, err := a.store.Set(newState); err != nil {
 			a.logger.Error("Remove destination failed", "err", err)
 			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: err}, nil
+		} else if len(validationErrors) > 0 { // This case shouldn't happen, there is no validation when removing a destination.
+			a.logger.Info("Remove destination failed", "validation_errors", validationErrors)
+			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: errors.New("validation failed")}, nil
 		}
 		a.handlePersistentStateUpdate(state)
 		a.logger.Info("Destination removed", "id", c.ID, "name", dest.Name)

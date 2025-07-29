@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"connectrpc.com/connect"
 	"git.netflux.io/rob/octoplex/internal/domain"
@@ -18,6 +19,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/terminal"
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // DefaultServerAddr is the default address for the client to connect to.
@@ -120,7 +122,11 @@ func (a *App) AddDestination(ctx context.Context, name, url string) (id string, 
 
 		return destID.String(), nil
 	case *pb.AddDestinationResponse_Error:
-		return "", fmt.Errorf("add destination failed: %s", evt.Error.Error)
+		if evt.Error.Error != "" {
+			return "", fmt.Errorf("add destination failed: %s", evt.Error.Error)
+		} else {
+			return "", errors.New(formatValidationErrors(evt.Error.ValidationErrors))
+		}
 	default:
 		panic("unreachable")
 	}
@@ -154,7 +160,11 @@ func (a *App) UpdateDestination(ctx context.Context, destinationID string, name,
 	case *pb.UpdateDestinationResponse_Ok:
 		return nil
 	case *pb.UpdateDestinationResponse_Error:
-		return fmt.Errorf("update destination failed: %s", evt.Error.Error)
+		if evt.Error.Error != "" {
+			return fmt.Errorf("update destination failed: %s", evt.Error.Error)
+		} else {
+			return errors.New(formatValidationErrors(evt.Error.ValidationErrors))
+		}
 	default:
 		panic("unreachable")
 	}
@@ -419,4 +429,25 @@ func parseID(id string) (uuid.UUID, error) {
 	}
 
 	return destID, nil
+}
+
+func formatValidationErrors(errs map[string]*structpb.ListValue) string {
+	var sb strings.Builder
+	var fieldIndex int
+
+	for _, fieldErrors := range errs {
+		for i, val := range fieldErrors.Values {
+			sb.WriteString(val.GetStringValue())
+			if i < len(fieldErrors.Values)-1 {
+				sb.WriteString(", ")
+			}
+		}
+
+		if fieldIndex < len(errs)-1 {
+			sb.WriteString(", ")
+		}
+		fieldIndex++
+	}
+
+	return sb.String()
 }

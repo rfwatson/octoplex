@@ -9,6 +9,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/event"
 	pb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -177,9 +178,15 @@ func DestinationAddedEventToProto(evt event.DestinationAddedEvent) *pb.Destinati
 
 // AddDestinationFailedEventToProto converts an AddDestinationFailedEvent to a protobuf message.
 func AddDestinationFailedEventToProto(evt event.AddDestinationFailedEvent) *pb.AddDestinationFailedEvent {
+	var errString string
+	if evt.Err != nil {
+		errString = evt.Err.Error()
+	}
+
 	return &pb.AddDestinationFailedEvent{
-		Url:   evt.URL,
-		Error: evt.Err.Error(),
+		Url:              evt.URL,
+		Error:            errString,
+		ValidationErrors: validationErrorsToProto(evt.ValidationErrors),
 	}
 }
 
@@ -190,9 +197,15 @@ func DestinationUpdatedEventToProto(evt event.DestinationUpdatedEvent) *pb.Desti
 
 // UpdateDestinationFailedEventToProto converts an UpdateDestinationFailedEvent to a protobuf message.
 func UpdateDestinationFailedEventToProto(evt event.UpdateDestinationFailedEvent) *pb.UpdateDestinationFailedEvent {
+	var errString string
+	if evt.Err != nil {
+		errString = evt.Err.Error()
+	}
+
 	return &pb.UpdateDestinationFailedEvent{
-		Id:    evt.ID[:],
-		Error: evt.Err.Error(),
+		Id:               evt.ID[:],
+		Error:            errString,
+		ValidationErrors: validationErrorsToProto(evt.ValidationErrors),
 	}
 }
 
@@ -395,8 +408,16 @@ func EventFromAddDestinationFailedProto(evt *pb.AddDestinationFailedEvent) (even
 	if evt == nil {
 		return nil, errors.New("nil AddDestinationFailedEvent")
 	}
+	var evtErr error
+	if evt.Error != "" {
+		evtErr = errors.New(evt.Error)
+	}
 
-	return event.AddDestinationFailedEvent{URL: evt.Url, Err: errors.New(evt.Error)}, nil
+	return event.AddDestinationFailedEvent{
+		URL:              evt.Url,
+		Err:              evtErr,
+		ValidationErrors: validationErrorsFromProto(evt.ValidationErrors),
+	}, nil
 }
 
 // EventFromDestinationUpdatedProto converts a protobuf DestinationUpdatedEvent to a domain event.
@@ -424,7 +445,16 @@ func EventFromUpdateDestinationFailedProto(evt *pb.UpdateDestinationFailedEvent)
 		return nil, fmt.Errorf("parse ID: %w", err)
 	}
 
-	return event.UpdateDestinationFailedEvent{ID: id, Err: errors.New(evt.Error)}, nil
+	var evtErr error
+	if evt.Error != "" {
+		evtErr = errors.New(evt.Error)
+	}
+
+	return event.UpdateDestinationFailedEvent{
+		ID:               id,
+		Err:              evtErr,
+		ValidationErrors: validationErrorsFromProto(evt.ValidationErrors),
+	}, nil
 }
 
 // EventFromDestinationStreamExitedProto converts a protobuf DestinationStreamExitedEvent to a domain event.
@@ -544,4 +574,42 @@ func EventFromMediaServerStartedProto(evt *pb.MediaServerStartedEvent) (event.Ev
 		return nil, errors.New("nil MediaServerStartedEvent")
 	}
 	return event.MediaServerStartedEvent{}, nil
+}
+
+func validationErrorsToProto(in domain.ValidationErrors) map[string]*structpb.ListValue {
+	if in == nil {
+		return nil
+	}
+
+	out := make(map[string]*structpb.ListValue)
+	for field, validationErrors := range in {
+		values := make([]*structpb.Value, 0, len(validationErrors))
+		for _, msg := range validationErrors {
+			value, _ := structpb.NewValue(msg) // msg is a string, will not error.
+			values = append(values, value)
+		}
+		out[field] = &structpb.ListValue{Values: values}
+	}
+	return out
+}
+
+func validationErrorsFromProto(in map[string]*structpb.ListValue) domain.ValidationErrors {
+	if in == nil {
+		return nil
+	}
+
+	out := make(domain.ValidationErrors)
+	for field, listValue := range in {
+		if listValue == nil {
+			continue
+		}
+		messages := make([]string, 0, len(listValue.Values))
+		for _, value := range listValue.Values {
+			if value.GetStringValue() != "" {
+				messages = append(messages, value.GetStringValue())
+			}
+		}
+		out[field] = messages
+	}
+	return out
 }

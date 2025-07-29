@@ -9,6 +9,7 @@ package internalapiv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -596,11 +597,12 @@ func (x *DestinationAddedEvent) GetId() []byte {
 }
 
 type AddDestinationFailedEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
-	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState         `protogen:"open.v1"`
+	Url              string                         `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Error            string                         `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	ValidationErrors map[string]*structpb.ListValue `protobuf:"bytes,3,rep,name=validation_errors,json=validationErrors,proto3" json:"validation_errors,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *AddDestinationFailedEvent) Reset() {
@@ -645,6 +647,13 @@ func (x *AddDestinationFailedEvent) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *AddDestinationFailedEvent) GetValidationErrors() map[string]*structpb.ListValue {
+	if x != nil {
+		return x.ValidationErrors
+	}
+	return nil
 }
 
 type DestinationUpdatedEvent struct {
@@ -692,11 +701,12 @@ func (x *DestinationUpdatedEvent) GetId() []byte {
 }
 
 type UpdateDestinationFailedEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            []byte                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState         `protogen:"open.v1"`
+	Id               []byte                         `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Error            string                         `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	ValidationErrors map[string]*structpb.ListValue `protobuf:"bytes,3,rep,name=validation_errors,json=validationErrors,proto3" json:"validation_errors,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *UpdateDestinationFailedEvent) Reset() {
@@ -741,6 +751,13 @@ func (x *UpdateDestinationFailedEvent) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *UpdateDestinationFailedEvent) GetValidationErrors() map[string]*structpb.ListValue {
+	if x != nil {
+		return x.ValidationErrors
+	}
+	return nil
 }
 
 type DestinationRemovedEvent struct {
@@ -1187,7 +1204,7 @@ var File_internalapi_v1_event_proto protoreflect.FileDescriptor
 
 const file_internalapi_v1_event_proto_rawDesc = "" +
 	"\n" +
-	"\x1ainternalapi/v1/event.proto\x12\x0einternalapi.v1\x1a\x1binternalapi/v1/domain.proto\"\xcd\r\n" +
+	"\x1ainternalapi/v1/event.proto\x12\x0einternalapi.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1binternalapi/v1/domain.proto\"\xcd\r\n" +
 	"\x05Event\x12R\n" +
 	"\x11app_state_changed\x18\x01 \x01(\v2$.internalapi.v1.AppStateChangedEventH\x00R\x0fappStateChanged\x12j\n" +
 	"\x19destination_stream_exited\x18\x02 \x01(\v2,.internalapi.v1.DestinationStreamExitedEventH\x00R\x17destinationStreamExited\x12T\n" +
@@ -1222,15 +1239,23 @@ const file_internalapi_v1_event_proto_rawDesc = "" +
 	"\x1bListDestinationsFailedEvent\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\"'\n" +
 	"\x15DestinationAddedEvent\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\fR\x02id\"C\n" +
+	"\x02id\x18\x01 \x01(\fR\x02id\"\x92\x02\n" +
 	"\x19AddDestinationFailedEvent\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\")\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12l\n" +
+	"\x11validation_errors\x18\x03 \x03(\v2?.internalapi.v1.AddDestinationFailedEvent.ValidationErrorsEntryR\x10validationErrors\x1a_\n" +
+	"\x15ValidationErrorsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x120\n" +
+	"\x05value\x18\x02 \x01(\v2\x1a.google.protobuf.ListValueR\x05value:\x028\x01\")\n" +
 	"\x17DestinationUpdatedEvent\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\fR\x02id\"D\n" +
+	"\x02id\x18\x01 \x01(\fR\x02id\"\x96\x02\n" +
 	"\x1cUpdateDestinationFailedEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\fR\x02id\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\")\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12o\n" +
+	"\x11validation_errors\x18\x03 \x03(\v2B.internalapi.v1.UpdateDestinationFailedEvent.ValidationErrorsEntryR\x10validationErrors\x1a_\n" +
+	"\x15ValidationErrorsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x120\n" +
+	"\x05value\x18\x02 \x01(\v2\x1a.google.protobuf.ListValueR\x05value:\x028\x01\")\n" +
 	"\x17DestinationRemovedEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\fR\x02id\"D\n" +
 	"\x1cRemoveDestinationFailedEvent\x12\x0e\n" +
@@ -1266,7 +1291,7 @@ func file_internalapi_v1_event_proto_rawDescGZIP() []byte {
 	return file_internalapi_v1_event_proto_rawDescData
 }
 
-var file_internalapi_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_internalapi_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_internalapi_v1_event_proto_goTypes = []any{
 	(*Event)(nil),                        // 0: internalapi.v1.Event
 	(*AppStateChangedEvent)(nil),         // 1: internalapi.v1.AppStateChangedEvent
@@ -1287,8 +1312,11 @@ var file_internalapi_v1_event_proto_goTypes = []any{
 	(*OtherInstanceDetectedEvent)(nil),   // 16: internalapi.v1.OtherInstanceDetectedEvent
 	(*FatalErrorEvent)(nil),              // 17: internalapi.v1.FatalErrorEvent
 	(*HandshakeCompletedEvent)(nil),      // 18: internalapi.v1.HandshakeCompletedEvent
-	(*AppState)(nil),                     // 19: internalapi.v1.AppState
-	(*Destination)(nil),                  // 20: internalapi.v1.Destination
+	nil,                                  // 19: internalapi.v1.AddDestinationFailedEvent.ValidationErrorsEntry
+	nil,                                  // 20: internalapi.v1.UpdateDestinationFailedEvent.ValidationErrorsEntry
+	(*AppState)(nil),                     // 21: internalapi.v1.AppState
+	(*Destination)(nil),                  // 22: internalapi.v1.Destination
+	(*structpb.ListValue)(nil),           // 23: google.protobuf.ListValue
 }
 var file_internalapi_v1_event_proto_depIdxs = []int32{
 	1,  // 0: internalapi.v1.Event.app_state_changed:type_name -> internalapi.v1.AppStateChangedEvent
@@ -1309,13 +1337,17 @@ var file_internalapi_v1_event_proto_depIdxs = []int32{
 	18, // 15: internalapi.v1.Event.handshake_completed:type_name -> internalapi.v1.HandshakeCompletedEvent
 	3,  // 16: internalapi.v1.Event.destinations_listed:type_name -> internalapi.v1.DestinationsListedEvent
 	4,  // 17: internalapi.v1.Event.list_destinations_failed:type_name -> internalapi.v1.ListDestinationsFailedEvent
-	19, // 18: internalapi.v1.AppStateChangedEvent.app_state:type_name -> internalapi.v1.AppState
-	20, // 19: internalapi.v1.DestinationsListedEvent.destinations:type_name -> internalapi.v1.Destination
-	20, // [20:20] is the sub-list for method output_type
-	20, // [20:20] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	21, // 18: internalapi.v1.AppStateChangedEvent.app_state:type_name -> internalapi.v1.AppState
+	22, // 19: internalapi.v1.DestinationsListedEvent.destinations:type_name -> internalapi.v1.Destination
+	19, // 20: internalapi.v1.AddDestinationFailedEvent.validation_errors:type_name -> internalapi.v1.AddDestinationFailedEvent.ValidationErrorsEntry
+	20, // 21: internalapi.v1.UpdateDestinationFailedEvent.validation_errors:type_name -> internalapi.v1.UpdateDestinationFailedEvent.ValidationErrorsEntry
+	23, // 22: internalapi.v1.AddDestinationFailedEvent.ValidationErrorsEntry.value:type_name -> google.protobuf.ListValue
+	23, // 23: internalapi.v1.UpdateDestinationFailedEvent.ValidationErrorsEntry.value:type_name -> google.protobuf.ListValue
+	24, // [24:24] is the sub-list for method output_type
+	24, // [24:24] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_internalapi_v1_event_proto_init() }
@@ -1350,7 +1382,7 @@ func file_internalapi_v1_event_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internalapi_v1_event_proto_rawDesc), len(file_internalapi_v1_event_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

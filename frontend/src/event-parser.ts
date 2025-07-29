@@ -1,4 +1,5 @@
 // Event parser that converts protobuf events to domain types
+import { ListValue } from '@bufbuild/protobuf/wkt';
 import type { Event } from '../generated/internalapi/v1/event_pb.ts';
 import type {
   AppEvent,
@@ -195,6 +196,9 @@ export function parseEvent(pbEvent: Event): AppEvent | null {
         type: 'addDestinationFailed',
         url: pbEvent.eventType.value.url,
         error: pbEvent.eventType.value.error,
+        validationErrors: buildValidationErrors(
+          pbEvent.eventType.value.validationErrors,
+        ),
       };
 
     case 'updateDestinationFailed':
@@ -202,6 +206,9 @@ export function parseEvent(pbEvent: Event): AppEvent | null {
         type: 'updateDestinationFailed',
         id: bytesToString(pbEvent.eventType.value.id),
         error: pbEvent.eventType.value.error,
+        validationErrors: buildValidationErrors(
+          pbEvent.eventType.value.validationErrors,
+        ),
       };
 
     case 'removeDestinationFailed':
@@ -229,4 +236,16 @@ export function parseEvent(pbEvent: Event): AppEvent | null {
       console.log(`Unhandled event type: ${pbEvent.eventType.case}`);
       return null;
   }
+}
+
+function buildValidationErrors(errors: { [key: string]: ListValue }): {
+  [key: string]: string[];
+} {
+  const out: { [key: string]: string[] } = {};
+
+  for (const [fieldName, fieldErrors] of Object.entries(errors)) {
+    out[fieldName] = fieldErrors.values.map((v) => v.kind.value as string);
+  }
+
+  return out;
 }

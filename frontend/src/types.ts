@@ -76,6 +76,7 @@ export interface AddDestinationFailedEvent {
   type: 'addDestinationFailed';
   url: string;
   error: string;
+  validationErrors: { [key: string]: string[] };
 }
 
 export interface DestinationUpdatedEvent {
@@ -87,6 +88,7 @@ export interface UpdateDestinationFailedEvent {
   type: 'updateDestinationFailed';
   id: string;
   error: string;
+  validationErrors: { [key: string]: string[] };
 }
 
 export interface DestinationRemovedEvent {
