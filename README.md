@@ -321,6 +321,9 @@ Flag|Alias|Modes|Env var|Default|Description
 `--rtmps-listen`||`server` `all-in-one`||`127.0.0.1:1936`|Listen address for RTMPS sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen`.
 `--image-name-mediamtx`||`server` `all-in-one`|`OCTO_IMAGE_NAME_MEDIAMTX`|`ghcr.io/rfwatson/mediamtx-alpine:latest`|OCI-compatible image for launching MediaMTX
 `--image-name-ffmpeg`||`server` `all-in-one`|`OCTO_IMAGE_NAME_FFMPEG`|`ghcr.io/jrottenberg/ffmpeg:7.1-scratch`|OCI-compatible image for launching FFmpeg
+`--log-to-file`||`server` `all-in-one`|`OCTO_LOG_TO_FILE`|`false`|Log to a file instead stderr
+`--log-file`||`server` `all-in-one`|`OCTO_LOG_FILE`||Path to a log file to write. Implies `--log-to-file`
+`--log-level`||`server` `all-in-one`|`OCTO_LOG_LEVEL`|`info`|Log level, one of `debug`, `info`, `warn` or `error`
 
 ### Client flags
 
@@ -331,6 +334,7 @@ Flag|Alias|Default|Description
 `--tls-skip-verify`|`-k`|`false`|Skip TLS certificate verification (insecure)
 `--api-token`|`-t`||API token. See [Security](#security).
 `--log-file`|||Path to log file
+`--log-level`||`info`|Log level, one of `debug`, `info`, `warn` or `error`
 
 ### All-in-one mode
 

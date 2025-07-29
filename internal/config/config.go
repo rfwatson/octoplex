@@ -13,17 +13,18 @@ const (
 	TLSMinVersion = tls.VersionTLS13
 )
 
-// LogFile holds the configuration for the log file.
-type LogFile struct {
-	Enabled bool
-	Path    string
+// Logging holds logging configuration.
+type Logging struct {
+	ToFile bool   // ToFile is true if logs should be written to file.
+	Path   string // Path is an explicit filesystem path to log to. May be zero value if unset.
+	Level  string // Level is "debug", "info", etc.
 
 	defaultPath string
 }
 
 // GetPath returns the path to the log file. If the path is not set, it
 // returns the default log path.
-func (l LogFile) GetPath() string {
+func (l Logging) GetPath() string {
 	return cmp.Or(l.Path, l.defaultPath)
 }
 
@@ -133,7 +134,7 @@ type Config struct {
 	Web                 Web
 	Debug               bool // deprecated
 	DataDir             string
-	LogFile             LogFile
+	Logging             Logging
 	Sources             Sources
 	ImageNameFFMPEG     string
 }

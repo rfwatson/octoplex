@@ -210,6 +210,11 @@ func run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 						Usage:     "Path to the log file",
 						TakesFile: true,
 					},
+					&cli.StringFlag{
+						Name:        "log-level",
+						Usage:       "Set the logging level",
+						DefaultText: "info",
+					},
 				},
 				Commands: []*cli.Command{
 					{
@@ -593,11 +598,12 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			TakesFile: true,
 			Sources:   cli.EnvVars("OCTO_LOG_FILE"),
 		},
-		&cli.BoolFlag{
-			Name:     "debug", // TODO: replace with --log-level
-			Usage:    "Enable debug logging",
-			Category: "Logs",
-			Sources:  cli.EnvVars("OCTO_DEBUG"),
+		&cli.StringFlag{
+			Name:        "log-level",
+			Usage:       "Set the logging level",
+			Category:    "Logs",
+			DefaultText: "info",
+			Sources:     cli.EnvVars("OCTO_LOG_LEVEL"),
 		},
 		&cli.StringFlag{
 			Name:        "stream-key",
@@ -897,6 +903,7 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 
 	logToFileEnabled := c.Bool("log-to-file")
 	logFile := c.String("log-file")
+	logLevel := cmp.Or(c.String("log-level"), "info")
 
 	if !logToFileEnabled && logFile != "" {
 		logToFileEnabled = true // enable logging to file if log-file is set
@@ -926,12 +933,12 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 		DockerHost:          cmp.Or(c.String("docker-host"), os.Getenv("DOCKER_HOST")),
 		InDocker:            os.Getenv("OCTO_DOCKER") == "true",
 		Web:                 config.Web{Enabled: !c.IsSet("web") || webEnabled},
-		Debug:               c.Bool("debug"),
 		DataDir:             dataDir,
 		ImageNameFFMPEG:     c.String("image-name-ffmpeg"),
-		LogFile: config.LogFile{
-			Enabled: logToFileEnabled,
-			Path:    logFile,
+		Logging: config.Logging{
+			ToFile: logToFileEnabled,
+			Path:   logFile,
+			Level:  logLevel,
 		},
 	}
 
@@ -998,22 +1005,17 @@ func buildServerLogger(cfg config.Config, stderr io.Writer, stderrAvailable bool
 	var w io.Writer
 	if stderrAvailable {
 		w = stderr
-	} else if !cfg.LogFile.Enabled {
+	} else if !cfg.Logging.ToFile {
 		w = io.Discard
 	} else {
 		var err error
-		w, err = os.OpenFile(cfg.LogFile.GetPath(), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		w, err = os.OpenFile(cfg.Logging.GetPath(), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
 			return nil, fmt.Errorf("error opening log file: %w", err)
 		}
 	}
 
-	var handlerOpts slog.HandlerOptions
-	if cfg.Debug {
-		handlerOpts.Level = slog.LevelDebug
-	}
-
-	return slog.New(slog.NewTextHandler(w, &handlerOpts)), nil
+	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: parseLogLevel(cfg.Logging.Level)})), nil
 }
 
 func buildClientLogger(c *cli.Command) (*slog.Logger, error) {
@@ -1024,7 +1026,7 @@ func buildClientLogger(c *cli.Command) (*slog.Logger, error) {
 		if err != nil {
 			return nil, fmt.Errorf("open log file: %w", err)
 		}
-		logger = slog.New(slog.NewTextHandler(fptr, nil))
+		logger = slog.New(slog.NewTextHandler(fptr, &slog.HandlerOptions{Level: parseLogLevel(c.String("log-level"))}))
 	}
 
 	return logger, nil
@@ -1033,4 +1035,19 @@ func buildClientLogger(c *cli.Command) (*slog.Logger, error) {
 func handleStdoutError(err error) error {
 	_, _ = fmt.Fprintf(os.Stderr, "failed to write to stdout: %s", err)
 	return fmt.Errorf("fprintf: %w", err)
+}
+
+func parseLogLevel(level string) slog.Level {
+	switch level {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }
