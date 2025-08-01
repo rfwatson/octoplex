@@ -23,48 +23,48 @@ outputs = ["{{config_root}}/frontend/node_modules/.pnpm/lock.yaml"]
 
 [tasks.test]
 description = "Run tests"
-dir = "{{config_root}}"
+dir = "{{cwd}}"
 run = "go test -v ./..."
 alias = "t"
 
 [tasks.test_integration]
 description = "Run integration tests"
-dir = "{{config_root}}"
+dir = "{{cwd}}"
 run = "go test -v -count 1 -p 1 -tags=integration -run TestIntegration ./..."
 alias = "ti"
 
 [tasks.test_ci]
 description = "Run tests in CI"
-dir = "{{config_root}}"
+dir = "{{cwd}}"
 run = "go test -v -count 1 -race ./..."
 env = { CGO_ENABLED = "1" }
 
 [tasks.test_integration_ci]
 description = "Run integration tests in CI"
-dir = "{{config_root}}"
+dir = "{{cwd}}"
 run = "go test -v -count 1 -race -p 1 -tags=integration -run TestIntegration ./..."
 env = { CGO_ENABLED = "1" }
 
 [tasks.lint]
 description = "Run linters"
-dir = "{{config_root}}"
+dir = "{{cwd}}"
 run = "golangci-lint run"
 alias = "l"
 
 [tasks.fmt]
 description = "Run formatter"
-dir = "{{config_root}}"
+dir = "{{cwd}}"
 run = "goimports -w ."
 alias = "f"
 
 [tasks.generate_mocks]
 description = "Generate mocks"
-dir = "{{config_root}}"
+dir = "{{cwd}}"
 run = "go tool mockery"
 alias = "m"
 
 [tasks.generate_proto]
 description = "Generate gRPC files from proto"
-dir = "{{config_root}}"
+dir = "{{cwd}}"
 run = "buf generate"
 alias = "p"
