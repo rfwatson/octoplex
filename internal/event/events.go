@@ -54,7 +54,7 @@ func (e DestinationsListedEvent) EventName() Name {
 // ListDestinationsFailedEvent is emitted when the list of destinations fails
 // to be retrieved.
 type ListDestinationsFailedEvent struct {
-	Err error
+	Error string
 }
 
 func (e ListDestinationsFailedEvent) EventName() Name {
@@ -73,7 +73,7 @@ func (e DestinationAddedEvent) EventName() Name {
 // AddDestinationFailedEvent is emitted when a destination fails to be added.
 type AddDestinationFailedEvent struct {
 	URL              string
-	Err              error
+	Error            string
 	ValidationErrors domain.ValidationErrors
 }
 
@@ -93,7 +93,7 @@ func (e DestinationUpdatedEvent) EventName() Name {
 // UpdateDestinationFailedEvent is emitted when a destination fails to be updated.
 type UpdateDestinationFailedEvent struct {
 	ID               uuid.UUID
-	Err              error
+	Error            string
 	ValidationErrors domain.ValidationErrors
 }
 
@@ -123,8 +123,8 @@ func (e DestinationStartedEvent) EventName() Name {
 
 // StartDestinationFailedEvent is emitted when a destination fails to start.
 type StartDestinationFailedEvent struct {
-	ID  uuid.UUID
-	Err error
+	ID    uuid.UUID
+	Error string
 }
 
 func (e StartDestinationFailedEvent) EventName() Name {
@@ -142,8 +142,8 @@ func (e DestinationStoppedEvent) EventName() Name {
 
 // StopDestinationFailedEvent is emitted when a destination fails to stop.
 type StopDestinationFailedEvent struct {
-	ID  uuid.UUID
-	Err error
+	ID    uuid.UUID
+	Error string
 }
 
 func (e StopDestinationFailedEvent) EventName() Name {
@@ -163,8 +163,8 @@ func (e DestinationRemovedEvent) EventName() Name {
 // RemoveDestinationFailedEvent is emitted when a destination fails to be
 // removed.
 type RemoveDestinationFailedEvent struct {
-	ID  uuid.UUID
-	Err error
+	ID    uuid.UUID
+	Error string
 }
 
 func (e RemoveDestinationFailedEvent) EventName() Name {

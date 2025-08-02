@@ -70,6 +70,9 @@ type Params struct {
 // defaultChanSize is the default size of the dispatch channel.
 const defaultChanSize = 64
 
+// defaultErrorMessage is the default error message to show when an error occurs.
+const defaultErrorMessage = "An error occurred, check server log for details"
+
 var (
 	// ErrOtherInstanceDetected is returned when another instance of the app is
 	// detected on startup.
@@ -433,7 +436,7 @@ func (a *App) handleCommand(
 		})
 		if validationErrors, err := a.store.Set(newState); err != nil {
 			a.logger.Error("Add destination failed", "err", err)
-			return nil, event.AddDestinationFailedEvent{URL: c.URL, Err: err}, nil
+			return nil, event.AddDestinationFailedEvent{URL: c.URL, Error: defaultErrorMessage}, nil
 		} else if len(validationErrors) > 0 {
 			a.logger.Info("Add destination failed", "validation_errors", validationErrors)
 			return nil, event.AddDestinationFailedEvent{URL: c.URL, ValidationErrors: validationErrors}, nil
@@ -445,14 +448,14 @@ func (a *App) handleCommand(
 		if isLive(state, c.ID) {
 			// should be caught in the UI, but just in case
 			a.logger.Warn("Update destination failed: destination is live", "id", c.ID)
-			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Err: errors.New("destination is live")}, nil
+			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Error: "destination is live"}, nil
 		}
 
 		newState := a.store.Get()
 		idx := slices.IndexFunc(newState.Destinations, func(dest store.Destination) bool { return dest.ID == c.ID })
 		if idx == -1 {
 			a.logger.Warn("Update destination failed: destination not found", "id", c.ID)
-			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Err: fmt.Errorf("destination not found")}, nil
+			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Error: "destination not found"}, nil
 		}
 
 		dest := &newState.Destinations[idx]
@@ -465,7 +468,7 @@ func (a *App) handleCommand(
 
 		if validationErrors, err := a.store.Set(newState); err != nil {
 			a.logger.Error("Update destination failed", "err", err)
-			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Err: err}, nil
+			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Error: defaultErrorMessage}, nil
 		} else if len(validationErrors) > 0 {
 			a.logger.Info("Update destination failed", "validation_errors", validationErrors)
 			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, ValidationErrors: validationErrors}, nil
@@ -479,12 +482,12 @@ func (a *App) handleCommand(
 		idx := slices.IndexFunc(newState.Destinations, func(dest store.Destination) bool { return dest.ID == c.ID })
 		if idx == -1 {
 			a.logger.Warn("Remove destination failed: destination not found", "id", c.ID)
-			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: fmt.Errorf("destination not found")}, nil
+			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Error: "destination not found"}, nil
 		}
 
 		dest := state.Destinations[idx]
 		if dest.Status == domain.DestinationStatusLive && !c.Force {
-			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: errors.New("destination is live")}, nil
+			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Error: "destination is live"}, nil
 		}
 
 		repl.StopDestination(dest.URL) // no-op if not live
@@ -492,10 +495,10 @@ func (a *App) handleCommand(
 
 		if validationErrors, err := a.store.Set(newState); err != nil {
 			a.logger.Error("Remove destination failed", "err", err)
-			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: err}, nil
+			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Error: defaultErrorMessage}, nil
 		} else if len(validationErrors) > 0 { // This case shouldn't happen, there is no validation when removing a destination.
 			a.logger.Info("Remove destination failed", "validation_errors", validationErrors)
-			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Err: errors.New("validation failed")}, nil
+			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Error: "validation failed"}, nil
 		}
 		a.handlePersistentStateUpdate(state)
 		a.logger.Info("Destination removed", "id", c.ID, "name", dest.Name)
@@ -506,11 +509,11 @@ func (a *App) handleCommand(
 		})
 		if destIndex == -1 {
 			a.logger.Warn("Start destination failed: destination not found", "id", c.ID)
-			return nil, event.StartDestinationFailedEvent{ID: c.ID, Err: fmt.Errorf("destination not found")}, nil
+			return nil, event.StartDestinationFailedEvent{ID: c.ID, Error: "destination not found"}, nil
 		}
 
 		if !state.Source.Live {
-			return nil, event.StartDestinationFailedEvent{ID: c.ID, Err: errors.New("source not live")}, nil
+			return nil, event.StartDestinationFailedEvent{ID: c.ID, Error: "source not live"}, nil
 		}
 
 		dest := state.Destinations[destIndex]
@@ -535,7 +538,7 @@ func (a *App) handleCommand(
 		})
 		if destIndex == -1 {
 			a.logger.Warn("Start destination failed: destination not found", "id", c.ID)
-			return nil, event.StopDestinationFailedEvent{ID: c.ID, Err: fmt.Errorf("destination not found")}, nil
+			return nil, event.StopDestinationFailedEvent{ID: c.ID, Error: "destination not found"}, nil
 		}
 
 		repl.StopDestination(state.Destinations[destIndex].URL)

@@ -109,7 +109,7 @@ func TestEventToProto(t *testing.T) {
 		},
 		{
 			name: "ListDestinationsFailed",
-			in:   event.ListDestinationsFailedEvent{Err: errors.New("failed to list destinations")},
+			in:   event.ListDestinationsFailedEvent{Error: "failed to list destinations"},
 			want: &pb.Event{
 				EventType: &pb.Event_ListDestinationsFailed{
 					ListDestinationsFailed: &pb.ListDestinationsFailedEvent{
@@ -130,8 +130,8 @@ func TestEventToProto(t *testing.T) {
 		{
 			name: "AddDestinationFailed",
 			in: event.AddDestinationFailedEvent{
-				URL: "rtmp://fail.example.com",
-				Err: errors.New("failed"),
+				URL:   "rtmp://fail.example.com",
+				Error: "failed",
 			},
 			want: &pb.Event{
 				EventType: &pb.Event_AddDestinationFailed{
@@ -153,7 +153,7 @@ func TestEventToProto(t *testing.T) {
 		},
 		{
 			name: "UpdateDestinationFailed",
-			in:   event.UpdateDestinationFailedEvent{ID: destinationID, Err: errors.New("update failed")},
+			in:   event.UpdateDestinationFailedEvent{ID: destinationID, Error: "update failed"},
 			want: &pb.Event{
 				EventType: &pb.Event_UpdateDestinationFailed{
 					UpdateDestinationFailed: &pb.UpdateDestinationFailedEvent{
@@ -174,7 +174,7 @@ func TestEventToProto(t *testing.T) {
 		},
 		{
 			name: "RemoveDestinationFailed",
-			in:   event.RemoveDestinationFailedEvent{ID: destinationID, Err: errors.New("removal failed")},
+			in:   event.RemoveDestinationFailedEvent{ID: destinationID, Error: "removal failed"},
 			want: &pb.Event{
 				EventType: &pb.Event_RemoveDestinationFailed{
 					RemoveDestinationFailed: &pb.RemoveDestinationFailedEvent{Id: destinationID[:], Error: "removal failed"},
@@ -205,7 +205,7 @@ func TestEventToProto(t *testing.T) {
 		},
 		{
 			name: "StartDestinationFailed",
-			in:   event.StartDestinationFailedEvent{ID: destinationID, Err: errors.New("start failed")},
+			in:   event.StartDestinationFailedEvent{ID: destinationID, Error: "start failed"},
 			want: &pb.Event{
 				EventType: &pb.Event_StartDestinationFailed{
 					StartDestinationFailed: &pb.StartDestinationFailedEvent{
@@ -226,7 +226,7 @@ func TestEventToProto(t *testing.T) {
 		},
 		{
 			name: "StopDestinationFailed",
-			in:   event.StopDestinationFailedEvent{ID: destinationID, Err: errors.New("stop failed")},
+			in:   event.StopDestinationFailedEvent{ID: destinationID, Error: "stop failed"},
 			want: &pb.Event{
 				EventType: &pb.Event_StopDestinationFailed{
 					StopDestinationFailed: &pb.StopDestinationFailedEvent{
@@ -341,8 +341,8 @@ func TestUnwrappedEventConversion(t *testing.T) {
 
 	t.Run("AddDestinationFailedEvent", func(t *testing.T) {
 		domainEvent := event.AddDestinationFailedEvent{
-			URL: "rtmp://fail.example.com",
-			Err: errors.New("failed"),
+			URL:   "rtmp://fail.example.com",
+			Error: "failed",
 		}
 
 		// Conversion to proto
@@ -375,8 +375,8 @@ func TestUnwrappedEventConversion(t *testing.T) {
 
 	t.Run("UpdateDestinationFailedEvent", func(t *testing.T) {
 		domainEvent := event.UpdateDestinationFailedEvent{
-			ID:  destinationID,
-			Err: errors.New("update failed"),
+			ID:    destinationID,
+			Error: "update failed",
 		}
 
 		// Conversion to proto
@@ -444,8 +444,8 @@ func TestUnwrappedEventConversion(t *testing.T) {
 
 	t.Run("StartDestinationFailedEvent", func(t *testing.T) {
 		domainEvent := event.StartDestinationFailedEvent{
-			ID:  destinationID,
-			Err: errors.New("start failed"),
+			ID:    destinationID,
+			Error: "start failed",
 		}
 
 		// Conversion to proto
@@ -478,8 +478,8 @@ func TestUnwrappedEventConversion(t *testing.T) {
 
 	t.Run("StopDestinationFailedEvent", func(t *testing.T) {
 		domainEvent := event.StopDestinationFailedEvent{
-			ID:  destinationID,
-			Err: errors.New("stop failed"),
+			ID:    destinationID,
+			Error: "stop failed",
 		}
 
 		// Conversion to proto
@@ -512,8 +512,8 @@ func TestUnwrappedEventConversion(t *testing.T) {
 
 	t.Run("RemoveDestinationFailedEvent", func(t *testing.T) {
 		domainEvent := event.RemoveDestinationFailedEvent{
-			ID:  destinationID,
-			Err: errors.New("removal failed"),
+			ID:    destinationID,
+			Error: "removal failed",
 		}
 
 		// Conversion to proto
@@ -588,7 +588,7 @@ func TestUnwrappedEventConversion(t *testing.T) {
 
 	t.Run("ListDestinationsFailedEvent", func(t *testing.T) {
 		domainEvent := event.ListDestinationsFailedEvent{
-			Err: errors.New("failed to list destinations"),
+			Error: "failed to list destinations",
 		}
 
 		// Conversion to proto
@@ -600,7 +600,7 @@ func TestUnwrappedEventConversion(t *testing.T) {
 		resultEvent, err := protocol.EventFromListDestinationsFailedProto(protoEvent)
 		require.NoError(t, err)
 		assert.IsType(t, event.ListDestinationsFailedEvent{}, resultEvent)
-		assert.Equal(t, domainEvent.Err.Error(), resultEvent.(event.ListDestinationsFailedEvent).Err.Error())
+		assert.Equal(t, domainEvent.Error, resultEvent.(event.ListDestinationsFailedEvent).Error)
 	})
 }
 
@@ -704,7 +704,7 @@ func TestEventFromProto(t *testing.T) {
 					},
 				},
 			},
-			want: event.ListDestinationsFailedEvent{Err: errors.New("failed to list destinations")},
+			want: event.ListDestinationsFailedEvent{Error: "failed to list destinations"},
 		},
 		{
 			name: "DestinationAdded",
@@ -728,8 +728,8 @@ func TestEventFromProto(t *testing.T) {
 				},
 			},
 			want: event.AddDestinationFailedEvent{
-				URL: "rtmp://fail.example.com",
-				Err: errors.New("failed"),
+				URL:   "rtmp://fail.example.com",
+				Error: "failed",
 			},
 		},
 		{
@@ -754,8 +754,8 @@ func TestEventFromProto(t *testing.T) {
 				},
 			},
 			want: event.UpdateDestinationFailedEvent{
-				ID:  destinationID,
-				Err: errors.New("failed"),
+				ID:    destinationID,
+				Error: "failed",
 			},
 		},
 		{
@@ -779,7 +779,7 @@ func TestEventFromProto(t *testing.T) {
 					},
 				},
 			},
-			want: event.RemoveDestinationFailedEvent{ID: destinationID, Err: errors.New("removal failed")},
+			want: event.RemoveDestinationFailedEvent{ID: destinationID, Error: "removal failed"},
 		},
 		{
 			name: "DestinationStreamExited",
@@ -815,7 +815,7 @@ func TestEventFromProto(t *testing.T) {
 					},
 				},
 			},
-			want: event.StartDestinationFailedEvent{ID: destinationID, Err: errors.New("start failed")},
+			want: event.StartDestinationFailedEvent{ID: destinationID, Error: "start failed"},
 		},
 		{
 			name: "DestinationStopped",
@@ -838,7 +838,7 @@ func TestEventFromProto(t *testing.T) {
 					},
 				},
 			},
-			want: event.StopDestinationFailedEvent{ID: destinationID, Err: errors.New("stop failed")},
+			want: event.StopDestinationFailedEvent{ID: destinationID, Error: "stop failed"},
 		},
 		{
 			name: "FatalErrorOccurred",

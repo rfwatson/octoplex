@@ -278,11 +278,11 @@ func (ui *UI) Run(ctx context.Context) error {
 				case event.DestinationAddedEvent:
 					ui.handleDestinationAdded(evt)
 				case event.AddDestinationFailedEvent:
-					ui.handleDestinationEventError(evt.Err, evt.ValidationErrors)
+					ui.handleDestinationEventError(evt.Error, evt.ValidationErrors)
 				case event.DestinationUpdatedEvent:
 					ui.handleDestinationUpdated(evt)
 				case event.UpdateDestinationFailedEvent:
-					ui.handleDestinationEventError(evt.Err, evt.ValidationErrors)
+					ui.handleDestinationEventError(evt.Error, evt.ValidationErrors)
 				case event.StartDestinationFailedEvent:
 					ui.handleStartDestinationFailed(evt)
 				case event.DestinationStreamExitedEvent:
@@ -290,7 +290,7 @@ func (ui *UI) Run(ctx context.Context) error {
 				case event.DestinationRemovedEvent:
 					ui.handleDestinationRemoved(evt)
 				case event.RemoveDestinationFailedEvent:
-					ui.handleDestinationEventError(evt.Err, nil)
+					ui.handleDestinationEventError(evt.Error, nil)
 				case event.OtherInstanceDetectedEvent:
 					ui.handleOtherInstanceDetected(evt)
 				case event.FatalErrorOccurredEvent:
@@ -1008,11 +1008,11 @@ func (ui *UI) handleDestinationRemoved(event.DestinationRemovedEvent) {
 	ui.selectPreviousDestination()
 }
 
-func (ui *UI) handleDestinationEventError(err error, validationErrors domain.ValidationErrors) {
+func (ui *UI) handleDestinationEventError(error string, validationErrors domain.ValidationErrors) {
 	var msg string
 	switch {
-	case err != nil:
-		msg = "Something went wrong. Check the server error logs for details."
+	case error != "":
+		msg = error
 	case len(validationErrors) > 0:
 		msg = formatValidationErrors(validationErrors)
 	default:

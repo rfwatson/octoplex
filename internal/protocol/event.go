@@ -137,9 +137,7 @@ func DestinationsListedEventToProto(evt event.DestinationsListedEvent) *pb.Desti
 
 // ListDestinationsFailedEventToProto converts a ListDestinationsFailedEvent to a protobuf message.
 func ListDestinationsFailedEventToProto(evt event.ListDestinationsFailedEvent) *pb.ListDestinationsFailedEvent {
-	return &pb.ListDestinationsFailedEvent{
-		Error: evt.Err.Error(),
-	}
+	return &pb.ListDestinationsFailedEvent{Error: evt.Error}
 }
 
 // AppStateChangedEventToProto converts an AppStateChangedEvent to a protobuf message.
@@ -178,14 +176,9 @@ func DestinationAddedEventToProto(evt event.DestinationAddedEvent) *pb.Destinati
 
 // AddDestinationFailedEventToProto converts an AddDestinationFailedEvent to a protobuf message.
 func AddDestinationFailedEventToProto(evt event.AddDestinationFailedEvent) *pb.AddDestinationFailedEvent {
-	var errString string
-	if evt.Err != nil {
-		errString = evt.Err.Error()
-	}
-
 	return &pb.AddDestinationFailedEvent{
 		Url:              evt.URL,
-		Error:            errString,
+		Error:            evt.Error,
 		ValidationErrors: validationErrorsToProto(evt.ValidationErrors),
 	}
 }
@@ -197,14 +190,9 @@ func DestinationUpdatedEventToProto(evt event.DestinationUpdatedEvent) *pb.Desti
 
 // UpdateDestinationFailedEventToProto converts an UpdateDestinationFailedEvent to a protobuf message.
 func UpdateDestinationFailedEventToProto(evt event.UpdateDestinationFailedEvent) *pb.UpdateDestinationFailedEvent {
-	var errString string
-	if evt.Err != nil {
-		errString = evt.Err.Error()
-	}
-
 	return &pb.UpdateDestinationFailedEvent{
 		Id:               evt.ID[:],
-		Error:            errString,
+		Error:            evt.Error,
 		ValidationErrors: validationErrorsToProto(evt.ValidationErrors),
 	}
 }
@@ -220,46 +208,40 @@ func DestinationStreamExitedEventToProto(evt event.DestinationStreamExitedEvent)
 
 // DestinationStartedEventToProto converts a DestinationStartedEvent to a protobuf message.
 func DestinationStartedEventToProto(evt event.DestinationStartedEvent) *pb.DestinationStartedEvent {
-	return &pb.DestinationStartedEvent{
-		Id: evt.ID[:],
-	}
+	return &pb.DestinationStartedEvent{Id: evt.ID[:]}
 }
 
 // StartDestinationFailedEventToProto converts a StartDestinationFailedEvent to a protobuf message.
 func StartDestinationFailedEventToProto(evt event.StartDestinationFailedEvent) *pb.StartDestinationFailedEvent {
 	return &pb.StartDestinationFailedEvent{
 		Id:    evt.ID[:],
-		Error: evt.Err.Error(),
+		Error: evt.Error,
 	}
 }
 
 // DestinationStoppedEventToProto converts a DestinationStoppedEvent to a protobuf message.
 func DestinationStoppedEventToProto(evt event.DestinationStoppedEvent) *pb.DestinationStoppedEvent {
-	return &pb.DestinationStoppedEvent{
-		Id: evt.ID[:],
-	}
+	return &pb.DestinationStoppedEvent{Id: evt.ID[:]}
 }
 
 // StopDestinationFailedEventToProto converts a StopDestinationFailedEvent to a protobuf message.
 func StopDestinationFailedEventToProto(evt event.StopDestinationFailedEvent) *pb.StopDestinationFailedEvent {
 	return &pb.StopDestinationFailedEvent{
 		Id:    evt.ID[:],
-		Error: evt.Err.Error(),
+		Error: evt.Error,
 	}
 }
 
 // DestinationRemovedEventToProto converts a DestinationRemovedEvent to a protobuf message.
 func DestinationRemovedEventToProto(evt event.DestinationRemovedEvent) *pb.DestinationRemovedEvent {
-	return &pb.DestinationRemovedEvent{
-		Id: evt.ID[:],
-	}
+	return &pb.DestinationRemovedEvent{Id: evt.ID[:]}
 }
 
 // RemoveDestinationFailedEventToProto converts a RemoveDestinationFailedEvent to a protobuf message.
 func RemoveDestinationFailedEventToProto(evt event.RemoveDestinationFailedEvent) *pb.RemoveDestinationFailedEvent {
 	return &pb.RemoveDestinationFailedEvent{
 		Id:    evt.ID[:],
-		Error: evt.Err.Error(),
+		Error: evt.Error,
 	}
 }
 
@@ -335,9 +317,7 @@ func EventFromDestinationsListedProto(evt *pb.DestinationsListedEvent) (event.Ev
 		return nil, fmt.Errorf("convert destinations: %w", err)
 	}
 
-	return event.DestinationsListedEvent{
-		Destinations: destinations,
-	}, nil
+	return event.DestinationsListedEvent{Destinations: destinations}, nil
 }
 
 // EventFromListDestinationsFailedProto converts a protobuf ListDestinationsFailedEvent to a domain event.
@@ -346,9 +326,7 @@ func EventFromListDestinationsFailedProto(evt *pb.ListDestinationsFailedEvent) (
 		return nil, fmt.Errorf("nil ListDestinationsFailedEvent")
 	}
 
-	return event.ListDestinationsFailedEvent{
-		Err: fmt.Errorf("%s", evt.Error),
-	}, nil
+	return event.ListDestinationsFailedEvent{Error: evt.Error}, nil
 }
 
 // EventFromAppStateChangedProto converts a protobuf AppStateChangedEvent to a domain event.
@@ -408,14 +386,10 @@ func EventFromAddDestinationFailedProto(evt *pb.AddDestinationFailedEvent) (even
 	if evt == nil {
 		return nil, errors.New("nil AddDestinationFailedEvent")
 	}
-	var evtErr error
-	if evt.Error != "" {
-		evtErr = errors.New(evt.Error)
-	}
 
 	return event.AddDestinationFailedEvent{
 		URL:              evt.Url,
-		Err:              evtErr,
+		Error:            evt.Error,
 		ValidationErrors: validationErrorsFromProto(evt.ValidationErrors),
 	}, nil
 }
@@ -445,14 +419,9 @@ func EventFromUpdateDestinationFailedProto(evt *pb.UpdateDestinationFailedEvent)
 		return nil, fmt.Errorf("parse ID: %w", err)
 	}
 
-	var evtErr error
-	if evt.Error != "" {
-		evtErr = errors.New(evt.Error)
-	}
-
 	return event.UpdateDestinationFailedEvent{
 		ID:               id,
-		Err:              evtErr,
+		Error:            evt.Error,
 		ValidationErrors: validationErrorsFromProto(evt.ValidationErrors),
 	}, nil
 }
@@ -496,7 +465,7 @@ func EventFromStartDestinationFailedProto(evt *pb.StartDestinationFailedEvent) (
 		return nil, fmt.Errorf("parse ID: %w", err)
 	}
 
-	return event.StartDestinationFailedEvent{ID: id, Err: errors.New(evt.Error)}, nil
+	return event.StartDestinationFailedEvent{ID: id, Error: evt.Error}, nil
 }
 
 // EventFromDestinationStoppedProto converts a protobuf DestinationStoppedEvent to a domain event.
@@ -524,7 +493,7 @@ func EventFromStopDestinationFailedProto(evt *pb.StopDestinationFailedEvent) (ev
 		return nil, fmt.Errorf("parse ID: %w", err)
 	}
 
-	return event.StopDestinationFailedEvent{ID: id, Err: errors.New(evt.Error)}, nil
+	return event.StopDestinationFailedEvent{ID: id, Error: evt.Error}, nil
 }
 
 // EventFromDestinationRemovedProto converts a protobuf DestinationRemovedEvent to a domain event.
@@ -552,7 +521,7 @@ func EventFromRemoveDestinationFailedProto(evt *pb.RemoveDestinationFailedEvent)
 		return nil, fmt.Errorf("parse ID: %w", err)
 	}
 
-	return event.RemoveDestinationFailedEvent{ID: id, Err: errors.New(evt.Error)}, nil
+	return event.RemoveDestinationFailedEvent{ID: id, Error: evt.Error}, nil
 }
 
 // EventFromFatalErrorProto converts a protobuf FatalErrorEvent to a domain event.
