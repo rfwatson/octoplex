@@ -48,10 +48,10 @@ jobs:
     - uses: jdx/mise-action@v2
       with:
         experimental: true
-    - name: Setup Go 1.24.6
+    - name: Setup Go 1.25.0
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24.6'
+        go-version: '1.25.0'
         cache: false
     - name: install_goimports
       run: |
@@ -65,7 +65,7 @@ jobs:
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v7
       with:
-        version: v2.1.6
+        version: v2.4.0
     - name: test
       run: mise run test_ci
     - name: test_integration
@@ -115,10 +115,10 @@ jobs:
       - name: install dependencies
         run: pnpm install
         working-directory: frontend
-      - name: Setup Go 1.24.6
+      - name: Setup Go 1.25.0
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.6'
+          go-version: '1.25.0'
       - name: install OS dependencies
         run: |
           sudo apt-get -y update && \
