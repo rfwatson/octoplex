@@ -34,22 +34,6 @@ func TestWebHandlerSessionCreate(t *testing.T) {
 		wantSecure     bool
 	}{
 		{
-			name:         "successful login, no base URL",
-			sentPassword: password,
-			tokenStoreFunc: func(t *testing.T, tokenStore *mocks.TokenStore) {
-				token, err := token.New(token.RawToken(password), time.Time{})
-				require.NoError(t, err)
-
-				tokenStore.EXPECT().Get(storeKeyAdminPassword).Return(token, nil)
-				tokenStore.EXPECT().Put(storeKeySessionToken, mock.Anything).Return(nil)
-			},
-			wantStatus:   http.StatusOK,
-			wantSuccess:  true,
-			wantRedirect: "/",
-			wantCookie:   true,
-			wantSecure:   true,
-		},
-		{
 			name:         "successful login, HTTP base URL",
 			baseURL:      "http://localhost:8080",
 			sentPassword: password,
@@ -102,6 +86,7 @@ func TestWebHandlerSessionCreate(t *testing.T) {
 		},
 		{
 			name:         "wrong password",
+			baseURL:      "https://www.example.com",
 			sentPassword: "nope",
 			tokenStoreFunc: func(t *testing.T, tokenStore *mocks.TokenStore) {
 				token, err := token.New(token.RawToken(password), time.Time{})
@@ -113,6 +98,7 @@ func TestWebHandlerSessionCreate(t *testing.T) {
 		},
 		{
 			name:         "empty password",
+			baseURL:      "https://www.example.com",
 			sentPassword: "",
 			tokenStoreFunc: func(t *testing.T, tokenStore *mocks.TokenStore) {
 				token, err := token.New(token.RawToken(password), time.Time{})
@@ -189,11 +175,6 @@ func TestWebHandlerSessionDestroy(t *testing.T) {
 		wantLocation string
 		wantSecure   bool
 	}{
-		{
-			name:         "no base URL",
-			wantLocation: "/login.html",
-			wantSecure:   true,
-		},
 		{
 			name:         "http base URL",
 			baseURL:      "http://localhost:8080",
@@ -274,6 +255,7 @@ func TestWebHandlerSessionRefresh(t *testing.T) {
 		{
 			name:            "credentials disabled",
 			credentialsMode: CredentialsModeDisabled,
+			baseURL:         "https://localhost:8080",
 			wantStatus:      http.StatusNoContent,
 		},
 		{
@@ -381,6 +363,72 @@ func TestWebHandlerSessionRefresh(t *testing.T) {
 			} else {
 				assert.Empty(t, rec.Result().Cookies(), "expected no cookies, but got one")
 			}
+		})
+	}
+}
+
+func TestCSRF(t *testing.T) {
+	const password = "s3cr3t"
+
+	testCases := []struct {
+		name         string
+		baseURL      string
+		originHeader string
+		wantStatus   int
+	}{
+		{
+			name:         "base URL matches origin",
+			baseURL:      "https://example.com/",
+			originHeader: "https://example.com",
+			wantStatus:   http.StatusOK,
+		},
+		{
+			name:         "base URL does not match origin",
+			baseURL:      "https://example.com/",
+			originHeader: "https://attacker.example.com",
+			wantStatus:   http.StatusForbidden,
+		},
+		{
+			name:         "base URL does not match site",
+			baseURL:      "https://example.com/",
+			originHeader: "https://attacker.com",
+			wantStatus:   http.StatusForbidden,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			logger := testhelpers.NewTestLogger(t)
+
+			reqBody, err := json.Marshal(map[string]string{"password": password})
+			require.NoError(t, err)
+
+			req := httptest.NewRequestWithContext(t.Context(), "POST", "/session", bytes.NewReader(reqBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Origin", tc.originHeader)
+			rec := httptest.NewRecorder()
+
+			token, err := token.New(token.RawToken(password), time.Time{})
+			require.NoError(t, err)
+			var tokenStore mocks.TokenStore
+			tokenStore.EXPECT().Get(storeKeyAdminPassword).Return(token, nil)
+			tokenStore.EXPECT().Put(storeKeySessionToken, mock.Anything).Return(nil).Maybe()
+
+			handler, err := newWebHandler(
+				config.Config{
+					ServerURL: config.ServerURL{BaseURL: tc.baseURL},
+					Web:       config.Web{Enabled: true},
+				},
+				nil, // internalAPI, not used in this test
+				CredentialsModeEnabled,
+				&tokenStore,
+				logger,
+			)
+			require.NoError(t, err)
+
+			handler.ServeHTTP(rec, req)
+
+			assert.Equal(t, tc.wantStatus, rec.Code)
 		})
 	}
 }

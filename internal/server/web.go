@@ -41,7 +41,15 @@ func newWebHandler(cfg config.Config, internalAPI *Server, credentialsMode Crede
 		logger.Info("Serving assets is disabled, no static files will be served")
 	}
 
-	return defaultHeaders(mux), nil
+	var crossOrigin http.CrossOriginProtection
+	if err := crossOrigin.AddTrustedOrigin(strings.TrimSuffix(cfg.ServerURL.BaseURL, "/")); err != nil {
+		return nil, fmt.Errorf("add trusted origin: %w", err)
+	}
+
+	var handler http.Handler = mux
+	handler = defaultHeaders(handler)
+	handler = crossOrigin.Handler(handler)
+	return handler, nil
 }
 
 func handleSessionCreate(cfg config.Config, credentialsMode CredentialsMode, tokenStore TokenStore, logger *slog.Logger) http.HandlerFunc {

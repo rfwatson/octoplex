@@ -48,6 +48,7 @@ Octoplex is a Docker-native live video restreamer.
 - [Security](#security)
   - [TLS](#tls)
   - [Admin password and API tokens](#admin-password-and-api-tokens)
+  - [Server URL](#server-url)
   - [Incoming streams](#incoming-streams)
 - [Restreaming with Octoplex](#restreaming-with-octoplex)
   - [Restreaming with OBS](#restreaming-with-obs)
@@ -381,6 +382,15 @@ They are both printed to the logs exactly once, on first startup. After this, yo
 octoplex server credentials reset     # add --data-dir "<YOUR_DATA_DIR>" if needed
 # { "api_token": "foo", "admin_password": "bar" }
 ```
+
+### Server URL
+
+When serving Octoplex from a non-localhost domain, the server URL (set by
+`--server-url` or `OCTO_SERVER_URL`) must match the scheme and domain you are
+serving Octoplex from. Example valid values would be
+`https://octoplex.mydomain.com` or `http://192.168.1.10:8080`. If you observe
+cross-origin errors from HTTP or websocket requests, verify the server URL is
+set correctly.
 
 ### Incoming streams
 
