@@ -130,12 +130,9 @@ func (a *Actor) StartDestination(url string) <-chan State {
 			},
 		})
 
-		a.wg.Add(1)
-		go func() {
-			defer a.wg.Done()
-
+		a.wg.Go(func() {
 			a.destLoop(url, doneC, containerStateC, errC)
-		}()
+		})
 	}
 
 	return doneC

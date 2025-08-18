@@ -121,22 +121,18 @@ func (p *WebSocketProxy) handleConnection(ctx context.Context, conn *websocket.C
 	eventC := make(chan *pb.Envelope, chanSize)
 
 	var wg sync.WaitGroup
-	wg.Add(3)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		p.readWebSocketMessages(ctx, conn, commandC)
-	}()
+	})
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		p.writeWebSocketMessages(ctx, conn, eventC)
-	}()
+	})
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		p.processMessages(ctx, commandC, eventC)
-	}()
+	})
 
 	wg.Wait()
 }

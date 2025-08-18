@@ -251,9 +251,7 @@ func (c *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 	errC := make(chan error, 1)
 	sendError := func(err error) { errC <- err }
 
-	c.wg.Add(1)
-	go func() {
-		defer c.wg.Done()
+	c.wg.Go(func() {
 		defer close(errC)
 
 		if err := c.pullImageIfNeeded(ctx, params.ContainerConfig.Image, containerStateC); err != nil {
@@ -323,7 +321,7 @@ func (c *Client) RunContainer(ctx context.Context, params RunContainerParams) (<
 			containerStateC,
 			errC,
 		)
-	}()
+	})
 
 	return containerStateC, errC
 }
