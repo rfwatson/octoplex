@@ -10,6 +10,11 @@ enum StartState {
   STARTED = 'started',
 }
 
+interface Point {
+  x: number;
+  y: number;
+}
+
 class Dashboard {
   private communicator: WebSocketCommunicator | null = null;
   private state: AppState = {
@@ -37,6 +42,7 @@ class Dashboard {
   };
   private isConnected = false;
   private destinationIdsToStartState: Map<string, StartState> = new Map();
+  private cursor: Point = { x: 0, y: 0 };
 
   async init() {
     let serverAddr = getServerAddr();
@@ -45,6 +51,10 @@ class Dashboard {
       window.location.href = '/login.html';
       return;
     }
+
+    document.addEventListener('mousemove', (event) => {
+      this.cursor = { x: event.clientX, y: event.clientY };
+    });
 
     // TODO: connect directly with connectrpc if H2 is available.
     try {
@@ -164,7 +174,7 @@ class Dashboard {
         }
 
         this.showToast(
-          `Stream to ${event.name} exited: ${event.error}`,
+          `Destination "${event.name}" exited: ${event.error}`,
           'error',
         );
         break;
@@ -532,15 +542,30 @@ class Dashboard {
 
     document.body.appendChild(toast);
 
-    // Auto-remove and reposition remaining toasts
-    setTimeout(() => {
+    const timeoutMillis = type === 'success' ? 3_000 : 6_000;
+    const intervalId = setInterval(() => {
+      if (this.isElementUnderPointer(toast)) {
+        return;
+      }
+      clearInterval(intervalId);
+
       toast.style.opacity = '0';
       toast.style.transform = 'translateX(100%)';
       setTimeout(() => {
         toast.remove();
         this.repositionToasts();
       }, 300);
-    }, 3000);
+    }, timeoutMillis);
+  }
+
+  private isElementUnderPointer(el: Element): boolean {
+    const elemAtPoint: Element | null = document.elementFromPoint(
+      this.cursor.x,
+      this.cursor.y,
+    );
+    return (
+      elemAtPoint !== null && (el === elemAtPoint || el.contains(elemAtPoint))
+    );
   }
 
   private repositionToasts() {

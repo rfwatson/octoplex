@@ -931,8 +931,8 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 		t,
 		func(c *assert.CollectT) {
 			contents := getContents()
-			assert.True(c, contentsIncludes(contents, "Streaming to Example server failed:"), "expected to see destination error")
-			assert.True(c, contentsIncludes(contents, "Error opening output files: I/O error"), "expected to see destination error")
+			assert.True(c, contentsIncludes(contents, "Failed to start destination: could not resolve host"), "expected to see destination error")
+			assert.True(c, contentsIncludes(contents, "rtmp.example.com"), "expected to see destination error")
 		},
 		waitTime,
 		time.Second,

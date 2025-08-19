@@ -3,7 +3,6 @@ package replicator
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -86,16 +85,16 @@ func StartActor(ctx context.Context, params StartActorParams) *Actor {
 }
 
 // StartDestination starts a destination stream.
-func (a *Actor) StartDestination(url string) <-chan State {
+func (a *Actor) StartDestination(destURL string) <-chan State {
 	doneC := make(chan State, 1)
 
 	a.actorC <- func() {
-		if _, ok := a.currURLs[url]; ok {
+		if _, ok := a.currURLs[destURL]; ok {
 			return
 		}
 
 		a.nextIndex++
-		a.currURLs[url] = struct{}{}
+		a.currURLs[destURL] = struct{}{}
 
 		a.logger.Info("Starting live stream")
 
@@ -104,15 +103,18 @@ func (a *Actor) StartDestination(url string) <-chan State {
 			ContainerConfig: &typescontainer.Config{
 				Image: a.imageName,
 				Cmd: []string{
+					"-hide_banner",
+					"-nostats",
 					"-loglevel", "level+error",
 					"-i", a.sourceURL,
 					"-c", "copy",
 					"-f", "flv",
-					url,
+					destURL,
 				},
+				Env: []string{"AV_LOG_FORCE_NOCOLOR=1"},
 				Labels: map[string]string{
 					container.LabelComponent: componentName,
-					container.LabelURL:       url,
+					container.LabelURL:       destURL,
 				},
 			},
 			HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
@@ -122,7 +124,7 @@ func (a *Actor) StartDestination(url string) <-chan State {
 				//
 				// For now, we just check if it was running for less than ten seconds.
 				if restartCount == 0 && runningTime < 10*time.Second {
-					return false, containerStartErrFromLogs(logs)
+					return false, startErrFromLogs(logs)
 				}
 
 				// Otherwise, always restart, regardless of the exit code.
@@ -131,37 +133,70 @@ func (a *Actor) StartDestination(url string) <-chan State {
 		})
 
 		a.wg.Go(func() {
-			a.destLoop(url, doneC, containerStateC, errC)
+			a.destLoop(destURL, doneC, containerStateC, errC)
 		})
 	}
 
 	return doneC
 }
 
-// Grab the first fatal log line, if it exists, or the first error log line,
-// from the FFmpeg output.
-func containerStartErrFromLogs(logs [][]byte) error {
-	var fatalLog, errLog string
+// StartError is an error that can occur during replicator startup.
+type StartError int
 
-	for _, logBytes := range logs {
-		log := string(logBytes)
-		if strings.HasPrefix(log, "[fatal]") {
-			fatalLog = log
-			break
-		}
+const (
+	ErrUnknown StartError = iota
+	ErrUnknownHost
+	ErrConnectionFailed
+	ErrTimeout
+	ErrForbidden
+)
+
+// Error implements the Error interface.
+func (e StartError) Error() string {
+	switch e {
+	case ErrUnknownHost:
+		return "connection failed - unknown host"
+	case ErrConnectionFailed:
+		return "connection failed"
+	case ErrTimeout:
+		return "connection timed out"
+	case ErrForbidden:
+		return "authentication failed"
+	default:
+		return "unknown error - check internet connection, authentication and server logs"
 	}
+}
 
-	if fatalLog == "" {
-		for _, logBytes := range logs {
-			log := string(logBytes)
-			if strings.HasPrefix(log, "[error]") {
-				errLog = log
-				break
+// startErrFromLogs tries to infer the error from the logs of an
+// FFmpeg container.
+func startErrFromLogs(logs [][]byte) error {
+	switch {
+	case containsFold(logs, "failed to resolve", "does not resolve", "unknown host"):
+		return ErrUnknownHost
+	case containsFold(logs, "connection refused", "failed to connect", "connection failed", "host is unreachable", "broken pipe"):
+		return ErrConnectionFailed
+	case containsFold(logs, "timeout", "time out", "timed out"):
+		return ErrTimeout
+	// RTMP connections are often simply closed in the case of an authentication failure.
+	// So it's unlikely to see one of these, but it doesn't hurt to check.
+	case containsFold(logs, "authentication failed", "forbidden", "access denied"):
+		return ErrForbidden
+	default:
+		return ErrUnknown
+	}
+}
+
+// containsFold is a helper function suitable for use outside of hot paths.
+func containsFold(s [][]byte, substrs ...string) bool {
+	for _, bytes := range s {
+		for _, substr := range substrs {
+			if strings.Contains(strings.ToLower(string(bytes)), strings.ToLower(substr)) {
+				return true
 			}
 		}
 	}
 
-	return errors.New(cmp.Or(fatalLog, errLog, "container failed to start"))
+	return false
 }
 
 // StopDestination stops a destination stream.

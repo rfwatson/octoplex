@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -517,6 +518,14 @@ func (a *App) handleCommand(
 		}
 
 		dest := state.Destinations[destIndex]
+
+		// Lookup destination DNS before we start.
+		// Error handling is more reliable than parsing FFmpeg logs.
+		if found, errMsg := isHostFound(dest.URL); !found {
+			a.logger.Warn("Start destination failed: host not found", "id", c.ID)
+			return nil, event.StartDestinationFailedEvent{ID: c.ID, Error: errMsg}, nil
+		}
+
 		doneC := repl.StartDestination(dest.URL)
 		a.logger.Info("Destination started", "id", c.ID, "name", dest.Name)
 		go func() {
@@ -556,6 +565,24 @@ func (a *App) handleCommand(
 	default:
 		return nil, nil, fmt.Errorf("unknown command: %T", cmd.Command)
 	}
+}
+
+func isHostFound(u string) (found bool, errMsg string) {
+	uri, err := url.Parse(u)
+	if err != nil {
+		return false, "could not parse URL"
+	}
+
+	addrs, err := net.LookupHost(uri.Hostname())
+	if err != nil {
+		return false, fmt.Sprintf("could not resolve host %q", uri.Hostname())
+	}
+
+	if len(addrs) == 0 {
+		return false, fmt.Sprintf("could not resolve host %q", uri.Hostname())
+	}
+
+	return true, ""
 }
 
 func isLive(state *domain.AppState, destinationID uuid.UUID) bool {

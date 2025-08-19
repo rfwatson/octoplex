@@ -214,14 +214,14 @@ export function parseEvent(pbEvent: Event): AppEvent | null {
     case 'removeDestinationFailed':
       return {
         type: 'error',
-        message: `Failed to remove destination: ${pbEvent.eventType.value.error}`,
+        message: `Remove destination failed: ${pbEvent.eventType.value.error}`,
         details: `ID: ${bytesToString(pbEvent.eventType.value.id)}`,
       };
 
     case 'startDestinationFailed':
       return {
         type: 'error',
-        message: `Failed to start destination: ${pbEvent.eventType.value.error}`,
+        message: `Start destination failed: ${pbEvent.eventType.value.error}`,
         details: `ID: ${bytesToString(pbEvent.eventType.value.id)}`,
       };
 

@@ -377,10 +377,22 @@ func (ui *UI) fkeyHandler(key tcell.Key) {
 	}
 }
 
-func (ui *UI) handleStartDestinationFailed(event.StartDestinationFailedEvent) {
+func (ui *UI) handleStartDestinationFailed(evt event.StartDestinationFailedEvent) {
+	// Special-case the common "source not live" error case, which deserves a
+	// more expressive message.
+	//
+	// TODO: pass a more specific error reason instead of inferring from the
+	// string.
+	var msg string
+	if strings.Contains(evt.Error, "source not live") {
+		msg = "Waiting for stream.\n\nStart streaming to a source URL then try again."
+	} else {
+		msg = fmt.Sprintf("Failed to start destination: %s", evt.Error)
+	}
+
 	ui.showModal(
 		pageNameModalStartDestinationFailed,
-		"Waiting for stream.\n\nStart streaming to a source URL then try again.",
+		msg,
 		[]string{"Ok"},
 		false,
 		nil,
