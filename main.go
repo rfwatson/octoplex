@@ -636,6 +636,30 @@ func serverFlags(clientAndServerMode bool) []cli.Flag {
 			Category:    "Sources",
 			DefaultText: "127.0.0.1:1936",
 		},
+		&cli.BoolFlag{
+			Name:        "rtsp-enabled",
+			Usage:       "Enable the RTSP source",
+			Category:    "Sources",
+			DefaultText: "false",
+		},
+		&cli.StringFlag{
+			Name:        "rtsp-listen",
+			Usage:       "The address to listen on for RTSP",
+			Category:    "Sources",
+			DefaultText: "127.0.0.1:8554",
+		},
+		&cli.BoolFlag{
+			Name:        "rtsps-enabled",
+			Usage:       "Enable the RTSPS source",
+			Category:    "Sources",
+			DefaultText: "false",
+		},
+		&cli.StringFlag{
+			Name:        "rtsps-listen",
+			Usage:       "The address to listen on for RTSPS",
+			Category:    "Sources",
+			DefaultText: "127.0.0.1:8332",
+		},
 		flagDataDir(),
 		&cli.StringFlag{
 			Name:        "image-name-mediamtx",
@@ -963,7 +987,7 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 	}
 	cfg.Sources.MediaServer.RTMP.Enabled = rtmpEnabled
 	if rtmpEnabled {
-		if err := parseRTMPConfig(&cfg.Sources.MediaServer.RTMP, c, "rtmp-listen"); err != nil {
+		if err := initEndpoint(&cfg.Sources.MediaServer.RTMP, c, "rtmp-listen"); err != nil {
 			return config.Config{}, fmt.Errorf("parse RTMP: %w", err)
 		}
 	}
@@ -974,15 +998,29 @@ func parseConfig(c *cli.Command) (config.Config, error) {
 	}
 	cfg.Sources.MediaServer.RTMPS.Enabled = rtmpsEnabled
 	if rtmpsEnabled {
-		if err := parseRTMPConfig(&cfg.Sources.MediaServer.RTMPS, c, "rtmps-listen"); err != nil {
+		if err := initEndpoint(&cfg.Sources.MediaServer.RTMPS, c, "rtmps-listen"); err != nil {
 			return config.Config{}, fmt.Errorf("parse RTMP: %w", err)
+		}
+	}
+
+	if rtspEnabled := c.Bool("rtsp-enabled"); rtspEnabled {
+		cfg.Sources.MediaServer.RTSP.Enabled = true
+		if err := initEndpoint(&cfg.Sources.MediaServer.RTSP, c, "rtsp-listen"); err != nil {
+			return config.Config{}, fmt.Errorf("parse RTSP: %w", err)
+		}
+	}
+
+	if rtspsEnabled := c.Bool("rtsps-enabled"); rtspsEnabled {
+		cfg.Sources.MediaServer.RTSPS.Enabled = true
+		if err := initEndpoint(&cfg.Sources.MediaServer.RTSPS, c, "rtsps-listen"); err != nil {
+			return config.Config{}, fmt.Errorf("parse RTSPS: %w", err)
 		}
 	}
 
 	return cfg, nil
 }
 
-func parseRTMPConfig(cfg *config.RTMPSource, c *cli.Command, arg string) error {
+func initEndpoint(cfg *config.Endpoint, c *cli.Command, arg string) error {
 	if !c.IsSet(arg) {
 		return nil
 	}

@@ -25,6 +25,7 @@ import (
 	"git.netflux.io/rob/octoplex/internal/event"
 	connectpb "git.netflux.io/rob/octoplex/internal/generated/grpc/internalapi/v1/internalapiv1connect"
 	"git.netflux.io/rob/octoplex/internal/mediaserver"
+	"git.netflux.io/rob/octoplex/internal/optional"
 	"git.netflux.io/rob/octoplex/internal/replicator"
 	"git.netflux.io/rob/octoplex/internal/store"
 	"github.com/docker/docker/client"
@@ -125,8 +126,8 @@ func (a *App) Run(ctx context.Context) error {
 	applyPersistentState(state, a.store.Get())
 
 	// Ensure there is at least one active source.
-	if !a.cfg.Sources.MediaServer.RTMP.Enabled && !a.cfg.Sources.MediaServer.RTMPS.Enabled {
-		return errors.New("config: either sources.mediaServer.rtmp.enabled or sources.mediaServer.rtmps.enabled must be set")
+	if !a.cfg.Sources.MediaServer.RTMP.Enabled && !a.cfg.Sources.MediaServer.RTMPS.Enabled && !a.cfg.Sources.MediaServer.RTSP.Enabled && !a.cfg.Sources.MediaServer.RTSPS.Enabled {
+		return errors.New("config: at least one mediaserver source (RTMP/RTMPS/RTSP/RTSPS) must be enabled")
 	}
 
 	internalAPI := newServer(a.DispatchSync, a.DispatchAsync, a.eventBus, a.logger)
@@ -269,6 +270,8 @@ func (a *App) Run(ctx context.Context) error {
 	srv, err := mediaserver.NewActor(ctx, mediaserver.NewActorParams{
 		RTMPAddr:        buildNetAddr(a.cfg.Sources.MediaServer.RTMP),
 		RTMPSAddr:       buildNetAddr(a.cfg.Sources.MediaServer.RTMPS),
+		RTSPAddr:        buildNetAddr(a.cfg.Sources.MediaServer.RTSP),
+		RTSPSAddr:       buildNetAddr(a.cfg.Sources.MediaServer.RTSPS),
 		Host:            a.cfg.ServerURL.Hostname,
 		DockerHost:      a.cfg.DockerHost,
 		KeyPairs:        a.keyPairs,
@@ -677,13 +680,16 @@ func closeOtherInstances(ctx context.Context, containerClient *container.Client)
 	return nil
 }
 
-// buildNetAddr builds a [mediaserver.OptionalNetAddr] from the config.
-func buildNetAddr(src config.RTMPSource) mediaserver.OptionalNetAddr {
+// buildNetAddr builds a domain.NetAddr wrapped in an optional.V from the
+// config struct. Using optional.V is required because at this stage default
+// host and port values have not been filled in, and the endpoint may be
+// disabled.
+func buildNetAddr(src config.Endpoint) optional.V[domain.NetAddr] {
 	if !src.Enabled {
-		return mediaserver.OptionalNetAddr{Enabled: false}
+		return optional.Empty[domain.NetAddr]()
 	}
 
-	return mediaserver.OptionalNetAddr{Enabled: true, NetAddr: domain.NetAddr(src.NetAddr)}
+	return optional.New(domain.NetAddr(src.NetAddr))
 }
 
 // Stop stops all containers and networks created by any instance of the app.

@@ -99,6 +99,8 @@ function parseSourceState(pbSource: any): SourceState {
     tracks: pbSource?.tracks || [],
     rtmpURL: pbSource?.rtmpUrl || '',
     rtmpsURL: pbSource?.rtmpsUrl || '',
+    rtspURL: pbSource?.rtspUrl || '',
+    rtspsURL: pbSource?.rtspsUrl || '',
     container: parseContainerState(pbSource?.container),
   };
 }

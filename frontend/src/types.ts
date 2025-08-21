@@ -11,6 +11,8 @@ export interface SourceState {
   tracks: string[];
   rtmpURL: string;
   rtmpsURL: string;
+  rtspURL: string;
+  rtspsURL: string;
   container: ContainerState;
 }
 

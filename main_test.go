@@ -109,6 +109,21 @@ func TestIntegrationRunServer(t *testing.T) {
 				`level=INFO msg="Removing container"`,
 			},
 		},
+		{
+			name:      "launch server with RTMP disabled and RTSP enabled",
+			args:      []string{"octoplex", "server", "start", "--rtmp-enabled", "false", "--rtmps-enabled", "false", "--rtsp-enabled", "--rtsps-enabled"},
+			wantPorts: []int{8443, 8554, 8332},
+			wantStderr: []string{
+				`level=INFO msg="Starting server"`,
+				`level=INFO msg="Server started" component=server tls=true listen-addr=127.0.0.1:8443`,
+				`level=INFO msg="Starting media server" component=server component=mediaserver host=localhost rtmp.enabled=true rtmp.bind_addr=127.0.0.1 rtmp.bind_port=1935 rtmps.enabled=true rtmps.bind_addr=127.0.0.1 rtmps.bind_port=1936 rtsp.enabled=true rtsp.bind_addr=127.0.0.1 rtsp.bind_port=8554 rtsps.enabled=true rtsps.bind_addr=127.0.0.1 rtsps.bind_port=8332`,
+				`level=INFO msg="Started container"`,
+			},
+			wantStderrOnClose: []string{
+				`level=INFO msg="Stopping container"`,
+				`level=INFO msg="Removing container"`,
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -144,7 +159,7 @@ func TestIntegrationRunServer(t *testing.T) {
 					}
 
 					for _, want := range tc.wantStderr {
-						assert.Contains(c, stderr.String(), want)
+						assert.Contains(c, stderr.String(), want, "stderr did not contain expected string")
 					}
 				},
 				10*time.Second,

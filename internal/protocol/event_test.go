@@ -34,6 +34,8 @@ func TestEventToProto(t *testing.T) {
 						Live:     true,
 						RTMPURL:  "rtmp://rtmp.example.com",
 						RTMPSURL: "rtmps://rtmp.example.com",
+						RTSPURL:  "rtsp://rtsp.example.com",
+						RTSPSURL: "rtsps://rtsps.example.com",
 					},
 					Destinations: []domain.Destination{
 						{
@@ -59,6 +61,8 @@ func TestEventToProto(t *testing.T) {
 								Live:     true,
 								RtmpUrl:  "rtmp://rtmp.example.com",
 								RtmpsUrl: "rtmps://rtmp.example.com",
+								RtspUrl:  "rtsp://rtsp.example.com",
+								RtspsUrl: "rtsps://rtsps.example.com",
 							},
 							Destinations: []*pb.Destination{
 								{
@@ -285,6 +289,8 @@ func TestUnwrappedEventConversion(t *testing.T) {
 					Live:     true,
 					RTMPURL:  "rtmp://rtmp.example.com",
 					RTMPSURL: "rtmps://rtmp.example.com",
+					RTSPURL:  "rtsp://rtsp.example.com",
+					RTSPSURL: "rtsps://rtsps.example.com",
 				},
 				Destinations: []domain.Destination{
 					{
@@ -309,6 +315,8 @@ func TestUnwrappedEventConversion(t *testing.T) {
 		assert.True(t, protoEvent.AppState.Source.Live)
 		assert.Equal(t, "rtmp://rtmp.example.com", protoEvent.AppState.Source.RtmpUrl)
 		assert.Equal(t, "rtmps://rtmp.example.com", protoEvent.AppState.Source.RtmpsUrl)
+		assert.Equal(t, "rtsp://rtsp.example.com", protoEvent.AppState.Source.RtspUrl)
+		assert.Equal(t, "rtsps://rtsps.example.com", protoEvent.AppState.Source.RtspsUrl)
 		assert.Len(t, protoEvent.AppState.Destinations, 1)
 		assert.Equal(t, destinationID[:], protoEvent.AppState.Destinations[0].Id)
 		assert.Equal(t, "dest1", protoEvent.AppState.Destinations[0].Name)
@@ -624,6 +632,8 @@ func TestEventFromProto(t *testing.T) {
 								Live:      true,
 								RtmpUrl:   "rtmp://rtmp.example.com",
 								RtmpsUrl:  "rtmps://rtmp.example.com",
+								RtspUrl:   "rtsp://rtsp.example.com",
+								RtspsUrl:  "rtsps://rtsps.example.com",
 							},
 							Destinations: []*pb.Destination{
 								{
@@ -648,6 +658,8 @@ func TestEventFromProto(t *testing.T) {
 						Live:      true,
 						RTMPURL:   "rtmp://rtmp.example.com",
 						RTMPSURL:  "rtmps://rtmp.example.com",
+						RTSPURL:   "rtsp://rtsp.example.com",
+						RTSPSURL:  "rtsps://rtsps.example.com",
 					},
 					Destinations: []domain.Destination{
 						{

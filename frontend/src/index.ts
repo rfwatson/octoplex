@@ -24,6 +24,8 @@ class Dashboard {
       tracks: [],
       rtmpURL: '',
       rtmpsURL: '',
+      rtspURL: '',
+      rtspsURL: '',
       container: {
         status: '',
         healthState: '',
@@ -429,12 +431,20 @@ class Dashboard {
 
     const rtmpSection = document.getElementById('rtmp-url-section');
     const rtmpsSection = document.getElementById('rtmps-url-section');
+    const rtspSection = document.getElementById('rtsp-url-section');
+    const rtspsSection = document.getElementById('rtsps-url-section');
     const noUrlsMessage = document.getElementById('no-urls-message');
     const rtmpInput = document.getElementById(
       'rtmp-url-input',
     ) as HTMLInputElement;
     const rtmpsInput = document.getElementById(
       'rtmps-url-input',
+    ) as HTMLInputElement;
+    const rtspInput = document.getElementById(
+      'rtsp-url-input',
+    ) as HTMLInputElement;
+    const rtspsInput = document.getElementById(
+      'rtsps-url-input',
     ) as HTMLInputElement;
 
     let hasAnyUrls = false;
@@ -455,6 +465,24 @@ class Dashboard {
       hasAnyUrls = true;
     } else if (rtmpsSection) {
       rtmpsSection.style.display = 'none';
+    }
+
+    // Handle RTSP URL
+    if (source.rtspURL && rtspSection && rtspInput) {
+      rtspSection.style.display = 'block';
+      rtspInput.value = source.rtspURL;
+      hasAnyUrls = true;
+    } else if (rtspSection) {
+      rtspSection.style.display = 'none';
+    }
+
+    // Handle RTSPS URL
+    if (source.rtspsURL && rtspsSection && rtspsInput) {
+      rtspsSection.style.display = 'block';
+      rtspsInput.value = source.rtspsURL;
+      hasAnyUrls = true;
+    } else if (rtspsSection) {
+      rtspsSection.style.display = 'none';
     }
 
     // Show/hide "no URLs" message
@@ -492,6 +520,14 @@ class Dashboard {
       this.copyToClipboard('rtmps'),
     );
 
+    const copyRtspBtn = document.getElementById('copy-rtsp-btn');
+    copyRtspBtn?.addEventListener('click', () => this.copyToClipboard('rtsp'));
+
+    const copyRtspsBtn = document.getElementById('copy-rtsps-btn');
+    copyRtspsBtn?.addEventListener('click', () =>
+      this.copyToClipboard('rtsps'),
+    );
+
     // Logout button
     const logoutLink = document.getElementById('logout-link');
     logoutLink?.addEventListener('click', (e) => {
@@ -504,11 +540,23 @@ class Dashboard {
     logoutConfirmBtn?.addEventListener('click', () => this.performLogout());
   }
 
-  private async copyToClipboard(urlType: 'rtmp' | 'rtmps') {
-    const url =
-      urlType === 'rtmp'
-        ? this.state.source.rtmpURL
-        : this.state.source.rtmpsURL;
+  private async copyToClipboard(urlType: 'rtmp' | 'rtmps' | 'rtsp' | 'rtsps') {
+    let url: string | null = null;
+    switch (urlType) {
+      case 'rtmp':
+        url = this.state.source.rtmpURL;
+        break;
+      case 'rtmps':
+        url = this.state.source.rtmpsURL;
+        break;
+      case 'rtsp':
+        url = this.state.source.rtspURL;
+        break;
+      case 'rtsps':
+        url = this.state.source.rtspsURL;
+        break;
+    }
+
     if (!url) return;
 
     try {

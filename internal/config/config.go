@@ -34,11 +34,12 @@ type NetAddr struct {
 	Port int
 }
 
-// RTMPSource holds the configuration for the RTMP source.
-type RTMPSource struct {
-	Enabled bool
-
+// Endpoint holds the configuration for a network endpoint that may be
+// enabled or disabled.
+type Endpoint struct {
 	NetAddr
+
+	Enabled bool
 }
 
 // TLS holds the TLS configuration.
@@ -51,8 +52,10 @@ type TLS struct {
 type MediaServerSource struct {
 	ImageName string // ImageName is the Docker image of the MediaMTX server.
 	StreamKey string
-	RTMP      RTMPSource
-	RTMPS     RTMPSource
+	RTMP      Endpoint
+	RTMPS     Endpoint
+	RTSP      Endpoint
+	RTSPS     Endpoint
 }
 
 // Sources holds the configuration for the sources.

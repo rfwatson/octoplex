@@ -42,6 +42,11 @@ const (
 	startStateStarted
 )
 
+type streamURLs struct {
+	rtmp, rtmps string
+	rtsp, rtsps string
+}
+
 // UI is responsible for managing the terminal user interface.
 type UI struct {
 	eventBus           *event.Bus
@@ -68,7 +73,7 @@ type UI struct {
 
 	mu                         sync.Mutex
 	destinationIDsToStartState map[uuid.UUID]startState
-	rtmpURL, rtmpsURL          string
+	streamURLs                 streamURLs
 
 	/// addingDestination is true if add destination modal is currently visible.
 	addingDestination bool
@@ -356,11 +361,17 @@ func (ui *UI) inputCaptureHandler(event *tcell.EventKey) *tcell.EventKey {
 
 func (ui *UI) fkeyHandler(key tcell.Key) {
 	var urls []string
-	if ui.rtmpURL != "" {
-		urls = append(urls, ui.rtmpURL)
+	if ui.streamURLs.rtmp != "" {
+		urls = append(urls, ui.streamURLs.rtmp)
 	}
-	if ui.rtmpsURL != "" {
-		urls = append(urls, ui.rtmpsURL)
+	if ui.streamURLs.rtmps != "" {
+		urls = append(urls, ui.streamURLs.rtmps)
+	}
+	if ui.streamURLs.rtsp != "" {
+		urls = append(urls, ui.streamURLs.rtsp)
+	}
+	if ui.streamURLs.rtsps != "" {
+		urls = append(urls, ui.streamURLs.rtsps)
 	}
 
 	switch key {
@@ -374,6 +385,16 @@ func (ui *UI) fkeyHandler(key tcell.Key) {
 			return
 		}
 		ui.copySourceURLToClipboard(urls[1])
+	case tcell.KeyF3:
+		if len(urls) < 3 {
+			return
+		}
+		ui.copySourceURLToClipboard(urls[2])
+	case tcell.KeyF4:
+		if len(urls) < 4 {
+			return
+		}
+		ui.copySourceURLToClipboard(urls[3])
 	}
 }
 
@@ -484,8 +505,10 @@ func (ui *UI) handleAppStateChanged(evt event.AppStateChangedEvent) {
 	ui.updatePullProgress(state)
 
 	ui.mu.Lock()
-	ui.rtmpURL = state.Source.RTMPURL
-	ui.rtmpsURL = state.Source.RTMPSURL
+	ui.streamURLs.rtmp = state.Source.RTMPURL
+	ui.streamURLs.rtmps = state.Source.RTMPSURL
+	ui.streamURLs.rtsp = state.Source.RTSPURL
+	ui.streamURLs.rtsps = state.Source.RTSPSURL
 
 	for _, dest := range state.Destinations {
 		ui.destinationIDsToStartState[dest.ID] = containerStateToStartState(dest.Container.Status)
@@ -835,15 +858,27 @@ func (ui *UI) redrawFromState(state domain.AppState) {
 	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText(""), 1, 0, false)
 
 	i := 1
-	if ui.rtmpURL != "" {
+	if ui.streamURLs.rtmp != "" {
 		rtmpURLView := tview.NewTextView().SetDynamicColors(true).SetText(fmt.Sprintf("[grey]F%d[-]       Copy source RTMP URL", i))
 		ui.actionsView.AddItem(rtmpURLView, 1, 0, false)
 		i++
 	}
 
-	if ui.rtmpsURL != "" {
+	if ui.streamURLs.rtmps != "" {
 		rtmpsURLView := tview.NewTextView().SetDynamicColors(true).SetText(fmt.Sprintf("[grey]F%d[-]       Copy source RTMPS URL", i))
 		ui.actionsView.AddItem(rtmpsURLView, 1, 0, false)
+		i++
+	}
+
+	if ui.streamURLs.rtsp != "" {
+		rtspURLView := tview.NewTextView().SetDynamicColors(true).SetText(fmt.Sprintf("[grey]F%d[-]       Copy source RTSP URL", i))
+		ui.actionsView.AddItem(rtspURLView, 1, 0, false)
+		i++
+	}
+
+	if ui.streamURLs.rtsps != "" {
+		rtspsURLView := tview.NewTextView().SetDynamicColors(true).SetText(fmt.Sprintf("[grey]F%d[-]       Copy source RTSPS URL", i))
+		ui.actionsView.AddItem(rtspsURLView, 1, 0, false)
 	}
 
 	ui.actionsView.AddItem(tview.NewTextView().SetDynamicColors(true).SetText("[grey]?[-]        About"), 1, 0, false)

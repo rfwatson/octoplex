@@ -18,6 +18,7 @@ import (
 
 	"git.netflux.io/rob/octoplex/internal/container"
 	"git.netflux.io/rob/octoplex/internal/domain"
+	"git.netflux.io/rob/octoplex/internal/optional"
 )
 
 // StreamKey is the stream key for the media server, which forms the RTMP path
@@ -33,6 +34,8 @@ const (
 	defaultRTMPIP                        = "127.0.0.1"             // default RTMP host IP, bound to localhost for security
 	defaultRTMPPort                      = 1935                    // default RTMP host port for the media server
 	defaultRTMPSPort                     = 1936                    // default RTMPS host port for the media server
+	defaultRTSPPort                      = 8554                    // default RTSP host port for the media server
+	defaultRTSPSPort                     = 8332                    // default RTSPS host port for the media server
 	defaultHost                          = "localhost"             // default mediaserver host name
 	defaultDockerHost                    = "localhost"             // default hostname to connect to Docker containers
 	defaultChanSize                      = 64                      // default channel size for asynchronous non-error channels
@@ -69,6 +72,8 @@ type Actor struct {
 	containerClient     ContainerClient
 	rtmpAddr            domain.NetAddr
 	rtmpsAddr           domain.NetAddr
+	rtspAddr            domain.NetAddr
+	rtspsAddr           domain.NetAddr
 	apiPort             int
 	host                string
 	dockerHost          string
@@ -88,27 +93,21 @@ type Actor struct {
 // NewActorParams contains the parameters for building a new media server
 // actor.
 type NewActorParams struct {
-	RTMPAddr            OptionalNetAddr // defaults to disabled, or 127.0.0.1:1935
-	RTMPSAddr           OptionalNetAddr // defaults to disabled, or 127.0.0.1:1936
-	APIPort             int             // defaults to 9997
-	Host                string          // defaults to "localhost"
-	DockerHost          string          // defaults to "localhost" (used for connecting to Docker containers)
-	StreamKey           StreamKey       // defaults to "live"
-	ImageName           string          // defaults to "ghcr.io/rfwatson/mediamtx-alpine:latest"
-	ChanSize            int             // defaults to 64
-	UpdateStateInterval time.Duration   // defaults to 5 seconds
+	RTMPAddr            optional.V[domain.NetAddr] // defaults to disabled, or 127.0.0.1:1935
+	RTMPSAddr           optional.V[domain.NetAddr] // defaults to disabled, or 127.0.0.1:1936
+	RTSPAddr            optional.V[domain.NetAddr] // defaults to disabled, or 127.0.0.1:8554
+	RTSPSAddr           optional.V[domain.NetAddr] // defaults to disabled, or 127.0.0.1:8332
+	APIPort             int                        // defaults to 9997
+	Host                string                     // defaults to "localhost"
+	DockerHost          string                     // defaults to "localhost" (used for connecting to Docker containers)
+	StreamKey           StreamKey                  // defaults to "live"
+	ImageName           string                     // defaults to "ghcr.io/rfwatson/mediamtx-alpine:latest"
+	ChanSize            int                        // defaults to 64
+	UpdateStateInterval time.Duration              // defaults to 5 seconds
 	KeyPairs            domain.KeyPairs
 	ContainerClient     ContainerClient
 	InDocker            bool
 	Logger              *slog.Logger
-}
-
-// OptionalNetAddr is a wrapper around domain.NetAddr that indicates whether it
-// is enabled or not.
-type OptionalNetAddr struct {
-	domain.NetAddr
-
-	Enabled bool
 }
 
 // NewActor creates a new media server actor.
@@ -135,8 +134,10 @@ func NewActor(ctx context.Context, params NewActorParams) (_ *Actor, err error) 
 
 	chanSize := cmp.Or(params.ChanSize, defaultChanSize)
 	return &Actor{
-		rtmpAddr:            toRTMPAddr(params.RTMPAddr, defaultRTMPPort),
-		rtmpsAddr:           toRTMPAddr(params.RTMPSAddr, defaultRTMPSPort),
+		rtmpAddr:            toNetAddr(params.RTMPAddr, defaultRTMPPort),
+		rtmpsAddr:           toNetAddr(params.RTMPSAddr, defaultRTMPSPort),
+		rtspAddr:            toNetAddr(params.RTSPAddr, defaultRTSPPort),
+		rtspsAddr:           toNetAddr(params.RTSPSAddr, defaultRTSPSPort),
 		apiPort:             cmp.Or(params.APIPort, defaultAPIPort),
 		host:                cmp.Or(params.Host, defaultHost),
 		dockerHost:          dockerHost,
@@ -168,12 +169,18 @@ func (a *Actor) Start(ctx context.Context) error {
 	}
 	portSpecs = append(portSpecs, fmt.Sprintf("%s:%d:9997", publishIP, a.apiPort))
 
-	// RTMP ports bind to 127.0.0.1 by default.
+	// RTMP and RTSP ports bind to 127.0.0.1 by default.
 	if !a.rtmpAddr.IsZero() {
 		portSpecs = append(portSpecs, fmt.Sprintf("%s:%d:%d", a.rtmpAddr.IP, a.rtmpAddr.Port, 1935))
 	}
 	if !a.rtmpsAddr.IsZero() {
 		portSpecs = append(portSpecs, fmt.Sprintf("%s:%d:%d", a.rtmpsAddr.IP, a.rtmpsAddr.Port, 1936))
+	}
+	if !a.rtspAddr.IsZero() {
+		portSpecs = append(portSpecs, fmt.Sprintf("%s:%d:%d", a.rtspAddr.IP, a.rtspAddr.Port, 8554))
+	}
+	if !a.rtspsAddr.IsZero() {
+		portSpecs = append(portSpecs, fmt.Sprintf("%s:%d:%d", a.rtspsAddr.IP, a.rtspsAddr.Port, 8332))
 	}
 
 	exposedPorts, portBindings, err := nat.ParsePortSpecs(portSpecs)
@@ -181,11 +188,13 @@ func (a *Actor) Start(ctx context.Context) error {
 		return fmt.Errorf("parse port specs: %w", err)
 	}
 
-	// RTMP URLs are passed in state mostly to ensure that late-joining clients
+	// RTMP and RTSP URLs are passed in state mostly to ensure that late-joining clients
 	// can receive them. It might be nice to clean this up, the URLs don't change
 	// so aren't really stateful data and don't need to be sent in every update.
 	a.state.RTMPURL = a.RTMPURL()
 	a.state.RTMPSURL = a.RTMPSURL()
+	a.state.RTSPURL = a.RTSPURL()
+	a.state.RTSPSURL = a.RTSPSURL()
 
 	cfg, err := a.buildServerConfig()
 	if err != nil {
@@ -242,6 +251,16 @@ func (a *Actor) Start(ctx context.Context) error {
 	} else {
 		args = append(args, "rtmps.enabled", true, "rtmps.bind_addr", a.rtmpsAddr.IP, "rtmps.bind_port", a.rtmpsAddr.Port)
 	}
+	if a.rtspAddr.IsZero() {
+		args = append(args, "rtsp.enabled", false)
+	} else {
+		args = append(args, "rtsp.enabled", true, "rtsp.bind_addr", a.rtspAddr.IP, "rtsp.bind_port", a.rtspAddr.Port)
+	}
+	if a.rtspsAddr.IsZero() {
+		args = append(args, "rtsps.enabled", false)
+	} else {
+		args = append(args, "rtsps.enabled", true, "rtsps.bind_addr", a.rtspsAddr.IP, "rtsps.bind_port", a.rtspsAddr.Port)
+	}
 	a.logger.Info("Starting media server", args...)
 
 	containerStateC, errC := a.containerClient.RunContainer(
@@ -288,11 +307,11 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 	// NOTE: Regardless of the user configuration (which mostly affects exposed
 	// ports and UI rendering) plain RTMP must be enabled at the container level,
 	// for internal connections.
-	var encryptionString string
+	var rtmpEncryptionString string
 	if a.rtmpsAddr.IsZero() {
-		encryptionString = "no"
+		rtmpEncryptionString = "no"
 	} else {
-		encryptionString = "optional"
+		rtmpEncryptionString = "optional"
 	}
 
 	var certPath, keyPath string
@@ -304,50 +323,77 @@ func (a *Actor) buildServerConfig() ([]byte, error) {
 		keyPath = tlsKeyPath
 	}
 
-	return yaml.Marshal(
-		Config{
-			LogLevel:        "info",
-			LogDestinations: []string{"stdout"},
-			AuthMethod:      "internal",
-			AuthInternalUsers: []User{
-				{
-					User: "any",
-					IPs:  []string{}, // allow any IP
-					Permissions: []UserPermission{
-						{Action: "publish"},
-					},
-				},
-				{
-					User: "api",
-					Pass: a.pass,
-					IPs:  []string{}, // allow any IP
-					Permissions: []UserPermission{
-						{Action: "read"},
-					},
-				},
-				{
-					User:        "api",
-					Pass:        a.pass,
-					IPs:         []string{}, // allow any IP
-					Permissions: []UserPermission{{Action: "api"}},
-				},
+	cfg := Config{
+		LogLevel:        "info",
+		LogDestinations: []string{"stdout"},
+		AuthMethod:      "internal",
+		AuthInternalUsers: []User{
+			{
+				User:        "any",
+				IPs:         []string{}, // allow any IP
+				Permissions: []UserPermission{{Action: "publish"}},
 			},
-			RTMP:           true,
-			RTMPEncryption: encryptionString,
-			RTMPAddress:    ":1935",
-			RTMPSAddress:   ":1936",
-			RTMPServerCert: certPath,
-			RTMPServerKey:  keyPath,
-			API:            true,
-			APIEncryption:  true,
-			APIServerCert:  tlsInternalCertPath,
-			APIServerKey:   tlsInternalKeyPath,
-			APIAddress:     ":9997",
-			Paths: map[string]Path{
-				string(a.streamKey): {Source: "publisher"},
+			{
+				User:        "api",
+				Pass:        a.pass,
+				IPs:         []string{}, // allow any IP
+				Permissions: []UserPermission{{Action: "read"}},
+			},
+			{
+				User:        "api",
+				Pass:        a.pass,
+				IPs:         []string{}, // allow any IP
+				Permissions: []UserPermission{{Action: "api"}},
 			},
 		},
-	)
+		RTMP:           true,
+		RTMPEncryption: rtmpEncryptionString,
+		RTMPAddress:    ":1935",
+		RTMPSAddress:   ":1936",
+		RTMPServerCert: certPath,
+		RTMPServerKey:  keyPath,
+		API:            true,
+		APIEncryption:  true,
+		APIServerCert:  tlsInternalCertPath,
+		APIServerKey:   tlsInternalKeyPath,
+		APIAddress:     ":9997",
+		Paths: map[string]Path{
+			string(a.streamKey): {Source: "publisher"},
+		},
+	}
+
+	rtspEnabled := !a.rtspAddr.IsZero()
+	rtspsEnabled := !a.rtspsAddr.IsZero()
+
+	applySharedRTSPConfig := func() {
+		cfg.RTSP = true
+		cfg.RTSPTransports = []string{"tcp"}
+
+		switch {
+		case rtspsEnabled && rtspEnabled:
+			cfg.RTSPEncryption = "optional"
+		case rtspsEnabled:
+			cfg.RTSPEncryption = "strict"
+		default:
+			cfg.RTSPEncryption = "no"
+		}
+	}
+
+	if !a.rtspAddr.IsZero() {
+		applySharedRTSPConfig()
+
+		cfg.RTSPAddress = ":8554"
+	}
+
+	if !a.rtspsAddr.IsZero() {
+		applySharedRTSPConfig()
+
+		cfg.RTSPSAddress = ":8332"
+		cfg.RTSPServerCert = certPath
+		cfg.RTSPServerKey = keyPath
+	}
+
+	return yaml.Marshal(cfg)
 }
 
 // C returns a channel that will receive the current state of the media server.
@@ -478,6 +524,24 @@ func (a *Actor) RTMPSURL() string {
 	return fmt.Sprintf("rtmps://%s:%d/%s", a.host, a.rtmpsAddr.Port, a.streamKey)
 }
 
+// RTSPURL returns the RTSP URL for the media server, accessible from the host.
+func (a *Actor) RTSPURL() string {
+	if a.rtspAddr.IsZero() {
+		return ""
+	}
+
+	return fmt.Sprintf("rtsp://%s:%d/%s", a.host, a.rtspAddr.Port, a.streamKey)
+}
+
+// RTSPSURL returns the RTSPS URL for the media server, accessible from the host.
+func (a *Actor) RTSPSURL() string {
+	if a.rtspsAddr.IsZero() {
+		return ""
+	}
+
+	return fmt.Sprintf("rtsps://%s:%d/%s", a.host, a.rtspsAddr.Port, a.streamKey)
+}
+
 // RTMPInternalURL returns the RTMP URL for the media server, accessible from
 // the app network.
 func (a *Actor) RTMPInternalURL() string {
@@ -528,16 +592,16 @@ func generatePassword() string {
 	return fmt.Sprintf("%x", []byte(p))
 }
 
-// toRTMPAddr builds a domain.NetAddr from an OptionalNetAddr, with default
+// toNetAddr builds a domain.NetAddr from an optional NetAddr, with default
 // values set to RTMP default bind config if needed. If the OptionalNetAddr is
 // not enabled, a zero value is returned.
-func toRTMPAddr(a OptionalNetAddr, defaultPort int) domain.NetAddr {
-	if !a.Enabled {
+func toNetAddr(a optional.V[domain.NetAddr], defaultPort int) domain.NetAddr {
+	if !a.Present {
 		return domain.NetAddr{}
 	}
 
 	return domain.NetAddr{
-		IP:   cmp.Or(a.IP, defaultRTMPIP),
-		Port: cmp.Or(a.Port, defaultPort),
+		IP:   cmp.Or(a.Value.IP, defaultRTMPIP),
+		Port: cmp.Or(a.Value.Port, defaultPort),
 	}
 }

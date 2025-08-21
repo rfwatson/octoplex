@@ -3,7 +3,6 @@
 package client_test
 
 import (
-	"cmp"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
@@ -41,35 +40,66 @@ const waitTime = time.Minute
 
 func TestIntegration(t *testing.T) {
 	t.Run("RTMP with default stream key", func(t *testing.T) {
-		testIntegration(t, config.MediaServerSource{
-			RTMP: config.RTMPSource{Enabled: true},
-		})
+		testIntegration(
+			t,
+			config.MediaServerSource{RTMP: config.Endpoint{Enabled: true}},
+			func(t *testing.T) { testhelpers.StreamFLV(t, "rtmp://localhost:1935/live") },
+		)
 	})
 
 	t.Run("RTMPS with default stream key", func(t *testing.T) {
-		testIntegration(t, config.MediaServerSource{
-			RTMPS: config.RTMPSource{Enabled: true},
-		})
+		testIntegration(
+			t,
+			config.MediaServerSource{RTMPS: config.Endpoint{Enabled: true}},
+			func(t *testing.T) { testhelpers.StreamFLV(t, "rtmps://localhost:1936/live") },
+		)
 	})
 
 	t.Run("RTMP with custom stream key", func(t *testing.T) {
-		testIntegration(t, config.MediaServerSource{
-			StreamKey: "s0meK3y",
-			RTMP: config.RTMPSource{
-				Enabled: true,
-				NetAddr: config.NetAddr{IP: "0.0.0.0", Port: 3000},
+		testIntegration(
+			t,
+			config.MediaServerSource{
+				StreamKey: "s0meK3y",
+				RTMP: config.Endpoint{
+					Enabled: true,
+					NetAddr: config.NetAddr{IP: "0.0.0.0", Port: 3000},
+				},
 			},
-		})
+			func(t *testing.T) { testhelpers.StreamFLV(t, "rtmp://localhost:3000/s0meK3y") },
+		)
 	})
 
 	t.Run("RTMPS with custom stream key", func(t *testing.T) {
-		testIntegration(t, config.MediaServerSource{
-			StreamKey: "an0therK3y",
-			RTMPS: config.RTMPSource{
-				Enabled: true,
-				NetAddr: config.NetAddr{IP: "0.0.0.0", Port: 443},
+		testIntegration(
+			t,
+			config.MediaServerSource{
+				StreamKey: "an0therK3y",
+				RTMPS: config.Endpoint{
+					Enabled: true,
+					NetAddr: config.NetAddr{IP: "0.0.0.0", Port: 443},
+				},
 			},
-		})
+			func(t *testing.T) { testhelpers.StreamFLV(t, "rtmps://localhost:443/an0therK3y") },
+		)
+	})
+
+	t.Run("RTSP with default stream key", func(t *testing.T) {
+		testIntegration(
+			t,
+			config.MediaServerSource{RTSP: config.Endpoint{Enabled: true}},
+			func(t *testing.T) { testhelpers.StreamRTSP(t, "rtsp://localhost:8554/live") },
+		)
+	})
+
+	t.Run("RTSPS with custom stream key", func(t *testing.T) {
+		testIntegration(
+			t,
+			config.MediaServerSource{
+				StreamKey: "y3tAn0therK3y",
+				RTSPS:     config.Endpoint{Enabled: true},
+			},
+			func(t *testing.T) { testhelpers.StreamRTSP(t, "rtsps://localhost:8332/y3tAn0therK3y") },
+		)
 	})
 }
 
@@ -79,26 +109,9 @@ func TestIntegration(t *testing.T) {
 // https://stackoverflow.com/a/60740997/62871
 const hostIP = "172.17.0.1"
 
-func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
+func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource, startStream func(t *testing.T)) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
-
-	var rtmpConfig config.RTMPSource
-	var proto string
-	var defaultPort int
-	if mediaServerConfig.RTMP.Enabled {
-		rtmpConfig = mediaServerConfig.RTMP
-		proto = "rtmp://"
-		defaultPort = 1935
-	} else {
-		rtmpConfig = mediaServerConfig.RTMPS
-		proto = "rtmps://"
-		defaultPort = 1936
-	}
-
-	wantRTMPPort := cmp.Or(rtmpConfig.Port, defaultPort)
-	wantStreamKey := cmp.Or(mediaServerConfig.StreamKey, "live")
-	wantRTMPURL := fmt.Sprintf("%slocalhost:%d/%s", proto, wantRTMPPort, wantStreamKey)
 
 	destServer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
@@ -161,7 +174,7 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 	printScreen(t, getContents, "After starting the mediaserver")
 
 	// Start streaming a test video to the app:
-	testhelpers.StreamFLV(t, wantRTMPURL)
+	startStream(t)
 
 	require.EventuallyWithT(
 		t,
@@ -289,6 +302,7 @@ func testIntegration(t *testing.T, mediaServerConfig config.MediaServerSource) {
 	cancel()
 
 	result := <-ch
+
 	// May be a gRPC error, not context.Canceled:
 	assert.ErrorContains(t, result.errClient, "context canceled")
 	assert.ErrorIs(t, result.errServer, context.Canceled)
@@ -313,7 +327,7 @@ func TestIntegrationCustomHost(t *testing.T) {
 			ServerURL:           config.ServerURL{Hostname: "rtmp.example.com"},
 			Sources: config.Sources{
 				MediaServer: config.MediaServerSource{
-					RTMP: config.RTMPSource{Enabled: true},
+					RTMP: config.Endpoint{Enabled: true},
 				},
 			},
 		},
@@ -390,7 +404,7 @@ func TestIntegrationTLSCerts(t *testing.T) {
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			DataDir:             dataDir,
-			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.RTMPSource{Enabled: true}}},
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.Endpoint{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -441,7 +455,7 @@ func TestIntegrationTLSCerts(t *testing.T) {
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
 			DataDir:             dataDir,
-			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.RTMPSource{Enabled: true}}},
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.Endpoint{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -501,7 +515,7 @@ func TestIntegrationCustomTLSCerts(t *testing.T) {
 			},
 			Sources: config.Sources{
 				MediaServer: config.MediaServerSource{
-					RTMPS: config.RTMPSource{Enabled: true},
+					RTMPS: config.Endpoint{Enabled: true},
 				},
 			},
 		},
@@ -578,7 +592,7 @@ func TestIntegrationCustomTLSNoInsecureSkipVerify(t *testing.T) {
 				CertPath: "testdata/server.crt",
 				KeyPath:  "testdata/server.key",
 			},
-			Sources: config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.RTMPSource{Enabled: true}}},
+			Sources: config.Sources{MediaServer: config.MediaServerSource{RTMPS: config.Endpoint{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -626,7 +640,7 @@ func TestIntegrationRestartDestination(t *testing.T) {
 			ListenAddrs:         config.ListenAddrs{TLS: "localhost:8443"},
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
-			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.Endpoint{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -775,7 +789,7 @@ func TestIntegrationUpdateDestination(t *testing.T) {
 			ListenAddrs:         config.ListenAddrs{TLS: "localhost:8443"},
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
-			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.Endpoint{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -878,7 +892,7 @@ func TestIntegrationStartDestinationFailed(t *testing.T) {
 			ListenAddrs:         config.ListenAddrs{TLS: "localhost:8443"},
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
-			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.Endpoint{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -963,7 +977,7 @@ func TestIntegrationDestinationValidations(t *testing.T) {
 			ListenAddrs:         config.ListenAddrs{TLS: "localhost:8443"},
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
-			Sources:             config.Sources{MediaServer: config.MediaServerSource{StreamKey: "live", RTMP: config.RTMPSource{Enabled: true}}},
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{StreamKey: "live", RTMP: config.Endpoint{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -1112,7 +1126,7 @@ func TestIntegrationStartupCheck(t *testing.T) {
 			ListenAddrs:         config.ListenAddrs{TLS: "localhost:8443"},
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
-			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.Endpoint{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -1188,7 +1202,7 @@ func TestIntegrationMediaServerError(t *testing.T) {
 			ListenAddrs:         config.ListenAddrs{TLS: "localhost:8443"},
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
-			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.Endpoint{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -1234,7 +1248,7 @@ func TestIntegrationDockerClientError(t *testing.T) {
 			ListenAddrs:         config.ListenAddrs{TLS: "localhost:8443"},
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
-			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.Endpoint{Enabled: true}}},
 		},
 		&dockerClient,
 		screen,
@@ -1279,7 +1293,7 @@ func TestIntegrationDockerConnectionError(t *testing.T) {
 			ListenAddrs:         config.ListenAddrs{TLS: "localhost:8443"},
 			AuthMode:            config.AuthModeNone,
 			InsecureAllowNoAuth: true,
-			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}}},
+			Sources:             config.Sources{MediaServer: config.MediaServerSource{RTMP: config.Endpoint{Enabled: true}}},
 		},
 		dockerClient,
 		screen,
@@ -1324,7 +1338,7 @@ func TestIntegrationCopyURLs(t *testing.T) {
 	}{
 		{
 			name:              "RTMP only",
-			mediaServerConfig: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}},
+			mediaServerConfig: config.MediaServerSource{RTMP: config.Endpoint{Enabled: true}},
 			wantBindings: []binding{
 				{
 					key:     tcell.KeyF1,
@@ -1336,7 +1350,7 @@ func TestIntegrationCopyURLs(t *testing.T) {
 		},
 		{
 			name:              "RTMPS only",
-			mediaServerConfig: config.MediaServerSource{RTMPS: config.RTMPSource{Enabled: true}},
+			mediaServerConfig: config.MediaServerSource{RTMPS: config.Endpoint{Enabled: true}},
 			wantBindings: []binding{
 				{
 					key:     tcell.KeyF1,
@@ -1348,7 +1362,7 @@ func TestIntegrationCopyURLs(t *testing.T) {
 		},
 		{
 			name:              "RTMP and RTMPS",
-			mediaServerConfig: config.MediaServerSource{RTMP: config.RTMPSource{Enabled: true}, RTMPS: config.RTMPSource{Enabled: true}},
+			mediaServerConfig: config.MediaServerSource{RTMP: config.Endpoint{Enabled: true}, RTMPS: config.Endpoint{Enabled: true}},
 			wantBindings: []binding{
 				{
 					key:     tcell.KeyF1,
@@ -1359,6 +1373,22 @@ func TestIntegrationCopyURLs(t *testing.T) {
 					key:     tcell.KeyF2,
 					content: "F2       Copy source RTMPS URL",
 					url:     "rtmps://localhost:1936/live",
+				},
+			},
+		},
+		{
+			name:              "RTSP and RTSPS",
+			mediaServerConfig: config.MediaServerSource{RTSP: config.Endpoint{Enabled: true}, RTSPS: config.Endpoint{Enabled: true}},
+			wantBindings: []binding{
+				{
+					key:     tcell.KeyF1,
+					content: "F1       Copy source RTSP URL",
+					url:     "rtsp://localhost:8554/live",
+				},
+				{
+					key:     tcell.KeyF2,
+					content: "F2       Copy source RTSPS URL",
+					url:     "rtsps://localhost:8332/live",
 				},
 			},
 		},

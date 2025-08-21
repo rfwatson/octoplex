@@ -23,8 +23,14 @@ type Config struct {
 	RTMPSAddress      string          `yaml:"rtmpsAddress,omitempty"`
 	RTMPServerCert    string          `yaml:"rtmpServerCert,omitempty"`
 	RTMPServerKey     string          `yaml:"rtmpServerKey,omitempty"`
-	HLS               bool            `yaml:"hls"`
 	RTSP              bool            `yaml:"rtsp"`
+	RTSPTransports    []string        `yaml:"rtspTransports,omitempty"`
+	RTSPEncryption    string          `yaml:"rtspEncryption,omitempty"`
+	RTSPAddress       string          `yaml:"rtspAddress,omitempty"`
+	RTSPSAddress      string          `yaml:"rtspsAddress,omitempty"`
+	RTSPServerCert    string          `yaml:"rtspServerCert,omitempty"`
+	RTSPServerKey     string          `yaml:"rtspServerKey,omitempty"`
+	HLS               bool            `yaml:"hls"`
 	WebRTC            bool            `yaml:"webrtc"`
 	SRT               bool            `yaml:"srt"`
 	Paths             map[string]Path `yaml:"paths,omitempty"`

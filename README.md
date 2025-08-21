@@ -9,12 +9,12 @@
 
 Octoplex is a Docker-native live video restreamer.
 
-* Restream RTMP/RTMPS to unlimited destinations
+* Restream live video to unlimited destinations
 * Add and remove destinations on-the-fly
-* Broadcast using OBS or any RTMP encoder
+* Broadcast with OBS - or any RTMP or RTSP encoder
 * Automatic reconnections on drop
-* Web user interface with live metrics and health
-* Terminal UI with live metrics and health
+* Automatic TLS certificate generation for RTMPS and RTSPS
+* Web and terminal UIs with live metrics and health
 * Command-line interface for scripting and automation
 
 ## Table of Contents
@@ -57,6 +57,8 @@ Octoplex is a Docker-native live video restreamer.
   - [Restreaming with FFmpeg](#restreaming-with-ffmpeg)
     - [RTMP](#rtmp-1)
     - [RTMPS](#rtmps-1)
+    - [RTSP](#rtsp)
+    - [RTSPS](#rtsps)
 - [Advanced](#advanced)
   - [Running with Docker](#running-with-docker)
     - [`docker run`](#docker-run)
@@ -66,7 +68,7 @@ Octoplex is a Docker-native live video restreamer.
 - [Acknowledgements](#acknowledgements)
 - [Licence](#licence)
 
-## Quick start
+<h2 id="quick-start">Quick start :checkered_flag:</h2>
 
 1. **Install Octoplex**
 
@@ -96,7 +98,7 @@ rtmps://localhost:1936/live        # self-signed TLS certificate by default
 
 That's it: your local restreamer is live. :tada:
 
-## User interfaces
+<h2 id="user-interfaces">User interfaces :computer:</h2>
 
 Octoplex provides two interactive user interfaces with equivalent functionality:
 
@@ -119,7 +121,7 @@ Terminal UI:
 
 ![Octoplex terminal user interface](/assets/octoplex-tui.png)
 
-## How it works
+<h2 id="how-it-works">How it works :wrench:</h2>
 
 Octoplex server runs on your Docker host (as a container or daemon process) and
 spins up [MediaMTX](https://github.com/bluenviron/mediamtx) and
@@ -148,7 +150,7 @@ Features and configuration settings may change between releases. Double-check
 your security configuration and exercise extra caution before deploying to
 public-facing networks. See the [Security](#security) section for more.
 
-## Installation
+<h2 id="installation">Installation :electric_plug:</h2>
 
 ### Docker Engine (only if you'll run Octoplex locally)
 
@@ -177,7 +179,7 @@ Unarchive the `octoplex` binary and copy it somewhere in your $PATH.
 
 See [Running with Docker](#running-with-docker).
 
-## Starting Octoplex
+<h2 id="starting-octoplex">Starting Octoplex :rocket:</h2>
 
 Octoplex can run as a single process (all-in-one), or in a client/server pair.
 
@@ -218,7 +220,7 @@ octoplex client start # --host my.remotehost.com if on a different host
 octoplex server stop
 ```
 
-## Interacting with Octoplex
+<h2 id="interacting-with-octoplex">Interacting with Octoplex :computer:</h2>
 
 ### Command-line interface (CLI)
 
@@ -312,14 +314,18 @@ Flag|Alias|Modes|Env var|Default|Description
 `--web`|`-w`|`server`|`OCTO_WEB`|`true`|Enable web server
 `--auth`||`server`|`OCTO_AUTH`|`auto`|Authentication mode for clients, one of `none`, `auto` and `token`. See [Security](#security).
 `--insecure-allow-no-auth`||`server`|`OCTO_INSECURE_ALLOW_NO_AUTH`|`false`|Allow `--auth=none` when bound to non-local addresses. See [Security](#security).
-`--tls-cert`||`server` `all-in-one`|`OCTO_TLS_CERT`||Path to custom TLS certifcate (PEM-encoded, must be valid for `hostname`). Used for gRPC and RTMPS connections.
-`--tls-key`||`server` `all-in-one`|`OCTO_TLS_KEY`||Path to custom TLS key (PEM-encoded, must be valid for `hostname`). Used for gRPC and RTMPS connections.
+`--tls-cert`||`server` `all-in-one`|`OCTO_TLS_CERT`||Path to custom TLS certifcate (PEM-encoded, must be valid for `hostname`). Used for gRPC, RTMPS and RTSPS connections.
+`--tls-key`||`server` `all-in-one`|`OCTO_TLS_KEY`||Path to custom TLS key (PEM-encoded, must be valid for `hostname`). Used for gRPC, RTMPS and RTSPS connections.
 `--docker-host`||`server`|`OCTO_DOCKER_HOST`||Optional. The Docker host to connect to, e.g. `ssh://user@host:2375`. If not set, falls back to the Docker SDK's DOCKER_HOST environment variable or the default Unix socket.
 `--stream-key`||`server` `all-in-one`|`OCTO_STREAM_KEY`|`live`|Stream key, e.g. `rtmp://rtmp.example.com/live`
 `--rtmp-enabled`||`server` `all-in-one`||`true`|Enable RTMP server
 `--rtmp-listen`||`server` `all-in-one`||`127.0.0.1:1935`|Listen address for RTMP sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen`.
-`--rtmps-enabled`||`server` `all-in-one`||`false`|Enable RTMPS server
+`--rtmps-enabled`||`server` `all-in-one`||`true`|Enable RTMPS server
 `--rtmps-listen`||`server` `all-in-one`||`127.0.0.1:1936`|Listen address for RTMPS sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen`.
+`--rtsp-enabled`||`server` `all-in-one`||`false`|Enable RTSP server
+`--rtsp-listen`||`server` `all-in-one`||`127.0.0.1:8554`|Listen address for RTSP sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen`.
+`--rtsps-enabled`||`server` `all-in-one`||`false`|Enable RTSPS server
+`--rtsps-listen`||`server` `all-in-one`||`127.0.0.1:8332`|Listen address for RTSPS sources.<br/>:warning: Must be set to a valid IP address to receive connections from other hosts. See `--listen`.
 `--image-name-mediamtx`||`server` `all-in-one`|`OCTO_IMAGE_NAME_MEDIAMTX`|`ghcr.io/rfwatson/mediamtx-alpine:latest`|OCI-compatible image for launching MediaMTX
 `--image-name-ffmpeg`||`server` `all-in-one`|`OCTO_IMAGE_NAME_FFMPEG`|`ghcr.io/jrottenberg/ffmpeg:7.1-scratch`|OCI-compatible image for launching FFmpeg
 `--log-to-file`||`server` `all-in-one`|`OCTO_LOG_TO_FILE`|`false`|Log to a file instead stderr
@@ -341,7 +347,7 @@ Flag|Alias|Default|Description
 
 :information_source: When running in all-in-one mode (`octoplex run`) some flags may be overridden or unavailable.
 
-## Web interface
+<h2 id="web-interface">Web interface :globe_with_meridians:</h2>
 
 Octoplex provides a built-in web interface that allows you to manage your live streams from any browser.
 
@@ -352,7 +358,7 @@ The web interface is served from your server URL. By default this is
 a custom URL with the `--server-url` flag (or `OCTO_SERVER_URL` environment
 variable. See [Server flags](#server-flags) for more details.
 
-## Security
+<h2 id="security">Security :lock:</h2>
 
 Read this section before putting Octoplex on any network you don't fully control.
 
@@ -417,7 +423,7 @@ accessible behind a TLS-enabled reverse proxy. To disable non-TLS listeners
 entirely, use `--listen=none` with `octoplex server start`, or set the
 `OCTO_LISTEN=none` environment variable.
 
-## Restreaming with Octoplex
+<h2 id="restreaming-with-octoplex">Restreaming with Octoplex :arrows_counterclockwise:</h2>
 
 ### Restreaming with OBS
 
@@ -457,7 +463,23 @@ ffmpeg -i input.mp4 -c copy -f flv rtmp://localhost:1935/live
 ffmpeg -i input.mp4 -c copy -f flv rtmps://localhost:1936/live
 ```
 
-## Advanced
+#### RTSP
+
+> **:information_source: Tip:** RTSP is disabled by default. To enable, start Octoplex with the `--rtsp-enabled` server flag.
+
+```shell
+ffmpeg -i input.mp4 -c copy -f rtsp -rtsp_transport tcp rtsp://localhost:8554/live
+```
+
+#### RTSPS
+
+> **:information_source: Tip:** RTSPS is disabled by default. To enable, start Octoplex with the `--rtsps-enabled` server flag.
+
+```shell
+ffmpeg -i input.mp4 -c copy -f rtsp -rtsp_transport tcp rtsps://localhost:8332/live
+```
+
+<h2 id="advanced">Advanced :gear:</h2>
 
 ### Running with Docker
 
@@ -520,7 +542,7 @@ volumes:
 
 See also [docker-compose.yaml](/docker-compose.yaml).
 
-## Contributing
+<h2 id="contributing">Contributing :sparkles:</h2>
 
 See [CONTRIBUTING.md](/CONTRIBUTING.md).
 

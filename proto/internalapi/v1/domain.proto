@@ -32,6 +32,8 @@ message Source {
   string exit_reason = 5;
   string rtmp_url = 6;
   string rtmps_url = 7;
+  string rtsp_url = 8;
+  string rtsps_url = 9;
 }
 
 message Destination {

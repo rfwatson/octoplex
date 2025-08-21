@@ -39,6 +39,8 @@ type Source struct {
 	Tracks        []string
 	RTMPURL       string
 	RTMPSURL      string
+	RTSPURL       string
+	RTSPSURL      string
 	ExitReason    string
 }
 
