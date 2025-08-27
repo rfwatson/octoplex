@@ -451,14 +451,14 @@ func (a *App) handleCommand(
 	case event.CommandUpdateDestination:
 		if isLive(state, c.ID) {
 			// should be caught in the UI, but just in case
-			a.logger.Warn("Update destination failed: destination is live", "id", c.ID)
+			a.logger.Info("Update destination failed: destination is live", "id", c.ID)
 			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Error: "destination is live"}, nil
 		}
 
 		newState := a.store.Get()
 		idx := slices.IndexFunc(newState.Destinations, func(dest store.Destination) bool { return dest.ID == c.ID })
 		if idx == -1 {
-			a.logger.Warn("Update destination failed: destination not found", "id", c.ID)
+			a.logger.Info("Update destination failed: destination not found", "id", c.ID)
 			return nil, event.UpdateDestinationFailedEvent{ID: c.ID, Error: "destination not found"}, nil
 		}
 
@@ -485,7 +485,7 @@ func (a *App) handleCommand(
 
 		idx := slices.IndexFunc(newState.Destinations, func(dest store.Destination) bool { return dest.ID == c.ID })
 		if idx == -1 {
-			a.logger.Warn("Remove destination failed: destination not found", "id", c.ID)
+			a.logger.Info("Remove destination failed: destination not found", "id", c.ID)
 			return nil, event.RemoveDestinationFailedEvent{ID: c.ID, Error: "destination not found"}, nil
 		}
 
@@ -512,7 +512,7 @@ func (a *App) handleCommand(
 			return d.ID == c.ID
 		})
 		if destIndex == -1 {
-			a.logger.Warn("Start destination failed: destination not found", "id", c.ID)
+			a.logger.Info("Start destination failed: destination not found", "id", c.ID)
 			return nil, event.StartDestinationFailedEvent{ID: c.ID, Error: "destination not found"}, nil
 		}
 
@@ -525,7 +525,7 @@ func (a *App) handleCommand(
 		// Lookup destination DNS before we start.
 		// Error handling is more reliable than parsing FFmpeg logs.
 		if found, errMsg := isHostFound(dest.URL); !found {
-			a.logger.Warn("Start destination failed: host not found", "id", c.ID)
+			a.logger.Info("Start destination failed: host not found", "id", c.ID)
 			return nil, event.StartDestinationFailedEvent{ID: c.ID, Error: errMsg}, nil
 		}
 
@@ -549,7 +549,7 @@ func (a *App) handleCommand(
 			return d.ID == c.ID
 		})
 		if destIndex == -1 {
-			a.logger.Warn("Start destination failed: destination not found", "id", c.ID)
+			a.logger.Info("Start destination failed: destination not found", "id", c.ID)
 			return nil, event.StopDestinationFailedEvent{ID: c.ID, Error: "destination not found"}, nil
 		}
 
