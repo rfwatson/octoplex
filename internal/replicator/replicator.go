@@ -1,6 +1,7 @@
 package replicator
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"fmt"
@@ -118,7 +119,10 @@ func (a *Actor) StartDestination(destURL string) <-chan State {
 				},
 			},
 			HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
-			Logs:       container.LogConfig{Stderr: true},
+			Logs: container.LogConfig{
+				Stderr:    true,
+				Sanitizer: logSanitizer(destURL),
+			},
 			ShouldRestart: func(_ int64, restartCount int, logs [][]byte, runningTime time.Duration) (bool, error) {
 				// Try to infer if the container failed to start.
 				//
@@ -183,6 +187,14 @@ func startErrFromLogs(logs [][]byte) error {
 		return ErrForbidden
 	default:
 		return ErrUnknown
+	}
+}
+
+// logSanitizer removes the destination URL from logs, to try to avoid logging
+// credentials passed in URLs.
+func logSanitizer(url string) func([]byte) []byte {
+	return func(input []byte) []byte {
+		return bytes.ReplaceAll(input, []byte(url), []byte("rtmp://redacted"))
 	}
 }
 

@@ -3,8 +3,10 @@
 package container_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -232,4 +234,54 @@ outer:
 
 	<-done
 	require.NoError(t, err)
+}
+
+func TestIntegrationSanitizeLogs(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	apiClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	require.NoError(t, err)
+	containerName := "octoplex-test-" + shortid.New().String()
+	component := "test-sanitize-logs"
+
+	client, err := container.NewClient(ctx, container.NewParams{APIClient: apiClient, Logger: logger})
+	require.NoError(t, err)
+
+	running, err := client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{container.LabelComponent: component}))
+	require.NoError(t, err)
+	assert.False(t, running)
+
+	containerStateC, errC := client.RunContainer(ctx, container.RunContainerParams{
+		Name:     containerName,
+		ChanSize: 1,
+		ContainerConfig: &typescontainer.Config{
+			Cmd:    []string{"/bin/sh", "-c", "echo 'Connecting to rtmp://rtmp.example.com/s3cr3t...' && sleep 1"},
+			Image:  "alpine:latest",
+			Labels: map[string]string{container.LabelComponent: component},
+		},
+		HostConfig: &typescontainer.HostConfig{NetworkMode: "default"},
+		Logs: container.LogConfig{
+			Stdout: true,
+			Sanitizer: func(line []byte) []byte {
+				return bytes.ReplaceAll(line, []byte("s3cr3t"), []byte("*****"))
+			},
+		},
+	})
+	testhelpers.ChanDiscard(containerStateC)
+	testhelpers.ChanRequireNoError(t, errC)
+
+	time.Sleep(time.Second)
+
+	client.Close()
+	require.NoError(t, <-errC)
+
+	running, err = client.ContainerRunning(ctx, client.ContainersWithLabels(map[string]string{container.LabelComponent: component}))
+	require.NoError(t, err)
+	assert.False(t, running)
+
+	assert.Contains(t, logs.String(), "Connecting to rtmp://rtmp.example.com/*****")
 }

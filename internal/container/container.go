@@ -1,3 +1,4 @@
+// Package container provides functionality for managing Docker containers.
 package container
 
 import (
@@ -200,9 +201,14 @@ type CopyFileConfig struct {
 	Mode    int64
 }
 
+// LogSanitizer is a function that is passed logs written from a container for
+// sanitization.
+type LogSanitizer func([]byte) []byte
+
 // LogConfig holds configuration for container logs.
 type LogConfig struct {
 	Stdout, Stderr bool
+	Sanitizer      LogSanitizer
 }
 
 // ShouldRestartFunc is a callback function that is called when a container
@@ -591,8 +597,9 @@ func (c *Client) waitForContainerExit(
 			}
 			c.logger.Info("Restarted container", "id", shortID(containerID))
 			return true
-		case line := <-logsC:
-			c.logger.Debug("Container log", "id", shortID(containerID), "log", string(line))
+		case lineBytes := <-logsC:
+			line := sanitizeContainerLog(logConfig.Sanitizer, lineBytes)
+			c.logger.Debug("Container log", "id", shortID(containerID), "log", line)
 			// TODO: limit max stored lines
 			logs = append(logs, line)
 		case err := <-errC:
@@ -604,6 +611,14 @@ func (c *Client) waitForContainerExit(
 			return false
 		}
 	}
+}
+
+func sanitizeContainerLog(sanitizer LogSanitizer, line []byte) []byte {
+	if sanitizer == nil {
+		return line
+	}
+
+	return sanitizer(line)
 }
 
 // Close closes the client, stopping and removing all running containers.
