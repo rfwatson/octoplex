@@ -10,7 +10,7 @@ postinstall = 'corepack enable'
 experimental = true
 
 [env]
-GOTOOLCHAIN = "go1.25.0"
+GOTOOLCHAIN = "go1.25.1"
 CGO_ENABLED = "0"
 _.path = ["{{config_root}}/frontend/node_modules/.bin"]
 

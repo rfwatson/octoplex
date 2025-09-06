@@ -48,10 +48,10 @@ jobs:
     - uses: jdx/mise-action@v2
       with:
         experimental: true
-    - name: Setup Go 1.25.0
+    - name: Setup Go 1.25.1
       uses: actions/setup-go@v5
       with:
-        go-version: '1.25.0'
+        go-version: '1.25.1'
         cache: false
     - name: install_goimports
       run: |
@@ -115,10 +115,10 @@ jobs:
       - name: install dependencies
         run: pnpm install
         working-directory: frontend
-      - name: Setup Go 1.25.0
+      - name: Setup Go 1.25.1
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.0'
+          go-version: '1.25.1'
       - name: install OS dependencies
         run: |
           sudo apt-get -y update && \
