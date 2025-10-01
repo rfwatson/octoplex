@@ -1,6 +1,7 @@
 package token_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -111,6 +112,7 @@ func TestToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			generatedToken, err := token.New(tc.rawToken, tc.expiresAt)
 			require.NoError(t, err)
+			assert.True(t, strings.HasPrefix(generatedToken.Hashed, "scrypt$32768,8,1,32$"))
 
 			got, err := token.Matches(generatedToken, tc.presentedToken)
 			if tc.wantErr != nil {

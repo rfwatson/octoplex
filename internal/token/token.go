@@ -22,6 +22,7 @@ const (
 	scryptR = 8
 	scryptP = 1
 	saltLen = 16
+	keyLen  = 32
 )
 
 var (
@@ -54,12 +55,12 @@ func New(rawToken RawToken, expiresAt time.Time) (domain.Token, error) {
 		return domain.Token{}, err
 	}
 
-	hash, err := scrypt.Key(rawToken, salt, scryptN, scryptR, scryptP, len(rawToken))
+	hash, err := scrypt.Key(rawToken, salt, scryptN, scryptR, scryptP, keyLen)
 	if err != nil {
 		return domain.Token{}, err
 	}
 
-	params := fmt.Sprintf("%d,%d,%d,%d", scryptN, scryptR, scryptP, len(rawToken))
+	params := fmt.Sprintf("%d,%d,%d,%d", scryptN, scryptR, scryptP, keyLen)
 	saltB64 := base64.StdEncoding.EncodeToString(salt)
 	hashB64 := base64.StdEncoding.EncodeToString(hash)
 	hashed := fmt.Sprintf("scrypt$%s$%s$%s", params, saltB64, hashB64)
