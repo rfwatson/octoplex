@@ -1,6 +1,6 @@
 module git.netflux.io/rob/octoplex
 
-go 1.25.1
+go 1.25.5
 
 require (
 	connectrpc.com/connect v1.18.1
